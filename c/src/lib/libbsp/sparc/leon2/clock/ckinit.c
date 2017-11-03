@@ -27,10 +27,6 @@
 #include <rtems/timecounter.h>
 #include <rtems/score/sparcimpl.h>
 
-#if SIMSPARC_FAST_IDLE==1
-#define CLOCK_DRIVER_USE_FAST_IDLE 1
-#endif
-
 static rtems_timecounter_simple leon2_tc;
 
 static uint32_t leon2_tc_get( rtems_timecounter_simple *tc )
@@ -72,10 +68,8 @@ static void leon2_tc_tick( void )
 
 #define CLOCK_VECTOR LEON_TRAP_TYPE( LEON_INTERRUPT_TIMER1 )
 
-#define Clock_driver_support_install_isr( _new, _old ) \
-  do { \
-    _old = set_vector( _new, CLOCK_VECTOR, 1 ); \
-  } while(0)
+#define Clock_driver_support_install_isr( _new ) \
+  set_vector( _new, CLOCK_VECTOR, 1 )
 
 extern int CLOCK_SPEED;
 

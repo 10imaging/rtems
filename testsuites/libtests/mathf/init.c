@@ -27,7 +27,6 @@
 #include <rtems/test.h>
 
 const char rtems_test_name[] = "MATHF";
-rtems_printer rtems_test_printer;
 #endif
 
 #include <stdio.h>
@@ -42,11 +41,12 @@ extern void domathf(void);
 
 #define CONFIGURE_MAXIMUM_TASKS           1
 #define CONFIGURE_INIT_TASK_ATTRIBUTES    RTEMS_FLOATING_POINT
-#define CONFIGURE_USE_DEVFS_AS_BASE_FILESYSTEM
 
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE
+
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
 
 #define CONFIGURE_INIT
 #include <rtems/confdefs.h>
@@ -59,7 +59,7 @@ int main( void )
 #endif
 {
 #if __rtems__
-  rtems_print_printer_printf(&rtems_test_printer);
+  rtems_print_printer_fprintf_putc(&rtems_test_printer);
   rtems_test_begin();
 #endif
 

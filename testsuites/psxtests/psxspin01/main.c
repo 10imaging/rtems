@@ -13,7 +13,6 @@
  *  http://www.rtems.org/license/LICENSE.
  */
 
-#define CONFIGURE_INIT
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -40,8 +39,6 @@ rtems_task Init(
 #define CONFIGURE_APPLICATION_NEEDS_CLOCK_DRIVER
 
 #define CONFIGURE_MAXIMUM_TASKS 2
-
-#define CONFIGURE_MAXIMUM_POSIX_SPINLOCKS 1
 
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 

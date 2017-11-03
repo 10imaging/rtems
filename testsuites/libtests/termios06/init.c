@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <rtems/bspIo.h>
 #include <rtems/dumpbuf.h>
 #include <rtems/termiostypes.h>
 
@@ -198,7 +199,7 @@ rtems_task Init(
   ioctl_it();
   read_it();
   close_it();
-  
+
   TEST_END();
 
   rtems_test_exit(0);

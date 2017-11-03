@@ -521,7 +521,8 @@ struct pmap		pmaparg;
 		return RPC_UNKNOWNHOST;
 	}
 
-	if ( (len = getgroups(NGROUPS, gids) < 0 ) ) {
+	len = getgroups(NGROUPS, gids);
+	if (len < 0 ) {
 		fprintf(stderr,
 				"RPCIO - error: I unable to get group ids (%s)\n",
 				strerror(errno));
@@ -958,7 +959,7 @@ int			noblock = 1;
 struct sockwakeup	wkup;
 
 	if (ourSock < 0) {
-    fprintf(stderr,"RTEMS-RPCIOD $Release$, " \
+    fprintf(stderr,"RTEMS-RPCIOD, " \
             "Till Straumann, Stanford/SLAC/SSRL 2002, " \
             "See LICENSE file for licensing info.\n");
 

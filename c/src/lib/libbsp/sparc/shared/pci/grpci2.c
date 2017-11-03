@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <rtems.h>
 #include <rtems/bspIo.h>
 #include <libcpu/byteorder.h>
 #include <libcpu/access.h>
@@ -42,20 +43,43 @@
 #include <drvmgr/pci_bus.h>
 #include <bsp/grpci2.h>
 
-#ifndef IRQ_GLOBAL_PREPARE
- #define IRQ_GLOBAL_PREPARE(level) rtems_interrupt_level level
-#endif
+/* Use interrupt lock privmitives compatible with SMP defined in
+ * RTEMS 4.11.99 and higher.
+ */
+#if (((__RTEMS_MAJOR__ << 16) | (__RTEMS_MINOR__ << 8) | __RTEMS_REVISION__) >= 0x040b63)
 
-#ifndef IRQ_GLOBAL_DISABLE
- #define IRQ_GLOBAL_DISABLE(level) rtems_interrupt_disable(level)
-#endif
+/* map via rtems_interrupt_lock_* API: */
+#define SPIN_DECLARE(lock) RTEMS_INTERRUPT_LOCK_MEMBER(lock)
+#define SPIN_INIT(lock, name) rtems_interrupt_lock_initialize(lock, name)
+#define SPIN_LOCK(lock, level) rtems_interrupt_lock_acquire_isr(lock, &level)
+#define SPIN_LOCK_IRQ(lock, level) rtems_interrupt_lock_acquire(lock, &level)
+#define SPIN_UNLOCK(lock, level) rtems_interrupt_lock_release_isr(lock, &level)
+#define SPIN_UNLOCK_IRQ(lock, level) rtems_interrupt_lock_release(lock, &level)
+#define SPIN_IRQFLAGS(k) rtems_interrupt_lock_context k
+#define SPIN_ISR_IRQFLAGS(k) SPIN_IRQFLAGS(k)
 
-#ifndef IRQ_GLOBAL_ENABLE
- #define IRQ_GLOBAL_ENABLE(level) rtems_interrupt_enable(level)
+#else
+
+/* maintain single-core compatibility with older versions of RTEMS: */
+#define SPIN_DECLARE(name)
+#define SPIN_INIT(lock, name)
+#define SPIN_LOCK(lock, level)
+#define SPIN_LOCK_IRQ(lock, level) rtems_interrupt_disable(level)
+#define SPIN_UNLOCK(lock, level)
+#define SPIN_UNLOCK_IRQ(lock, level) rtems_interrupt_enable(level)
+#define SPIN_IRQFLAGS(k) rtems_interrupt_level k
+#define SPIN_ISR_IRQFLAGS(k)
+
+#ifdef RTEMS_SMP
+#error SMP mode not compatible with these interrupt lock primitives
+#endif
 #endif
 
 /* If defined to 1 - byte twisting is enabled by default */
 #define DEFAULT_BT_ENABLED 0
+
+/* If defined to 64 - Latency timer is 64 by default */
+#define DEFAULT_LATENCY_TIMER 64
 
 /* Interrupt assignment. Set to other value than 0xff in order to 
  * override defaults and plug&play information
@@ -102,8 +126,8 @@ struct grpci2_regs {
 
 #define CTRL_SI (1<<27)
 #define CTRL_PE (1<<26)
-#define CTRL_EI (1<<25)
-#define CTRL_ER (1<<24)
+#define CTRL_ER (1<<25)
+#define CTRL_EI (1<<24)
 #define CTRL_BUS (0xff<<CTRL_BUS_BIT)
 #define CTRL_HOSTINT 0xf
 
@@ -132,51 +156,18 @@ struct grpci2_regs {
 #define STS_TRACE	(1<<STS_TRACE_BIT)
 #define STS_CFGERRVALID	(1<<STS_CFGERRVALID_BIT)
 #define STS_CFGERR	(1<<STS_CFGERR_BIT)
-#define STS_INTTYPE	(0x3f<<STS_INTTYPE_BIT)
+#define STS_INTTYPE	(0x7f<<STS_INTTYPE_BIT)
 #define STS_INTSTS	(0xf<<STS_INTSTS_BIT)
 #define STS_FDEPTH	(0x7<<STS_FDEPTH_BIT)
 #define STS_FNUM	(0x3<<STS_FNUM_BIT)
 
+#define STS_ITIMEOUT	(1<<18)
 #define STS_ISYSERR	(1<<17)
 #define STS_IDMA	(1<<16)
 #define STS_IDMAERR	(1<<15)
 #define STS_IMSTABRT	(1<<14)
 #define STS_ITGTABRT	(1<<13)
 #define STS_IPARERR	(1<<12)
-
-struct grpci2_bd_chan {
-	volatile unsigned int ctrl;	/* 0x00 DMA Control */
-	volatile unsigned int nchan;	/* 0x04 Next DMA Channel Address */
-	volatile unsigned int nbd;	/* 0x08 Next Data Descriptor in channel */
-	volatile unsigned int res;	/* 0x0C Reserved */
-};
-
-#define BD_CHAN_EN		0x80000000
-#define BD_CHAN_TYPE		0x00300000
-#define BD_CHAN_BDCNT		0x0000ffff
-#define BD_CHAN_EN_BIT		31
-#define BD_CHAN_TYPE_BIT	20
-#define BD_CHAN_BDCNT_BIT	0
-
-struct grpci2_bd_data {
-	volatile unsigned int ctrl;	/* 0x00 DMA Data Control */
-	volatile unsigned int pci_adr;	/* 0x04 PCI Start Address */
-	volatile unsigned int ahb_adr;	/* 0x08 AHB Start address */
-	volatile unsigned int next;	/* 0x0C Next Data Descriptor in channel */
-};
-
-#define BD_DATA_EN		0x80000000
-#define BD_DATA_IE		0x40000000
-#define BD_DATA_DR		0x20000000
-#define BD_DATA_TYPE		0x00300000
-#define BD_DATA_ER		0x00080000
-#define BD_DATA_LEN		0x0000ffff
-#define BD_DATA_EN_BIT		31
-#define BD_DATA_IE_BIT		30
-#define BD_DATA_DR_BIT		29
-#define BD_DATA_TYPE_BIT	20
-#define BD_DATA_ER_BIT		19
-#define BD_DATA_LEN_BIT		0
 
 /* GRPCI2 Capability */
 struct grpci2_cap_first {
@@ -225,13 +216,15 @@ struct grpci2_pcibar_cfg grpci2_default_bar_mapping[6] = {
 
 /* Driver private data struture */
 struct grpci2_priv {
-	struct drvmgr_dev	*dev;
+	struct drvmgr_dev		*dev;
 	struct grpci2_regs		*regs;
 	unsigned char			ver;
 	char				irq;
 	char				irq_mode; /* IRQ Mode from CAPSTS REG */
+	char				irq_dma; /* IRQ Index for DMA */
 	char				bt_enabled;
 	unsigned int			irq_mask;
+	unsigned int			latency_timer;
 
 	struct grpci2_pcibar_cfg	*barcfg;
 
@@ -246,11 +239,18 @@ struct grpci2_priv {
 	struct drvmgr_map_entry		maps_up[7];
 	struct drvmgr_map_entry		maps_down[2];
 	struct pcibus_config		config;
+
+	/* DMA interrupts */
+	void (*dma_isr)(void *data);
+	void *dma_isr_arg;
+
+	SPIN_DECLARE(devlock)
 };
 
 int grpci2_init1(struct drvmgr_dev *dev);
 int grpci2_init3(struct drvmgr_dev *dev);
 void grpci2_err_isr(void *arg);
+void grpci2_dma_isr(void *arg);
 
 /* GRPCI2 DRIVER */
 
@@ -284,6 +284,19 @@ struct amba_drv_info grpci2_info =
 	&grpci2_ids[0]
 };
 
+/* Defaults to do nothing - user can override this function
+ * by including the DMA DRIVER.
+ */
+int __attribute__((weak)) grpci2dma_init(void * regs, void isr_register( void (*isr)(void *), void * arg));
+
+int grpci2dma_init(void * regs, void isr_register( void (*isr)(void *), void * arg))
+{
+	return 0;
+}
+
+/* Prototype of grpci2_dma_isr_register function */
+static void grpci2_dma_isr_register( void (*isr)(void *), void * arg);
+
 void grpci2_register_drv(void)
 {
 	DBG("Registering GRPCI2 driver\n");
@@ -295,8 +308,8 @@ static int grpci2_cfg_r32(pci_dev_t dev, int ofs, uint32_t *val)
 	struct grpci2_priv *priv = grpci2priv;
 	volatile uint32_t *pci_conf;
 	unsigned int tmp, devfn;
-	IRQ_GLOBAL_PREPARE(oldLevel);
 	int retval, bus = PCI_DEV_BUS(dev);
+	SPIN_IRQFLAGS(irqflags);
 
 	if ((unsigned int)ofs & 0xffffff03) {
 		retval = PCISTS_EINVAL;
@@ -320,7 +333,7 @@ static int grpci2_cfg_r32(pci_dev_t dev, int ofs, uint32_t *val)
 
 	pci_conf = (volatile uint32_t *) (priv->pci_conf | (devfn << 8) | ofs);
 
-	IRQ_GLOBAL_DISABLE(oldLevel); /* protect regs */
+	SPIN_LOCK_IRQ(&priv->devlock, irqflags);
 
 	/* Select bus */
 	priv->regs->ctrl = (priv->regs->ctrl & ~(0xff<<16)) | (bus<<16);
@@ -343,7 +356,7 @@ static int grpci2_cfg_r32(pci_dev_t dev, int ofs, uint32_t *val)
 		retval = PCISTS_OK;
 	}
 
-	IRQ_GLOBAL_ENABLE(oldLevel);
+	SPIN_UNLOCK_IRQ(&priv->devlock, irqflags);
 
 out:
 	if (retval != PCISTS_OK)
@@ -388,7 +401,7 @@ static int grpci2_cfg_w32(pci_dev_t dev, int ofs, uint32_t val)
 	volatile uint32_t *pci_conf;
 	uint32_t value, devfn;
 	int retval, bus = PCI_DEV_BUS(dev);
-	IRQ_GLOBAL_PREPARE(oldLevel);
+	SPIN_IRQFLAGS(irqflags);
 
 	if ((unsigned int)ofs & 0xffffff03)
 		return PCISTS_EINVAL;
@@ -410,7 +423,7 @@ static int grpci2_cfg_w32(pci_dev_t dev, int ofs, uint32_t val)
 
 	pci_conf = (volatile uint32_t *) (priv->pci_conf | (devfn << 8) | ofs);
 
-	IRQ_GLOBAL_DISABLE(oldLevel); /* protect regs */
+	SPIN_LOCK_IRQ(&priv->devlock, irqflags);
 
 	/* Select bus */
 	priv->regs->ctrl = (priv->regs->ctrl & ~(0xff<<16)) | (bus<<16);
@@ -430,7 +443,7 @@ static int grpci2_cfg_w32(pci_dev_t dev, int ofs, uint32_t val)
 	else
 		retval = PCISTS_OK;
 
-	IRQ_GLOBAL_ENABLE(oldLevel);
+	SPIN_UNLOCK_IRQ(&priv->devlock, irqflags);
 
 	DBG("pci_write - [%x:%x:%x] reg: 0x%x => addr: 0x%x, val: 0x%x  (%d)\n",
 		PCI_DEV_EXPAND(dev), ofs, pci_conf, value, retval);
@@ -607,7 +620,7 @@ void grpci2_err_isr(void *arg)
 	struct grpci2_priv *priv = arg;
 	unsigned int sts = priv->regs->sts_cap;
 
-	if (sts & (STS_IMSTABRT | STS_ITGTABRT | STS_IPARERR | STS_ISYSERR)) {
+	if (sts & (STS_IMSTABRT | STS_ITGTABRT | STS_IPARERR | STS_ISYSERR | STS_ITIMEOUT)) {
 		/* A PCI error IRQ ... Error handler unimplemented
 		 * add your code here...
 		 */
@@ -623,6 +636,27 @@ void grpci2_err_isr(void *arg)
 		if (sts & STS_ISYSERR) {
 			printk("GRPCI2: unhandled System Error IRQ\n");
 		}
+		if (sts & STS_ITIMEOUT) {
+			printk("GRPCI2: unhandled PCI target access timeout IRQ\n");
+		}
+	}
+}
+
+/* PCI DMA Interrupt handler, called when there may be a PCI DMA interrupt.
+ */
+void grpci2_dma_isr(void *arg)
+{
+	struct grpci2_priv *priv = arg;
+	unsigned int sts = (priv->regs->sts_cap & (STS_IDMAERR | STS_IDMA));
+
+	/* Clear Interrupt if taken*/
+	if (sts != 0){
+		/* Clear IDMAERR and IDMA bits */
+		priv->regs->sts_cap = (STS_IDMAERR | STS_IDMA);
+		/* Clear DRVMGR interrupt */
+		drvmgr_interrupt_clear(priv->dev, priv->irq_dma);
+		/* Call DMA driver ISR */
+		(priv->dma_isr)(priv->dma_isr_arg);
 	}
 }
 
@@ -688,6 +722,12 @@ static int grpci2_hw_init(struct grpci2_priv *priv)
 	data |= (PCIM_CMD_MEMEN | PCIM_CMD_BUSMASTEREN);
 	grpci2_cfg_w32(host, PCIR_COMMAND, data);
 
+	/* set latency timer */
+	grpci2_cfg_r32(host, PCIR_CACHELNSZ, &data);
+	data &= ~0xff00;
+	data |= ((priv->latency_timer & 0xff) << 8);
+	grpci2_cfg_w32(host, PCIR_CACHELNSZ, data);
+
 	/* Enable Error respone (CPU-TRAP) on illegal memory access */
 	regs->ctrl = CTRL_ER | CTRL_PE;
 
@@ -725,6 +765,10 @@ static int grpci2_init(struct grpci2_priv *priv)
 	priv->regs = (struct grpci2_regs *)apb->start;
 	priv->bt_enabled = DEFAULT_BT_ENABLED;
 	priv->irq_mode = (priv->regs->sts_cap & STS_IRQMODE) >> STS_IRQMODE_BIT;
+	priv->latency_timer = DEFAULT_LATENCY_TIMER;
+
+	/* Initialize Spin-lock for GRPCI2 Device. */
+	SPIN_INIT(&priv->devlock, "grpci2");
 
 	/* Calculate the PCI windows 
 	 *  AMBA->PCI Window:                       AHB SLAVE AREA0
@@ -782,6 +826,11 @@ static int grpci2_init(struct grpci2_priv *priv)
 		priv->barcfg = value->ptr;
 	else
 		priv->barcfg = grpci2_default_bar_mapping;
+
+	/* User may override DEFAULT_LATENCY_TIMER */
+	value = drvmgr_dev_key_get(priv->dev, "latencyTimer", DRVMGR_KT_INT);
+	if (value)
+		priv->latency_timer = value->i;
 
 	/* This driver only support HOST systems, we check that it can act as a 
 	 * PCI Master and that it is in the Host slot. */
@@ -906,6 +955,11 @@ int grpci2_init3(struct drvmgr_dev *dev)
 	/* Install and Enable PCI Error interrupt handler */
 	drvmgr_interrupt_register(dev, 0, "grpci2", grpci2_err_isr, priv);
 
+	/* Initialize DMA driver (if supported) */
+	if (priv->regs->sts_cap & STS_DMA){
+		grpci2dma_init((void *) &(priv->regs->dma_ctrl), grpci2_dma_isr_register);
+	}
+
 	/* Unmask Error IRQ and all PCI interrupts at PCI Core. For this to be
 	 * safe every PCI board have to be resetted (no IRQ generation) before
 	 * Global IRQs are enabled (Init is reached or similar)
@@ -913,4 +967,34 @@ int grpci2_init3(struct drvmgr_dev *dev)
 	priv->regs->ctrl |= (CTRL_EI | priv->irq_mask);
 
 	return DRVMGR_OK;
+}
+
+static void grpci2_dma_isr_register( void (*isr)(void *), void * arg)
+{
+	struct grpci2_priv *priv = grpci2priv;
+
+	/* Handle unregistration */
+	if (priv->dma_isr != NULL) {
+		drvmgr_interrupt_unregister(priv->dev, priv->irq_dma, grpci2_dma_isr, priv);
+		/* Uninstall user ISR */
+		priv->dma_isr = NULL;
+		priv->dma_isr_arg = NULL;
+	}
+
+	if (isr == NULL)
+		return;
+
+	/* Install user ISR */
+	priv->dma_isr_arg = arg;
+	priv->dma_isr = isr;
+
+	/* Install and Enable PCI DMA interrupt handler */
+	if (priv->irq_mode == 1) {
+		priv->irq_dma = 1;
+	} else if (priv->irq_mode == 3) {
+		priv->irq_dma = 4;
+	} else {
+		priv->irq_dma = 0;
+	}
+	drvmgr_interrupt_register(priv->dev, priv->irq_dma, "grpci2dma", grpci2_dma_isr, priv);
 }

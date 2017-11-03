@@ -13,7 +13,6 @@
 #include <bsp.h>
 
 const char rtems_test_name[] = "LOOPBACK";
-rtems_printer rtems_test_printer;
 
 #define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_CLOCK_DRIVER
@@ -33,6 +32,7 @@ rtems_printer rtems_test_printer;
                                            RTEMS_NO_TIMESLICE | \
                                            RTEMS_NO_ASR | \
                                            RTEMS_INTERRUPT_LEVEL(0))
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
 
 #define CONFIGURE_INIT
 rtems_task Init(rtems_task_argument argument);
@@ -248,7 +248,7 @@ Init (rtems_task_argument ignored)
 {
     rtems_status_code sc;
 
-    rtems_print_printer_printf(&rtems_test_printer);
+    rtems_print_printer_fprintf_putc(&rtems_test_printer);
 
     rtems_test_begin();
 

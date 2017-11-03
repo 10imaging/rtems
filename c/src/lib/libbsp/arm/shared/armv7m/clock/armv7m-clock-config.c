@@ -88,18 +88,6 @@ static void _ARMV7M_TC_systick_tick(void)
   );
 }
 
-static uint32_t _ARMV7M_TC_dwt_get_timecount(struct timecounter *tc)
-{
-  volatile ARMV7M_DWT *dwt = _ARMV7M_DWT;
-
-  return dwt->cyccnt;
-}
-
-static void _ARMV7M_TC_dwt_tick(void)
-{
-  rtems_timecounter_tick();
-}
-
 static void _ARMV7M_TC_tick(void)
 {
   (*_ARMV7M_TC.tick)();
@@ -123,7 +111,6 @@ static void _ARMV7M_Systick_handler_install(void)
 
 static void _ARMV7M_Systick_initialize(void)
 {
-  volatile ARMV7M_DWT *dwt = _ARMV7M_DWT;
   volatile ARMV7M_Systick *systick = _ARMV7M_Systick;
   #ifdef BSP_ARMV7M_SYSTICK_FREQUENCY
     uint64_t freq = BSP_ARMV7M_SYSTICK_FREQUENCY;
@@ -132,7 +119,6 @@ static void _ARMV7M_Systick_initialize(void)
   #endif
   uint64_t us_per_tick = rtems_configuration_get_microseconds_per_tick();
   uint64_t interval = (freq * us_per_tick) / 1000000ULL;
-  uint32_t dwt_ctrl;
 
   systick->rvr = (uint32_t) interval;
   systick->cvr = 0;
@@ -140,24 +126,13 @@ static void _ARMV7M_Systick_initialize(void)
     | ARMV7M_SYSTICK_CSR_TICKINT
     | ARMV7M_SYSTICK_CSR_CLKSOURCE;
 
-  dwt_ctrl = dwt->ctrl;
-  if ((dwt_ctrl & ARMV7M_DWT_CTRL_NOCYCCNT) == 0) {
-    dwt->ctrl = dwt_ctrl | ARMV7M_DWT_CTRL_CYCCNTENA;
-    _ARMV7M_TC.base.tc.tc_get_timecount = _ARMV7M_TC_dwt_get_timecount;
-    _ARMV7M_TC.base.tc.tc_counter_mask = 0xffffffff;
-    _ARMV7M_TC.base.tc.tc_frequency = freq;
-    _ARMV7M_TC.base.tc.tc_quality = RTEMS_TIMECOUNTER_QUALITY_CLOCK_DRIVER;
-    _ARMV7M_TC.tick = _ARMV7M_TC_dwt_tick;
-    rtems_timecounter_install(&_ARMV7M_TC.base.tc);
-  } else {
-    _ARMV7M_TC.tick = _ARMV7M_TC_systick_tick;
-    rtems_timecounter_simple_install(
-      &_ARMV7M_TC.base,
-      freq,
-      interval,
-      _ARMV7M_TC_systick_get_timecount
-    );
-  }
+  _ARMV7M_TC.tick = _ARMV7M_TC_systick_tick;
+  rtems_timecounter_simple_install(
+    &_ARMV7M_TC.base,
+    freq,
+    interval,
+    _ARMV7M_TC_systick_get_timecount
+  );
 }
 
 static void _ARMV7M_Systick_cleanup(void)
@@ -172,11 +147,8 @@ static void _ARMV7M_Systick_cleanup(void)
 #define Clock_driver_support_initialize_hardware() \
   _ARMV7M_Systick_initialize()
 
-#define Clock_driver_support_install_isr(isr, old_isr) \
-  do { \
-    _ARMV7M_Systick_handler_install(); \
-    old_isr = NULL; \
-  } while (0)
+#define Clock_driver_support_install_isr(isr) \
+  _ARMV7M_Systick_handler_install()
 
 #define Clock_driver_support_shutdown_hardware() \
   _ARMV7M_Systick_cleanup()

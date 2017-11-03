@@ -111,13 +111,8 @@ typedef struct {
 } rtems_resource_rtems_api;
 
 typedef struct {
-  uint32_t active_barriers;
-  uint32_t active_condition_variables;
   uint32_t active_message_queues;
-  uint32_t active_mutexes;
-  uint32_t active_rwlocks;
   uint32_t active_semaphores;
-  uint32_t active_spinlocks;
   uint32_t active_threads;
   uint32_t active_timers;
 } rtems_resource_posix_api;

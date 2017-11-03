@@ -73,6 +73,8 @@
 /*                                                                     */
 /***********************************************************************/
 
+#include <inttypes.h>
+
 #include <rtems.h>
 
 #include <libcpu/powerpc-utility.h>
@@ -357,69 +359,67 @@ static inline void BSP_disable_crit_irq_at_siu( rtems_vector_number
 /*
  * This function enables a given siu interrupt
  */
-rtems_status_code bsp_interrupt_vector_enable( rtems_vector_number irqLine)
+void bsp_interrupt_vector_enable( rtems_vector_number vector)
 {
-  int base_index = get_siu_irq_base_index( irqLine);
+  int base_index = get_siu_irq_base_index( vector);
 
-  if (is_siu_irq( irqLine)) {
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
+
+  if (is_siu_irq( vector)) {
     rtems_interrupt_level level;
 
     rtems_interrupt_disable( level);
 
     switch (base_index) {
       case BSP_PER_IRQ_LOWEST_OFFSET:
-        BSP_enable_per_irq_at_siu( irqLine);
+        BSP_enable_per_irq_at_siu( vector);
         break;
       case BSP_MAIN_IRQ_LOWEST_OFFSET:
-        BSP_enable_main_irq_at_siu( irqLine);
+        BSP_enable_main_irq_at_siu( vector);
         break;
       case BSP_CRIT_IRQ_LOWEST_OFFSET:
-        BSP_enable_crit_irq_at_siu( irqLine);
+        BSP_enable_crit_irq_at_siu( vector);
         break;
       default:
-        rtems_interrupt_enable( level);
-        printk( "No valid base index\n");
-        return RTEMS_INVALID_NUMBER;
+        bsp_interrupt_assert(0);
+        break;
     }
 
     rtems_interrupt_enable( level);
   }
-
-  return RTEMS_SUCCESSFUL;
 }
 
 /*
  * This function disables a given siu interrupt
  */
-rtems_status_code bsp_interrupt_vector_disable( rtems_vector_number irqLine)
+void bsp_interrupt_vector_disable( rtems_vector_number vector)
 {
-  int base_index = get_siu_irq_base_index( irqLine);
+  int base_index = get_siu_irq_base_index( vector);
 
-  if (is_siu_irq( irqLine)) {
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
+
+  if (is_siu_irq( vector)) {
     rtems_interrupt_level level;
 
     rtems_interrupt_disable( level);
 
     switch (base_index) {
       case BSP_PER_IRQ_LOWEST_OFFSET:
-        BSP_disable_per_irq_at_siu( irqLine);
+        BSP_disable_per_irq_at_siu( vector);
         break;
       case BSP_MAIN_IRQ_LOWEST_OFFSET:
-        BSP_disable_main_irq_at_siu( irqLine);
+        BSP_disable_main_irq_at_siu( vector);
         break;
       case BSP_CRIT_IRQ_LOWEST_OFFSET:
-        BSP_disable_crit_irq_at_siu( irqLine);
+        BSP_disable_crit_irq_at_siu( vector);
         break;
       default:
-        rtems_interrupt_enable( level);
-        printk( "No valid base index\n");
-        return RTEMS_INVALID_NUMBER;
+        bsp_interrupt_assert(0);
+        break;
     }
 
     rtems_interrupt_enable( level);
   }
-
-  return RTEMS_SUCCESSFUL;
 }
 
 #if (BENCHMARK_IRQ_PROCESSING == 0)
@@ -717,6 +717,6 @@ rtems_status_code bsp_interrupt_facility_initialize( void)
 void bsp_interrupt_handler_default( rtems_vector_number vector)
 {
   if (vector != BSP_DECREMENTER) {
-    printk( "Spurious interrupt: 0x%08x\n", vector);
+    printk( "Spurious interrupt: 0x%08" PRIx32 "\n", vector);
   }
 }

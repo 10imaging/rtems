@@ -49,18 +49,16 @@ static void mcf5329_tc_tick(void)
 /*
  * Attach clock interrupt handler
  */
-#define Clock_driver_support_install_isr( _new, _old )             \
-    do {                                                           \
-        _old = (rtems_isr_entry)set_vector(_new, CLOCK_VECTOR, 1); \
-    } while(0)
+#define Clock_driver_support_install_isr( _new ) \
+  set_vector(_new, CLOCK_VECTOR, 1)
 
 /*
  * Turn off the clock
  */
-static void Clock_driver_support_shutdown_hardware(void)
-{
-  MCF_PIT3_PCSR &= ~MCF_PIT_PCSR_EN;
-}
+#define Clock_driver_support_shutdown_hardware() \
+  do { \
+    MCF_PIT3_PCSR &= ~MCF_PIT_PCSR_EN; \
+  } while (0)
 
 /*
  * Set up the clock hardware

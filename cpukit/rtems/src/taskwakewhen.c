@@ -52,11 +52,11 @@ rtems_status_code rtems_task_wake_when(
     executing = _Thread_Executing;
     _Thread_Set_state( executing, STATES_WAITING_FOR_TIME );
     _Thread_Wait_flags_set( executing, THREAD_WAIT_STATE_BLOCKED );
-    _Thread_Timer_insert_absolute(
+    _Thread_Timer_insert_realtime(
       executing,
       cpu_self,
       _Thread_Timeout,
-      _Watchdog_Ticks_from_seconds( seconds )
+      _Watchdog_Realtime_from_seconds( seconds )
     );
   _Thread_Dispatch_enable( cpu_self );
   return RTEMS_SUCCESSFUL;

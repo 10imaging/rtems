@@ -77,8 +77,6 @@ _BSP_null_char( char c )
 {
 	int level;
 
-    if (c == '\n')
-        _BSP_null_char('\r');
 	rtems_interrupt_disable(level);
     while (!((MCF548X_PSC_SR(CONSOLE_PORT) & MCF548X_PSC_SR_TXRDY)))
         continue;
@@ -307,7 +305,7 @@ IntUartSetAttributes(int minor, const struct termios *t)
 	if ( t != (const struct termios *)0 )
 	{
 		/* determine baud rate index */
-		baud = GetBaud( t->c_cflag & CBAUD );
+    baud = GetBaud( t->c_ospeed );
 
 		/* determine data bits */
 		switch ( t->c_cflag & CSIZE )

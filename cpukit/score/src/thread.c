@@ -32,10 +32,10 @@
 THREAD_OFFSET_ASSERT( Object );
 THREAD_OFFSET_ASSERT( Join_queue );
 THREAD_OFFSET_ASSERT( current_state );
-THREAD_OFFSET_ASSERT( current_priority );
-THREAD_OFFSET_ASSERT( real_priority );
-THREAD_OFFSET_ASSERT( priority_restore_hint );
+THREAD_OFFSET_ASSERT( Real_priority );
+#if defined(RTEMS_SCORE_THREAD_ENABLE_RESOURCE_COUNT)
 THREAD_OFFSET_ASSERT( resource_count );
+#endif
 THREAD_OFFSET_ASSERT( Scheduler );
 THREAD_OFFSET_ASSERT( Wait );
 THREAD_OFFSET_ASSERT( Timer );
@@ -84,11 +84,7 @@ void _Thread_Handler_initialization(void)
 
   if ( rtems_configuration_get_stack_allocate_hook() == NULL ||
        rtems_configuration_get_stack_free_hook() == NULL)
-    _Terminate(
-      INTERNAL_ERROR_CORE,
-      true,
-      INTERNAL_ERROR_BAD_STACK_HOOK
-    );
+    _Internal_error( INTERNAL_ERROR_BAD_STACK_HOOK );
 
   if ( stack_allocate_init_hook != NULL )
     (*stack_allocate_init_hook)( rtems_configuration_get_stack_space_size() );

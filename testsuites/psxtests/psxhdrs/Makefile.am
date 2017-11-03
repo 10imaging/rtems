@@ -1,6 +1,9 @@
 noinst_LIBRARIES = lib.a
 lib_a_SOURCES =
 
+# methods in <devctl.h>
+lib_a_SOURCES += devctl/posix_devctl.c
+
 # methods in <pthread.h>
 lib_a_SOURCES += pthread/pthread_attr_destroy.c
 lib_a_SOURCES += pthread/pthread_attr_getdetachstate.c
@@ -137,6 +140,19 @@ lib_a_SOURCES += unistd/sleep.c
 lib_a_SOURCES += unistd/sync.c
 lib_a_SOURCES += unistd/ualarm.c
 lib_a_SOURCES += unistd/usleep.c
+
+# methods in <sys/mman.h>
+lib_a_SOURCES += sys/mman/mlockall.c
+lib_a_SOURCES += sys/mman/mlock.c
+lib_a_SOURCES += sys/mman/mmap.c
+lib_a_SOURCES += sys/mman/mprotect.c
+lib_a_SOURCES += sys/mman/msync.c
+lib_a_SOURCES += sys/mman/munlockall.c
+lib_a_SOURCES += sys/mman/munlock.c
+lib_a_SOURCES += sys/mman/munmap.c
+lib_a_SOURCES += sys/mman/posix_madvise.c
+lib_a_SOURCES += sys/mman/shm_open.c
+lib_a_SOURCES += sys/mman/shm_unlink.c
 
 if HAS_NETWORKING
 # methods in <sys/socket.h>

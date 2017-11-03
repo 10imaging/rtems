@@ -322,7 +322,7 @@ static int imx_uart_set_attrs(int minor, const struct termios *t)
 {
     int baud;
 
-    baud = rtems_termios_baud_to_number(t->c_cflag & CBAUD);
+    baud = rtems_termios_baud_to_number(t->c_ospeed);
     imx_uart_set_baud(minor, baud);
 
     return 0;
@@ -461,9 +461,6 @@ static void  imx_uart_poll_write_char(int minor, char c)
 static void _BSP_output_char(char c)
 {
     poll_write(c);
-    if (c == '\n') {
-        poll_write('\r');
-    }
 }
 
 BSP_output_char_function_type BSP_output_char = _BSP_output_char;

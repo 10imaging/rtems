@@ -21,10 +21,12 @@
 
 #include <rtems/score/threadq.h>
 #include <rtems/score/chainimpl.h>
-#include <rtems/score/rbtreeimpl.h>
+#include <rtems/score/priorityimpl.h>
 #include <rtems/score/scheduler.h>
 #include <rtems/score/smp.h>
+#include <rtems/score/status.h>
 #include <rtems/score/thread.h>
+#include <rtems/score/threaddispatch.h>
 
 #if defined(RTEMS_DEBUG)
 #include <string.h>
@@ -39,38 +41,8 @@ extern "C" {
  */
 /**@{*/
 
-/**
- * @brief Representation of a thread queue path from a start thread queue to
- * the terminal thread queue.
- *
- * The start thread queue is determined by the object on which a thread intends
- * to block.  The terminal thread queue is the thread queue reachable via
- * thread queue links those owner is not blocked on a thread queue.  The thread
- * queue links are determined by the thread queue owner and thread wait queue
- * relationships.
- */
-struct Thread_queue_Path {
-#if defined(RTEMS_SMP)
-  /**
-   * @brief The chain of thread queue links defining the thread queue path.
-   */
-  Chain_Control Links;
-
-  /**
-   * @brief The start of a thread queue path.
-   */
-  Thread_queue_Link Start;
-#endif
-
-  /**
-   * @brief A potential thread to update the priority via
-   * _Thread_Update_priority().
-   *
-   * This thread is determined by thread queues which support priority
-   * inheritance.
-   */
-  Thread_Control *update_priority;
-};
+#define THREAD_QUEUE_LINK_OF_PATH_NODE( node ) \
+  RTEMS_CONTAINER_OF( node, Thread_queue_Link, Path_node );
 
 /**
  * @brief Thread queue with a layout compatible to struct _Thread_queue_Queue
@@ -89,6 +61,34 @@ typedef struct {
 
   Thread_queue_Queue Queue;
 } Thread_queue_Syslock_queue;
+
+void _Thread_queue_Enqueue_do_nothing_extra(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Per_CPU_Control      *cpu_self,
+  Thread_queue_Context *queue_context
+);
+
+void _Thread_queue_Add_timeout_ticks(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Per_CPU_Control      *cpu_self,
+  Thread_queue_Context *queue_context
+);
+
+void _Thread_queue_Add_timeout_monotonic_timespec(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Per_CPU_Control      *cpu_self,
+  Thread_queue_Context *queue_context
+);
+
+void _Thread_queue_Add_timeout_realtime_timespec(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Per_CPU_Control      *cpu_self,
+  Thread_queue_Context *queue_context
+);
 
 /**
  * @brief Sets the thread wait return code to STATUS_DEADLOCK.
@@ -110,89 +110,164 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Context_initialize(
 )
 {
 #if defined(RTEMS_DEBUG)
-  memset( queue_context, 0, sizeof( *queue_context ) );
-  queue_context->expected_thread_dispatch_disable_level = 0xdeadbeef;
-  queue_context->deadlock_callout = _Thread_queue_Deadlock_fatal;
+  memset( queue_context, 0x7f, sizeof( *queue_context ) );
+#if defined(RTEMS_SMP)
+  _Chain_Initialize_node( &queue_context->Lock_context.Wait.Gate.Node );
+#endif
+  queue_context->enqueue_callout = NULL;
+  queue_context->deadlock_callout = NULL;
 #else
   (void) queue_context;
 #endif
 }
 
 /**
- * @brief Sets the expected thread dispatch disable level in the thread queue
+ * @brief Sets the thread state for the thread to enqueue in the thread queue
  * context.
  *
  * @param queue_context The thread queue context.
- * @param expected_level The expected thread dispatch disable level.
+ * @param state The thread state.
  *
- * @see _Thread_queue_Enqueue_critical().
+ * @see _Thread_queue_Enqueue().
  */
 RTEMS_INLINE_ROUTINE void
-_Thread_queue_Context_set_expected_level(
+_Thread_queue_Context_set_thread_state(
   Thread_queue_Context *queue_context,
-  uint32_t              expected_level
+  States_Control        thread_state
 )
 {
-  queue_context->expected_thread_dispatch_disable_level = expected_level;
+  queue_context->thread_state = thread_state;
 }
 
 /**
- * @brief Sets an indefinite timeout interval in the thread queue context.
+ * @brief Sets the timeout ticks in the thread queue context.
  *
  * @param queue_context The thread queue context.
- * @param timeout The new timeout.
+ * @param ticks The timeout in ticks.
  *
- * @see _Thread_queue_Enqueue_critical().
+ * @see _Thread_queue_Enqueue().
  */
 RTEMS_INLINE_ROUTINE void
-_Thread_queue_Context_set_no_timeout(
+_Thread_queue_Context_set_timeout_ticks(
+  Thread_queue_Context *queue_context,
+  Watchdog_Interval     ticks
+)
+{
+  queue_context->Timeout.ticks = ticks;
+}
+
+/**
+ * @brief Sets the timeout argument in the thread queue context.
+ *
+ * @param queue_context The thread queue context.
+ * @param arg The timeout argument.
+ *
+ * @see _Thread_queue_Enqueue().
+ */
+RTEMS_INLINE_ROUTINE void
+_Thread_queue_Context_set_timeout_argument(
+  Thread_queue_Context *queue_context,
+  const void           *arg
+)
+{
+  queue_context->Timeout.arg = arg;
+}
+
+/**
+ * @brief Sets the enqueue callout in the thread queue context.
+ *
+ * @param queue_context The thread queue context.
+ * @param enqueue_callout The enqueue callout.
+ *
+ * @see _Thread_queue_Enqueue().
+ */
+RTEMS_INLINE_ROUTINE void
+_Thread_queue_Context_set_enqueue_callout(
+  Thread_queue_Context         *queue_context,
+  Thread_queue_Enqueue_callout  enqueue_callout
+)
+{
+  queue_context->enqueue_callout = enqueue_callout;
+}
+
+/**
+ * @brief Sets the do nothing enqueue callout in the thread queue context.
+ *
+ * @param queue_context The thread queue context.
+ *
+ * @see _Thread_queue_Enqueue().
+ */
+RTEMS_INLINE_ROUTINE void
+_Thread_queue_Context_set_enqueue_do_nothing_extra(
   Thread_queue_Context *queue_context
 )
 {
-  queue_context->timeout_discipline = WATCHDOG_NO_TIMEOUT;
+  queue_context->enqueue_callout = _Thread_queue_Enqueue_do_nothing_extra;
 }
 
 /**
- * @brief Sets a relative timeout in the thread queue context.
+ * @brief Sets the enqueue callout to add a relative monotonic timeout in
+ * ticks.
  *
  * @param queue_context The thread queue context.
- * @param discipline The clock discipline to use for the timeout.
+ * @param ticks The timeout in ticks.
  *
- * @see _Thread_queue_Enqueue_critical().
+ * @see _Thread_queue_Enqueue().
  */
 RTEMS_INLINE_ROUTINE void
-_Thread_queue_Context_set_relative_timeout(
+_Thread_queue_Context_set_enqueue_timeout_ticks(
   Thread_queue_Context *queue_context,
-  Watchdog_Interval     timeout
+  Watchdog_Interval     ticks
 )
 {
-  queue_context->timeout_discipline = WATCHDOG_RELATIVE;
-  queue_context->timeout = timeout;
+  queue_context->Timeout.ticks = ticks;
+  queue_context->enqueue_callout = _Thread_queue_Add_timeout_ticks;
 }
 
 /**
- * @brief Sets an absolute timeout in the thread queue context.
+ * @brief Sets the enqueue callout to add an absolute monotonic timeout in
+ * timespec format.
  *
  * @param queue_context The thread queue context.
- * @param discipline The clock discipline to use for the timeout.
+ * @param abstime The absolute monotonic timeout.
  *
- * @see _Thread_queue_Enqueue_critical().
+ * @see _Thread_queue_Enqueue().
  */
 RTEMS_INLINE_ROUTINE void
-_Thread_queue_Context_set_absolute_timeout(
-  Thread_queue_Context *queue_context,
-  uint64_t              timeout
+_Thread_queue_Context_set_enqueue_timeout_monotonic_timespec(
+  Thread_queue_Context  *queue_context,
+  const struct timespec *abstime
 )
 {
-  queue_context->timeout_discipline = WATCHDOG_ABSOLUTE;
-  queue_context->timeout = timeout;
+  queue_context->Timeout.arg = abstime;
+  queue_context->enqueue_callout =
+    _Thread_queue_Add_timeout_monotonic_timespec;
+}
+
+/**
+ * @brief Sets the enqueue callout to add an absolute realtime timeout in
+ * timespec format.
+ *
+ * @param queue_context The thread queue context.
+ * @param abstime The absolute realtime timeout.
+ *
+ * @see _Thread_queue_Enqueue().
+ */
+RTEMS_INLINE_ROUTINE void
+_Thread_queue_Context_set_enqueue_timeout_realtime_timespec(
+  Thread_queue_Context  *queue_context,
+  const struct timespec *abstime
+)
+{
+  queue_context->Timeout.arg = abstime;
+  queue_context->enqueue_callout = _Thread_queue_Add_timeout_realtime_timespec;
 }
 
 /**
  * @brief Sets the deadlock callout in the thread queue
  * context.
  *
- * A deadlock callout must be provided for _Thread_queue_Enqueue_critical()
+ * A deadlock callout must be provided for _Thread_queue_Enqueue()
  * operations that operate on thread queues which may have an owner, e.g. mutex
  * objects.  Available deadlock callouts are _Thread_queue_Deadlock_status()
  * and _Thread_queue_Deadlock_fatal().
@@ -200,7 +275,7 @@ _Thread_queue_Context_set_absolute_timeout(
  * @param queue_context The thread queue context.
  * @param deadlock_callout The deadlock callout.
  *
- * @see _Thread_queue_Enqueue_critical().
+ * @see _Thread_queue_Enqueue().
  */
 RTEMS_INLINE_ROUTINE void _Thread_queue_Context_set_deadlock_callout(
   Thread_queue_Context          *queue_context,
@@ -208,6 +283,70 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Context_set_deadlock_callout(
 )
 {
   queue_context->deadlock_callout = deadlock_callout;
+}
+
+RTEMS_INLINE_ROUTINE void _Thread_queue_Context_clear_priority_updates(
+  Thread_queue_Context *queue_context
+)
+{
+  queue_context->Priority.update_count = 0;
+}
+
+RTEMS_INLINE_ROUTINE size_t _Thread_queue_Context_save_priority_updates(
+  Thread_queue_Context *queue_context
+)
+{
+  return queue_context->Priority.update_count;
+}
+
+RTEMS_INLINE_ROUTINE void _Thread_queue_Context_restore_priority_updates(
+  Thread_queue_Context *queue_context,
+  size_t                update_count
+)
+{
+  queue_context->Priority.update_count = update_count;
+}
+
+RTEMS_INLINE_ROUTINE void _Thread_queue_Context_add_priority_update(
+  Thread_queue_Context *queue_context,
+  Thread_Control       *the_thread
+)
+{
+  size_t n;
+
+  n = queue_context->Priority.update_count;
+  _Assert( n < RTEMS_ARRAY_SIZE( queue_context->Priority.update ) );
+
+  queue_context->Priority.update_count = n + 1;
+  queue_context->Priority.update[ n ] = the_thread;
+}
+
+#define _Thread_queue_Context_ISR_disable( queue_context, level ) \
+  do { \
+    _ISR_Local_disable( level ); \
+    _ISR_lock_ISR_disable_profile( \
+      &( queue_context )->Lock_context.Lock_context \
+    ) \
+  } while ( 0 )
+
+RTEMS_INLINE_ROUTINE void _Thread_queue_Context_set_ISR_level(
+  Thread_queue_Context *queue_context,
+  ISR_Level             level
+)
+{
+  _ISR_lock_Context_set_level(
+    &queue_context->Lock_context.Lock_context,
+    level
+  );
+}
+
+RTEMS_INLINE_ROUTINE Per_CPU_Control *_Thread_queue_Dispatch_disable(
+  Thread_queue_Context *queue_context
+)
+{
+  return _Thread_Dispatch_disable_critical(
+    &queue_context->Lock_context.Lock_context
+  );
 }
 
 /**
@@ -276,7 +415,8 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Heads_initialize(
 
   for ( i = 0; i < _Scheduler_Count; ++i ) {
     _Chain_Initialize_node( &heads->Priority[ i ].Node );
-    _RBTree_Initialize_empty( &heads->Priority[ i ].Queue );
+    _Priority_Initialize_empty( &heads->Priority[ i ].Queue );
+    heads->Priority[ i ].Queue.scheduler = &_Scheduler_Table[ i ];
   }
 #endif
 
@@ -285,7 +425,8 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Heads_initialize(
 }
 
 RTEMS_INLINE_ROUTINE void _Thread_queue_Queue_initialize(
-  Thread_queue_Queue *queue
+  Thread_queue_Queue *queue,
+  const char         *name
 )
 {
 #if defined(RTEMS_SMP)
@@ -293,6 +434,7 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Queue_initialize(
 #endif
   queue->heads = NULL;
   queue->owner = NULL;
+  queue->name = name;
 }
 
 RTEMS_INLINE_ROUTINE void _Thread_queue_Queue_do_acquire_critical(
@@ -350,20 +492,40 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Queue_release(
   _ISR_lock_ISR_enable( lock_context );
 }
 
+/**
+ * @brief Copies the thread queue name to the specified buffer.
+ *
+ * @param[in] queue The actual thread queue.
+ * @param[in] buffer The buffer for the thread queue name copy.
+ * @param[in] buffer_size The buffer size in characters.
+ * @param[in] id The object identifier in case the thread queue is embedded in
+ *   an object with identifier, otherwise it is set to 0.
+ *
+ * @retval The length of the thread queue name.  May be greater than or equal
+ *   to the buffer size if truncation occurred.
+ */
+size_t _Thread_queue_Queue_get_name_and_id(
+  const Thread_queue_Queue *queue,
+  char                     *buffer,
+  size_t                    buffer_size,
+  Objects_Id               *id
+);
+
+#if defined(RTEMS_SMP)
+void _Thread_queue_Do_acquire_critical(
+  Thread_queue_Control *the_thread_queue,
+  ISR_lock_Context     *lock_context
+);
+#else
 RTEMS_INLINE_ROUTINE void _Thread_queue_Do_acquire_critical(
   Thread_queue_Control *the_thread_queue,
   ISR_lock_Context     *lock_context
 )
 {
-  _Thread_queue_Queue_acquire_critical(
-    &the_thread_queue->Queue,
-    &the_thread_queue->Lock_stats,
-    lock_context
-  );
-#if defined(RTEMS_DEBUG) && defined(RTEMS_SMP)
-  the_thread_queue->owner = _SMP_Get_current_processor();
-#endif
+  (void) the_thread_queue;
+  (void) lock_context;
 }
+#endif
 
 RTEMS_INLINE_ROUTINE void _Thread_queue_Acquire_critical(
   Thread_queue_Control *the_thread_queue,
@@ -376,14 +538,21 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Acquire_critical(
   );
 }
 
+#if defined(RTEMS_SMP)
+void _Thread_queue_Acquire(
+  Thread_queue_Control *the_thread_queue,
+  Thread_queue_Context *queue_context
+);
+#else
 RTEMS_INLINE_ROUTINE void _Thread_queue_Acquire(
   Thread_queue_Control *the_thread_queue,
   Thread_queue_Context *queue_context
 )
 {
+  (void) the_thread_queue;
   _ISR_lock_ISR_disable( &queue_context->Lock_context.Lock_context );
-  _Thread_queue_Acquire_critical( the_thread_queue, queue_context );
 }
+#endif
 
 #if defined(RTEMS_DEBUG)
 RTEMS_INLINE_ROUTINE bool _Thread_queue_Is_lock_owner(
@@ -391,29 +560,29 @@ RTEMS_INLINE_ROUTINE bool _Thread_queue_Is_lock_owner(
 )
 {
 #if defined(RTEMS_SMP)
-  return the_thread_queue->owner == _SMP_Get_current_processor();
+  return the_thread_queue->owner == _SMP_lock_Who_am_I();
 #else
   return _ISR_Get_level() != 0;
 #endif
 }
 #endif
 
+#if defined(RTEMS_SMP)
+void _Thread_queue_Do_release_critical(
+  Thread_queue_Control *the_thread_queue,
+  ISR_lock_Context     *lock_context
+);
+#else
 RTEMS_INLINE_ROUTINE void _Thread_queue_Do_release_critical(
   Thread_queue_Control *the_thread_queue,
   ISR_lock_Context     *lock_context
 )
 {
-#if defined(RTEMS_DEBUG)
+  (void) the_thread_queue;
+  (void) lock_context;
   _Assert( _Thread_queue_Is_lock_owner( the_thread_queue ) );
-#if defined(RTEMS_SMP)
-  the_thread_queue->owner = SMP_LOCK_NO_OWNER;
-#endif
-#endif
-  _Thread_queue_Queue_release_critical(
-    &the_thread_queue->Queue,
-    lock_context
-  );
 }
+#endif
 
 RTEMS_INLINE_ROUTINE void _Thread_queue_Release_critical(
   Thread_queue_Control *the_thread_queue,
@@ -426,14 +595,22 @@ RTEMS_INLINE_ROUTINE void _Thread_queue_Release_critical(
   );
 }
 
+#if defined(RTEMS_SMP)
+void _Thread_queue_Release(
+  Thread_queue_Control *the_thread_queue,
+  Thread_queue_Context *queue_context
+);
+#else
 RTEMS_INLINE_ROUTINE void _Thread_queue_Release(
   Thread_queue_Control *the_thread_queue,
   Thread_queue_Context *queue_context
 )
 {
-  _Thread_queue_Release_critical( the_thread_queue, queue_context );
+  (void) the_thread_queue;
+  _Assert( _Thread_queue_Is_lock_owner( the_thread_queue ) );
   _ISR_lock_ISR_enable( &queue_context->Lock_context.Lock_context );
 }
+#endif
 
 Thread_Control *_Thread_queue_Do_dequeue(
   Thread_queue_Control          *the_thread_queue,
@@ -492,7 +669,20 @@ Thread_Control *_Thread_queue_Do_dequeue(
  * complete.  The operation to enqueue the thread on the queue is protected by
  * the thread queue lock.  This makes it possible to use the thread queue lock
  * to protect the state of objects embedding the thread queue and directly
- * enter _Thread_queue_Enqueue_critical() in case the thread must block.
+ * enter _Thread_queue_Enqueue() in case the thread must block.
+ *
+ * The thread queue context must be set up with the following functions,
+ * otherwise the behaviour is unpredictable
+ *
+ * - _Thread_queue_Context_set_thread_state(),
+ *
+ * - _Thread_queue_Context_set_enqueue_callout() or
+ *   _Thread_queue_Context_set_enqueue_do_nothing_extra() or
+ *   _Thread_queue_Context_set_enqueue_timeout_ticks() or
+ *   _Thread_queue_Context_set_enqueue_timeout_monotonic_timespec() or
+ *   _Thread_queue_Context_set_enqueue_timeout_realtime_timespec(),
+ *
+ * - _Thread_queue_Context_set_deadlock_callout().
  *
  * @code
  * #include <rtems/score/threadqimpl.h>
@@ -501,8 +691,7 @@ Thread_Control *_Thread_queue_Do_dequeue(
  * #define MUTEX_TQ_OPERATIONS &_Thread_queue_Operations_priority
  *
  * typedef struct {
- *   Thread_queue_Control  Queue;
- *   Thread_Control       *owner;
+ *   Thread_queue_Control Queue;
  * } Mutex;
  *
  * void _Mutex_Obtain( Mutex *mutex )
@@ -515,17 +704,23 @@ Thread_Control *_Thread_queue_Do_dequeue(
  *
  *   executing = _Thread_Executing;
  *
- *   if ( mutex->owner == NULL ) {
- *     mutex->owner = executing;
+ *   if ( mutex->Queue.owner == NULL ) {
+ *     mutex->Queue.owner = executing;
  *     _Thread_queue_Release( &mutex->Queue, queue_context );
  *   } else {
- *     _Thread_queue_Context_set_expected_level( &queue_context, 1 );
- *     _Thread_queue_Enqueue_critical(
+ *     _Thread_queue_Context_set_thread_state(
+ *       &queue_context,
+ *       STATES_WAITING_FOR_MUTEX
+ *     );
+ *     _Thread_queue_Context_set_enqueue_do_nothing_extra( &queue_context );
+ *     _Thread_queue_Context_set_deadlock_callout(
+ *       queue_context,
+ *       _Thread_queue_Deadlock_fatal
+ *     );
+ *     _Thread_queue_Enqueue(
  *       &mutex->Queue.Queue,
  *       MUTEX_TQ_OPERATIONS,
  *       executing,
- *       STATES_WAITING_FOR_MUTEX,
- *       0,
  *       &queue_context
  *     );
  *   }
@@ -535,59 +730,45 @@ Thread_Control *_Thread_queue_Do_dequeue(
  * @param[in] queue The actual thread queue.
  * @param[in] operations The thread queue operations.
  * @param[in] the_thread The thread to enqueue.
- * @param[in] state The new state of the thread.
  * @param[in] queue_context The thread queue context of the lock acquire.
  */
-void _Thread_queue_Enqueue_critical(
+void _Thread_queue_Enqueue(
   Thread_queue_Queue            *queue,
   const Thread_queue_Operations *operations,
   Thread_Control                *the_thread,
-  States_Control                 state,
   Thread_queue_Context          *queue_context
 );
 
+#if defined(RTEMS_SMP)
 /**
- * @brief Acquires the thread queue lock and calls
- * _Thread_queue_Enqueue_critical().
+ * @brief Enqueues the thread on the thread queue and busy waits for dequeue.
+ *
+ * Optionally starts the thread timer in case the timeout discipline is not
+ * WATCHDOG_NO_TIMEOUT. Timeout discipline and value are in the queue_context.
+ *
+ * The caller must be the owner of the thread queue lock.  This function will
+ * release the thread queue lock and register it as the new thread lock.
+ *
+ * The thread priorities of the owner and the are updated with respect to the
+ * scheduler.  The sticky level of the thread is incremented.  A thread
+ * dispatch is performed if necessary.
+ *
+ * Afterwards, the thread busy waits on the thread wait flags until a timeout
+ * occurs or the thread queue is surrendered to this thread.  So, it sticks to
+ * the processor instead of blocking with respect to the scheduler.
+ *
+ * @param[in] queue The actual thread queue.
+ * @param[in] operations The thread queue operations.
+ * @param[in] the_thread The thread to enqueue.
+ * @param[in] queue_context The thread queue context of the lock acquire.
  */
-RTEMS_INLINE_ROUTINE void _Thread_queue_Enqueue(
-  Thread_queue_Control          *the_thread_queue,
-  const Thread_queue_Operations *operations,
-  Thread_Control                *the_thread,
-  States_Control                 state,
-  uint64_t                       timeout,
-  Watchdog_Discipline            discipline,
-  uint32_t                       expected_level
-)
-{
-  Thread_queue_Context queue_context;
-
-  _Thread_queue_Context_initialize( &queue_context );
-  _Thread_queue_Acquire( the_thread_queue, &queue_context );
-  _Thread_queue_Context_set_expected_level( &queue_context, expected_level );
-  if ( discipline == WATCHDOG_ABSOLUTE ) {
-    _Thread_queue_Context_set_absolute_timeout( &queue_context, timeout );
-  } else {
-    _Thread_queue_Context_set_relative_timeout( &queue_context, timeout );
-  }
-  _Thread_queue_Enqueue_critical(
-    &the_thread_queue->Queue,
-    operations,
-    the_thread,
-    state,
-    &queue_context
-  );
-}
-
-bool _Thread_queue_Do_extract_locked(
+Status_Control _Thread_queue_Enqueue_sticky(
   Thread_queue_Queue            *queue,
   const Thread_queue_Operations *operations,
-  Thread_Control                *the_thread
-#if defined(RTEMS_MULTIPROCESSING)
-  ,
-  const Thread_queue_Context    *queue_context
-#endif
+  Thread_Control                *the_thread,
+  Thread_queue_Context          *queue_context
 );
+#endif
 
 /**
  * @brief Extracts the thread from the thread queue, restores the default wait
@@ -599,8 +780,7 @@ bool _Thread_queue_Do_extract_locked(
  * @param[in] queue The actual thread queue.
  * @param[in] operations The thread queue operations.
  * @param[in] the_thread The thread to extract.
- * @param[in] queue_context The thread queue context.  This parameter is only
- *   used on multiprocessing configurations.
+ * @param[in] queue_context The thread queue context.
  *
  * @return Returns the unblock indicator for _Thread_queue_Unblock_critical().
  * True indicates, that this thread must be unblocked by the scheduler later in
@@ -610,32 +790,12 @@ bool _Thread_queue_Do_extract_locked(
  * since this thread may already block on another resource in an SMP
  * configuration.
  */
-#if defined(RTEMS_MULTIPROCESSING)
-  #define _Thread_queue_Extract_locked( \
-    unblock, \
-    queue, \
-    the_thread, \
-    queue_context \
-  ) \
-    _Thread_queue_Do_extract_locked( \
-      unblock, \
-      queue, \
-      the_thread, \
-      queue_context \
-    )
-#else
-  #define _Thread_queue_Extract_locked( \
-    unblock, \
-    queue, \
-    the_thread, \
-    queue_context \
-  ) \
-    _Thread_queue_Do_extract_locked( \
-      unblock, \
-      queue, \
-      the_thread \
-    )
-#endif
+bool _Thread_queue_Extract_locked(
+  Thread_queue_Queue            *queue,
+  const Thread_queue_Operations *operations,
+  Thread_Control                *the_thread,
+  Thread_queue_Context          *queue_context
+);
 
 /**
  * @brief Unblocks the thread which was on the thread queue before.
@@ -735,7 +895,7 @@ void _Thread_queue_Extract_with_proxy(
 
 /**
  * @brief Surrenders the thread queue previously owned by the thread to the
- * first enqueued thread if it exists.
+ * first enqueued thread.
  *
  * The owner of the thread queue must be set to NULL by the caller.
  *
@@ -743,22 +903,49 @@ void _Thread_queue_Extract_with_proxy(
  * thread dispatch if necessary.
  *
  * @param[in] queue The actual thread queue.
- * @param[in] operations The thread queue operations.
- * @param[in] heads The thread queue heads.
+ * @param[in] heads The thread queue heads.  It must not be NULL.
  * @param[in] previous_owner The previous owner thread surrendering the thread
  *   queue.
- * @param[in] keep_priority Indicates if the previous owner thread should keep
- *   its current priority.
  * @param[in] queue_context The thread queue context of the lock acquire.
+ * @param[in] operations The thread queue operations.
  */
 void _Thread_queue_Surrender(
   Thread_queue_Queue            *queue,
-  const Thread_queue_Operations *operations,
   Thread_queue_Heads            *heads,
   Thread_Control                *previous_owner,
-  bool                           keep_priority,
-  Thread_queue_Context          *queue_context
+  Thread_queue_Context          *queue_context,
+  const Thread_queue_Operations *operations
 );
+
+#if defined(RTEMS_SMP)
+/**
+ * @brief Surrenders the thread queue previously owned by the thread to the
+ * first enqueued thread.
+ *
+ * The owner of the thread queue must be set to NULL by the caller.
+ *
+ * The caller must be the owner of the thread queue lock.  This function will
+ * release the thread queue.
+ *
+ * The thread priorities of the previous owner and the new owner are updated.  The
+ * sticky level of the previous owner is decremented.  A thread dispatch is
+ * performed if necessary.
+ *
+ * @param[in] queue The actual thread queue.
+ * @param[in] heads The thread queue heads.  It must not be NULL.
+ * @param[in] previous_owner The previous owner thread surrendering the thread
+ *   queue.
+ * @param[in] queue_context The thread queue context of the lock acquire.
+ * @param[in] operations The thread queue operations.
+ */
+void _Thread_queue_Surrender_sticky(
+  Thread_queue_Queue            *queue,
+  Thread_queue_Heads            *heads,
+  Thread_Control                *previous_owner,
+  Thread_queue_Context          *queue_context,
+  const Thread_queue_Operations *operations
+);
+#endif
 
 RTEMS_INLINE_ROUTINE bool _Thread_queue_Is_empty(
   const Thread_queue_Queue *queue
@@ -915,47 +1102,64 @@ size_t _Thread_queue_Flush_critical(
   Thread_queue_Context          *queue_context
 );
 
-void _Thread_queue_Initialize( Thread_queue_Control *the_thread_queue );
+void _Thread_queue_Initialize(
+  Thread_queue_Control *the_thread_queue,
+  const char           *name
+);
 
 #if defined(RTEMS_SMP) && defined(RTEMS_DEBUG) && defined(RTEMS_PROFILING)
-  #define THREAD_QUEUE_INITIALIZER( name ) \
+  #define THREAD_QUEUE_INITIALIZER( _name ) \
     { \
-      .Lock_stats = SMP_LOCK_STATS_INITIALIZER( name ), \
+      .Lock_stats = SMP_LOCK_STATS_INITIALIZER( _name ), \
       .owner = SMP_LOCK_NO_OWNER, \
       .Queue = { \
-        .heads = NULL, \
         .Lock = SMP_TICKET_LOCK_INITIALIZER, \
+        .heads = NULL, \
+        .owner = NULL, \
+        .name = _name \
       } \
     }
 #elif defined(RTEMS_SMP) && defined(RTEMS_DEBUG)
-  #define THREAD_QUEUE_INITIALIZER( name ) \
+  #define THREAD_QUEUE_INITIALIZER( _name ) \
     { \
       .owner = SMP_LOCK_NO_OWNER, \
       .Queue = { \
-        .heads = NULL, \
         .Lock = SMP_TICKET_LOCK_INITIALIZER, \
+        .heads = NULL, \
+        .owner = NULL, \
+        .name = _name \
       } \
     }
 #elif defined(RTEMS_SMP) && defined(RTEMS_PROFILING)
-  #define THREAD_QUEUE_INITIALIZER( name ) \
+  #define THREAD_QUEUE_INITIALIZER( _name ) \
     { \
-      .Lock_stats = SMP_LOCK_STATS_INITIALIZER( name ), \
+      .Lock_stats = SMP_LOCK_STATS_INITIALIZER( _name ), \
       .Queue = { \
-        .heads = NULL, \
         .Lock = SMP_TICKET_LOCK_INITIALIZER, \
+        .heads = NULL, \
+        .owner = NULL, \
+        .name = _name \
       } \
     }
 #elif defined(RTEMS_SMP)
-  #define THREAD_QUEUE_INITIALIZER( name ) \
+  #define THREAD_QUEUE_INITIALIZER( _name ) \
     { \
       .Queue = { \
-        .heads = NULL, \
         .Lock = SMP_TICKET_LOCK_INITIALIZER, \
+        .heads = NULL, \
+        .owner = NULL, \
+        .name = _name \
       } \
     }
 #else
-  #define THREAD_QUEUE_INITIALIZER( name ) \
-    { .Queue = { .heads = NULL } }
+  #define THREAD_QUEUE_INITIALIZER( _name ) \
+    { \
+      .Queue = { \
+        .heads = NULL, \
+        .owner = NULL, \
+        .name = _name \
+      } \
+    }
 #endif
 
 RTEMS_INLINE_ROUTINE void _Thread_queue_Destroy(
@@ -980,6 +1184,18 @@ void _Thread_queue_Unblock_proxy(
 );
 #endif
 
+#if defined(RTEMS_SMP)
+bool _Thread_queue_Path_acquire_critical(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Thread_queue_Context *queue_context
+);
+
+void _Thread_queue_Path_release_critical(
+  Thread_queue_Context *queue_context
+);
+#endif
+
 /**
  * @brief Helper structure to ensure that all objects containing a thread queue
  * have the right layout.
@@ -995,8 +1211,12 @@ typedef struct {
   RTEMS_STATIC_ASSERT( \
     offsetof( object_type, wait_queue_member ) \
       == offsetof( Thread_queue_Object, Wait_queue ) \
-    && ( &( ( (object_type *) 0 )->wait_queue_member ) \
-      == ( &( (Thread_queue_Object *) 0 )->Wait_queue ) ), \
+    && RTEMS_HAVE_MEMBER_SAME_TYPE( \
+      object_type, \
+      wait_queue_member, \
+      Thread_queue_Object, \
+      Wait_queue \
+    ), \
     object_type \
   )
 
@@ -1014,6 +1234,26 @@ extern const Thread_queue_Operations _Thread_queue_Operations_FIFO;
 extern const Thread_queue_Operations _Thread_queue_Operations_priority;
 
 extern const Thread_queue_Operations _Thread_queue_Operations_priority_inherit;
+
+/**
+ * @brief The special thread queue name to indicated that the thread queue is
+ * embedded in an object with identifier.
+ *
+ * @see _Thread_queue_Object_initialize().
+ */
+extern const char _Thread_queue_Object_name[];
+
+/**
+ * @brief Initializes a thread queue embedded in an object with identifier.
+ *
+ * The object must have the layout specified by Thread_queue_Object.  It should
+ * be ensured with the THREAD_QUEUE_OBJECT_ASSERT() static assertion.
+ *
+ * @param[in] the_thread_queue The thread queue.
+ */
+void _Thread_queue_Object_initialize(
+  Thread_queue_Control *the_thread_queue
+);
 
 /**@}*/
 

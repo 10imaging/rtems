@@ -869,6 +869,19 @@ void ShowBATS(void);
 #include <rtems/asm.h>
 
 .macro LA reg, addr
+#if defined(__powerpc64__)
+	lis	\reg, (\addr)@highest
+	ori	\reg, \reg, (\addr)@higher
+	rldicr	\reg, \reg, 32, 31
+	oris	\reg, \reg, (\addr)@h
+	ori	\reg, \reg, (\addr)@l
+#else
+	lis	\reg, (\addr)@h
+	ori	\reg, \reg, (\addr)@l
+#endif
+.endm
+
+.macro LA32 reg, addr
 	lis	\reg, (\addr)@h
 	ori	\reg, \reg, (\addr)@l
 .endm
@@ -936,13 +949,25 @@ void ShowBATS(void);
 	mtmsr	\level
 .endm
 
-.macro GET_SELF_CPU_CONTROL reg
+.macro SET_SELF_CPU_CONTROL reg_0, reg_1
 #if defined(RTEMS_SMP)
 	/* Use Book E Processor ID Register (PIR) */
-	mfspr	\reg, 286
-	slwi	\reg, \reg, PER_CPU_CONTROL_SIZE_LOG2
-	addis	\reg, \reg, _Per_CPU_Information@ha
-	addi	\reg, \reg, _Per_CPU_Information@l
+	mfspr	\reg_0, 286
+	slwi	\reg_0, \reg_0, PER_CPU_CONTROL_SIZE_LOG2
+#if defined(__powerpc64__)
+	LA	\reg_1, _Per_CPU_Information
+	add	\reg_0, \reg_0, \reg_1
+#else
+	addis	\reg_0, \reg_0, _Per_CPU_Information@ha
+	addi	\reg_0, \reg_0, _Per_CPU_Information@l
+#endif
+	mtspr	PPC_PER_CPU_CONTROL_REGISTER, \reg_0
+#endif
+.endm
+
+.macro GET_SELF_CPU_CONTROL reg
+#if defined(RTEMS_SMP)
+	mfspr	\reg, PPC_PER_CPU_CONTROL_REGISTER
 #else
 	lis	\reg, _Per_CPU_Information@h
 	ori	\reg, \reg, _Per_CPU_Information@l

@@ -111,20 +111,10 @@ typedef struct {
  */
 void _Scheduler_priority_Initialize( const Scheduler_Control *scheduler );
 
-/**
- *  @brief Removes @a the_thread from the scheduling decision.
- *
- *  This routine removes @a the_thread from the scheduling decision,
- *  that is, removes it from the ready queue.  It performs
- *  any necessary scheduling operations including the selection of
- *  a new heir thread.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread is the thread to be blocked
- */
 void _Scheduler_priority_Block(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
 /**
@@ -138,24 +128,16 @@ void _Scheduler_priority_Schedule(
   Thread_Control          *the_thread
 );
 
-/**
- *  @brief Add @a the_thread to the scheduling decision.
- *
- *  This routine adds @a the_thread to the scheduling decision,
- *  that is, adds it to the ready queue and
- *  updates any appropriate scheduling variables, for example the heir thread.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread will be unblocked
- */
-Scheduler_Void_or_thread _Scheduler_priority_Unblock(
+void _Scheduler_priority_Unblock(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-Scheduler_Void_or_thread _Scheduler_priority_Update_priority(
+void _Scheduler_priority_Update_priority(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *base_node
 );
 
 void _Scheduler_priority_Node_initialize(
@@ -165,29 +147,10 @@ void _Scheduler_priority_Node_initialize(
   Priority_Control         priority
 );
 
-/**
- *  @brief The specified THREAD yields.
- *
- *  This routine is invoked when a thread wishes to voluntarily
- *  transfer control of the processor to another thread in the queue.
- *
- *  This routine will remove the specified THREAD from the ready queue
- *  and place it immediately at the rear of this chain.  Reset timeslice
- *  and yield the processor functions both use this routine, therefore if
- *  reset is true and this is the only thread on the queue then the
- *  timeslice counter is reset.  The heir THREAD will be updated if the
- *  running is also the currently the heir.
- *
- *  - INTERRUPT LATENCY:
- *    + ready chain
- *    + select heir
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in,out] the_thread The yielding thread.
- */
-Scheduler_Void_or_thread _Scheduler_priority_Yield(
+void _Scheduler_priority_Yield(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
 /**@}*/

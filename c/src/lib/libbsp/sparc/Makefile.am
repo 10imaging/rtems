@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I ../../../aclocal
 
 # Descend into the @RTEMS_BSP_FAMILY@ directory
-SUBDIRS = @RTEMS_BSP_FAMILY@
+_SUBDIRS = @RTEMS_BSP_FAMILY@
 
 EXTRA_DIST =
 
@@ -42,9 +42,11 @@ EXTRA_DIST += shared/timer/tlib_ckinit.c
 # PCI bus
 EXTRA_DIST += shared/include/grpci.h
 EXTRA_DIST += shared/include/grpci2.h
+EXTRA_DIST += shared/include/grpci2dma.h
 EXTRA_DIST += shared/include/pcif.h
 EXTRA_DIST += shared/pci/grpci.c
 EXTRA_DIST += shared/pci/grpci2.c
+EXTRA_DIST += shared/pci/grpci2dma.c
 EXTRA_DIST += shared/pci/pcif.c
 EXTRA_DIST += shared/pci/pci_memreg_sparc_le.c
 EXTRA_DIST += shared/pci/pci_memreg_sparc_be.c
@@ -57,6 +59,7 @@ EXTRA_DIST += shared/include/gr_rasta_spw_router.h
 EXTRA_DIST += shared/include/gr_rasta_tmtc.h
 EXTRA_DIST += shared/include/gr_tmtc_1553.h
 EXTRA_DIST += shared/include/gr_leon4_n2x.h
+EXTRA_DIST += shared/include/gr_cpci_gr740.h
 EXTRA_DIST += shared/pci/gr_701.c
 EXTRA_DIST += shared/pci/gr_rasta_adcdac.c
 EXTRA_DIST += shared/pci/gr_rasta_io.c
@@ -64,6 +67,7 @@ EXTRA_DIST += shared/pci/gr_rasta_spw_router.c
 EXTRA_DIST += shared/pci/gr_rasta_tmtc.c
 EXTRA_DIST += shared/pci/gr_tmtc_1553.c
 EXTRA_DIST += shared/pci/gr_leon4_n2x.c
+EXTRA_DIST += shared/pci/gr_cpci_gr740.c
 
 # DEBUG
 EXTRA_DIST += shared/include/debug_defs.h
@@ -79,7 +83,6 @@ EXTRA_DIST += shared/uart/cons.c
 EXTRA_DIST += shared/uart/apbuart_cons.c
 EXTRA_DIST += shared/include/cons.h
 EXTRA_DIST += shared/include/apbuart_cons.h
-EXTRA_DIST += shared/uart/apbuart.c
 EXTRA_DIST += shared/include/apbuart.h
 
 # CAN (OC_CAN, GRCAN)
@@ -90,6 +93,14 @@ EXTRA_DIST += shared/include/grcan.h
 
 # MEM
 EXTRA_DIST += shared/mem/mctrl.c
+
+# L2CACHE
+EXTRA_DIST += shared/l2c/l2c.c
+EXTRA_DIST += shared/include/l2c.h
+
+# GRIOMMU
+EXTRA_DIST += shared/iommu/griommu.c
+EXTRA_DIST += shared/include/griommu.h
 
 # MIL-STD-B1553 (Core1553BRM)
 EXTRA_DIST += shared/1553/b1553brm.c
@@ -169,6 +180,14 @@ EXTRA_DIST += shared/tmtc/grtc.c
 EXTRA_DIST += shared/include/grtc.h
 EXTRA_DIST += shared/tmtc/grtm.c
 EXTRA_DIST += shared/include/grtm.h
+
+# MEMSCRUB
+EXTRA_DIST += shared/stat/memscrub.c
+EXTRA_DIST += shared/include/memscrub.h
+
+# L4STAT
+EXTRA_DIST += shared/stat/l4stat.c
+EXTRA_DIST += shared/include/l4stat.h
 
 include $(top_srcdir)/../../../automake/subdirs.am
 include $(top_srcdir)/../../../automake/local.am

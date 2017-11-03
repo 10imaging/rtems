@@ -27,7 +27,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/ioctl.h>
+#include <sys/ioccom.h>
 #include <sys/statvfs.h>
 #include <sys/uio.h>
 
@@ -37,6 +37,7 @@
 #include <rtems.h>
 #include <rtems/fs.h>
 #include <rtems/chain.h>
+#include <rtems/score/atomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -977,6 +978,28 @@ typedef int (*rtems_filesystem_kqfilter_t)(
 );
 
 /**
+ * @brief MMAP support.
+ *
+ * @param[in, out] iop The IO pointer.
+ * @param[in, out] addr The starting address of the mapped memory.
+ * @param[in] len The maximum number of bytes to map.
+ * @param[in] prot The desired memory protection.
+ * @param[in] off The offset within the file descriptor to map.
+ *
+ * @retval 0 Successful operation.
+ * @retval error An error occurred.  This is usually EINVAL.
+ *
+ * @see rtems_filesystem_default_mmap().
+ */
+typedef int (*rtems_filesystem_mmap_t)(
+  rtems_libio_t *iop,
+  void **addr,
+  size_t len,
+  int prot,
+  off_t off
+);
+
+/**
  * @brief File system node operations table.
  */
 struct _rtems_filesystem_file_handlers_r {
@@ -995,6 +1018,7 @@ struct _rtems_filesystem_file_handlers_r {
   rtems_filesystem_kqfilter_t kqfilter_h;
   rtems_filesystem_readv_t readv_h;
   rtems_filesystem_writev_t writev_h;
+  rtems_filesystem_mmap_t mmap_h;
 };
 
 /**
@@ -1216,6 +1240,21 @@ int rtems_filesystem_default_kqfilter(
   struct knote *kn
 );
 
+/**
+ * @brief Default MMAP handler.
+ *
+ * @retval ENOTSUP Always.
+ *
+ * @see rtems_filesystem_mmap_t.
+ */
+int rtems_filesystem_default_mmap(
+  rtems_libio_t *iop,
+  void **addr,
+  size_t len,
+  int prot,
+  off_t off
+);
+
 /** @} */
 
 /**
@@ -1279,9 +1318,8 @@ extern const rtems_filesystem_limits_and_options_t
  * to (eg: offset, driver, pathname should be in that)
  */
 struct rtems_libio_tt {
-  rtems_driver_name_t                    *driver;
   off_t                                   offset;    /* current offset into file */
-  uint32_t                                flags;
+  Atomic_Uint                             flags;
   rtems_filesystem_location_info_t        pathinfo;
   uint32_t                                data0;     /* private to "driver" */
   void                                   *data1;     /* ... */
@@ -1331,11 +1369,56 @@ typedef struct {
 #define LIBIO_FLAGS_WRITE         0x0004U  /* writing */
 #define LIBIO_FLAGS_OPEN          0x0100U  /* device is open */
 #define LIBIO_FLAGS_APPEND        0x0200U  /* all writes append */
-#define LIBIO_FLAGS_CREATE        0x0400U  /* create file */
 #define LIBIO_FLAGS_CLOSE_ON_EXEC 0x0800U  /* close on process exec() */
 #define LIBIO_FLAGS_READ_WRITE    (LIBIO_FLAGS_READ | LIBIO_FLAGS_WRITE)
+#define LIBIO_FLAGS_REFERENCE_INC 0x1000U
 
 /** @} */
+
+static inline unsigned int rtems_libio_iop_flags( const rtems_libio_t *iop )
+{
+  return _Atomic_Load_uint( &iop->flags, ATOMIC_ORDER_RELAXED );
+}
+
+/**
+ * @brief Returns true if this is a no delay iop, otherwise returns false.
+ *
+ * @param[in] iop The iop.
+ */
+static inline bool rtems_libio_iop_is_no_delay( const rtems_libio_t *iop )
+{
+  return ( rtems_libio_iop_flags( iop ) & LIBIO_FLAGS_NO_DELAY ) != 0;
+}
+
+/**
+ * @brief Returns true if this is a readable iop, otherwise returns false.
+ *
+ * @param[in] iop The iop.
+ */
+static inline bool rtems_libio_iop_is_readable( const rtems_libio_t *iop )
+{
+  return ( rtems_libio_iop_flags( iop ) & LIBIO_FLAGS_READ ) != 0;
+}
+
+/**
+ * @brief Returns true if this is a writeable iop, otherwise returns false.
+ *
+ * @param[in] iop The iop.
+ */
+static inline bool rtems_libio_iop_is_writeable( const rtems_libio_t *iop )
+{
+  return ( rtems_libio_iop_flags( iop ) & LIBIO_FLAGS_WRITE ) != 0;
+}
+
+/**
+ * @brief Returns true if this is an append iop, otherwise returns false.
+ *
+ * @param[in] iop The iop.
+ */
+static inline bool rtems_libio_iop_is_append( const rtems_libio_t *iop )
+{
+  return ( rtems_libio_iop_flags( iop ) & LIBIO_FLAGS_APPEND ) != 0;
+}
 
 /**
  * @name External I/O Handlers

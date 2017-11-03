@@ -33,7 +33,6 @@
 rtems_task Init(rtems_task_argument argument);
 
 const char rtems_test_name[] = "CAPTURE 1";
-rtems_printer rtems_test_printer;
 
 rtems_task Init(
   rtems_task_argument ignored
@@ -47,7 +46,7 @@ rtems_task Init(
   rtems_mode          old_mode;
   rtems_name          to_name = rtems_build_name('I', 'D', 'L', 'E');;
 
-  rtems_print_printer_printf(&rtems_test_printer);
+  rtems_print_printer_fprintf_putc(&rtems_test_printer);
 
   rtems_test_begin();
 

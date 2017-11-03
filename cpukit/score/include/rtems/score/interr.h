@@ -48,38 +48,38 @@ typedef enum {
    *
    * @see Internal_errors_Core_list.
    */
-  INTERNAL_ERROR_CORE,
+  INTERNAL_ERROR_CORE = 0,
 
   /**
    * @brief Errors of the RTEMS API.
    */
-  INTERNAL_ERROR_RTEMS_API,
+  INTERNAL_ERROR_RTEMS_API = 1,
 
   /**
    * @brief Errors of the POSIX API.
    */
-  INTERNAL_ERROR_POSIX_API,
+  INTERNAL_ERROR_POSIX_API = 2,
 
   /**
    * @brief Fatal source for the block device cache.
    *
    * @see rtems_bdbuf_fatal_code.
    */
-  RTEMS_FATAL_SOURCE_BDBUF,
+  RTEMS_FATAL_SOURCE_BDBUF = 3,
 
   /**
    * @brief Fatal source for application specific errors.
    *
    * The fatal code is application specific.
    */
-  RTEMS_FATAL_SOURCE_APPLICATION,
+  RTEMS_FATAL_SOURCE_APPLICATION = 4,
 
   /**
    * @brief Fatal source of exit().
    *
    * The fatal code is the exit() status code.
    */
-  RTEMS_FATAL_SOURCE_EXIT,
+  RTEMS_FATAL_SOURCE_EXIT = 5,
 
   /**
    * @brief Fatal source for BSP errors.
@@ -89,7 +89,7 @@ typedef enum {
    *
    * @see bsp_fatal_code and bsp_fatal().
    */
-  RTEMS_FATAL_SOURCE_BSP,
+  RTEMS_FATAL_SOURCE_BSP = 6,
 
   /**
    * @brief Fatal source of assert().
@@ -98,14 +98,14 @@ typedef enum {
    *
    * @see rtems_assert_context.
    */
-  RTEMS_FATAL_SOURCE_ASSERT,
+  RTEMS_FATAL_SOURCE_ASSERT = 7,
 
   /**
    * @brief Fatal source of the stack checker.
    *
    * The fatal code is the object name of the executing task.
    */
-  RTEMS_FATAL_SOURCE_STACK_CHECKER,
+  RTEMS_FATAL_SOURCE_STACK_CHECKER = 8,
 
   /**
    * @brief Fatal source of the exceptions.
@@ -114,14 +114,14 @@ typedef enum {
    *
    * @see rtems_exception_frame and rtems_exception_frame_print().
    */
-  RTEMS_FATAL_SOURCE_EXCEPTION,
+  RTEMS_FATAL_SOURCE_EXCEPTION = 9,
 
   /**
    * @brief Fatal source of SMP domain.
    *
    * @see SMP_Fatal_code.
    */
-  RTEMS_FATAL_SOURCE_SMP,
+  RTEMS_FATAL_SOURCE_SMP = 10,
 
   /**
    * @brief The last available fatal source.
@@ -133,38 +133,52 @@ typedef enum {
 } Internal_errors_Source;
 
 /**
- *  A list of errors which are generated internally by the executive core.
+ * @brief A list of errors which are generated internally by the executive
+ * core.
+ *
+ * Do not re-use numbers of obsolete error codes.  Uncomment no longer used
+ * error codes.
  */
 typedef enum {
-  INTERNAL_ERROR_NO_CONFIGURATION_TABLE,
-  INTERNAL_ERROR_NO_CPU_TABLE,
-  INTERNAL_ERROR_TOO_LITTLE_WORKSPACE,
-  INTERNAL_ERROR_WORKSPACE_ALLOCATION,
-  INTERNAL_ERROR_INTERRUPT_STACK_TOO_SMALL,
-  INTERNAL_ERROR_THREAD_EXITTED,
-  INTERNAL_ERROR_INCONSISTENT_MP_INFORMATION,
-  INTERNAL_ERROR_INVALID_NODE,
-  INTERNAL_ERROR_NO_MPCI,
-  INTERNAL_ERROR_BAD_PACKET,
-  INTERNAL_ERROR_OUT_OF_PACKETS,
-  INTERNAL_ERROR_OUT_OF_GLOBAL_OBJECTS,
-  INTERNAL_ERROR_OUT_OF_PROXIES,
-  INTERNAL_ERROR_INVALID_GLOBAL_ID,
-  INTERNAL_ERROR_BAD_STACK_HOOK,
-  INTERNAL_ERROR_BAD_ATTRIBUTES,
-  INTERNAL_ERROR_IMPLEMENTATION_KEY_CREATE_INCONSISTENCY,
-  OBSOLETE_INTERNAL_ERROR_IMPLEMENTATION_BLOCKING_OPERATION_CANCEL,
-  INTERNAL_ERROR_THREAD_QUEUE_ENQUEUE_FROM_BAD_STATE,
-  INTERNAL_ERROR_UNLIMITED_AND_MAXIMUM_IS_0,
-  OBSOLETE_INTERNAL_ERROR_SHUTDOWN_WHEN_NOT_UP,
-  INTERNAL_ERROR_GXX_KEY_ADD_FAILED,
-  INTERNAL_ERROR_GXX_MUTEX_INIT_FAILED,
-  INTERNAL_ERROR_NO_MEMORY_FOR_HEAP,
-  INTERNAL_ERROR_CPU_ISR_INSTALL_VECTOR,
-  INTERNAL_ERROR_RESOURCE_IN_USE,
-  INTERNAL_ERROR_RTEMS_INIT_TASK_ENTRY_IS_NULL,
-  INTERNAL_ERROR_POSIX_INIT_THREAD_ENTRY_IS_NULL,
-  INTERNAL_ERROR_THREAD_QUEUE_DEADLOCK
+  /* INTERNAL_ERROR_NO_CONFIGURATION_TABLE = 0, */
+  /* INTERNAL_ERROR_NO_CPU_TABLE = 1, */
+  INTERNAL_ERROR_TOO_LITTLE_WORKSPACE = 2,
+  INTERNAL_ERROR_WORKSPACE_ALLOCATION = 3,
+  INTERNAL_ERROR_INTERRUPT_STACK_TOO_SMALL = 4,
+  INTERNAL_ERROR_THREAD_EXITTED = 5,
+  INTERNAL_ERROR_INCONSISTENT_MP_INFORMATION = 6,
+  INTERNAL_ERROR_INVALID_NODE = 7,
+  INTERNAL_ERROR_NO_MPCI = 8,
+  INTERNAL_ERROR_BAD_PACKET = 9,
+  INTERNAL_ERROR_OUT_OF_PACKETS = 10,
+  INTERNAL_ERROR_OUT_OF_GLOBAL_OBJECTS = 11,
+  INTERNAL_ERROR_OUT_OF_PROXIES = 12,
+  INTERNAL_ERROR_INVALID_GLOBAL_ID = 13,
+  INTERNAL_ERROR_BAD_STACK_HOOK = 14,
+  /* INTERNAL_ERROR_BAD_ATTRIBUTES = 15, */
+  /* INTERNAL_ERROR_IMPLEMENTATION_KEY_CREATE_INCONSISTENCY = 16, */
+  /* INTERNAL_ERROR_IMPLEMENTATION_BLOCKING_OPERATION_CANCEL = 17, */
+  /* INTERNAL_ERROR_THREAD_QUEUE_ENQUEUE_FROM_BAD_STATE = 18, */
+  INTERNAL_ERROR_UNLIMITED_AND_MAXIMUM_IS_0 = 19,
+  /* INTERNAL_ERROR_SHUTDOWN_WHEN_NOT_UP = 20, */
+  INTERNAL_ERROR_GXX_KEY_ADD_FAILED = 21,
+  INTERNAL_ERROR_GXX_MUTEX_INIT_FAILED = 22,
+  INTERNAL_ERROR_NO_MEMORY_FOR_HEAP = 23,
+  INTERNAL_ERROR_CPU_ISR_INSTALL_VECTOR = 24,
+  INTERNAL_ERROR_RESOURCE_IN_USE = 25,
+  INTERNAL_ERROR_RTEMS_INIT_TASK_ENTRY_IS_NULL = 26,
+  INTERNAL_ERROR_POSIX_INIT_THREAD_ENTRY_IS_NULL = 27,
+  INTERNAL_ERROR_THREAD_QUEUE_DEADLOCK = 28,
+  INTERNAL_ERROR_THREAD_QUEUE_ENQUEUE_STICKY_FROM_BAD_STATE = 29,
+  INTERNAL_ERROR_BAD_THREAD_DISPATCH_DISABLE_LEVEL = 30,
+  INTERNAL_ERROR_BAD_THREAD_DISPATCH_ENVIRONMENT = 31,
+  INTERNAL_ERROR_RTEMS_INIT_TASK_CREATE_FAILED = 32,
+  INTERNAL_ERROR_POSIX_INIT_THREAD_CREATE_FAILED = 33,
+  INTERNAL_ERROR_LIBIO_USER_ENV_KEY_CREATE_FAILED = 34,
+  INTERNAL_ERROR_LIBIO_SEM_CREATE_FAILED = 35,
+  INTERNAL_ERROR_LIBIO_STDOUT_FD_OPEN_FAILED = 36,
+  INTERNAL_ERROR_LIBIO_STDERR_FD_OPEN_FAILED = 37,
+  INTERNAL_ERROR_ILLEGAL_USE_OF_FLOATING_POINT_UNIT = 38
 } Internal_errors_Core_list;
 
 typedef CPU_Uint32ptr Internal_errors_t;
@@ -175,8 +189,6 @@ typedef CPU_Uint32ptr Internal_errors_t;
 typedef struct {
   /** This is the source of the error. */
   Internal_errors_Source  the_source;
-  /** This indicates if the error is internal of external. */
-  bool                    is_internal;
   /** This is the error code. */
   Internal_errors_t       the_error;
 } Internal_errors_Information;
@@ -218,18 +230,25 @@ extern Internal_errors_Information _Internal_errors_What_happened;
  *
  * @param[in] the_source The fatal source indicating the subsystem the fatal
  * condition originated in.
- * @param[in] is_internal Indicates if the fatal condition was generated
- * internally to the executive.
  * @param[in] the_error The fatal error code.  This value must be interpreted
  * with respect to the source.
  *
- * @see rtems_fatal_error_occurred() and rtems_fatal().
+ * @see rtems_fatal() and _Internal_error().
  */
 void _Terminate(
   Internal_errors_Source  the_source,
-  bool                    is_internal,
   Internal_errors_t       the_error
 ) RTEMS_NO_RETURN;
+
+/**
+ * @brief Terminates the system with an INTERNAL_ERROR_CORE fatal source and
+ * the specified core error code.
+ *
+ * @param[in] core_error The core error code.
+ *
+ * @see _Terminate().
+ */
+void _Internal_error( Internal_errors_Core_list core_error ) RTEMS_NO_RETURN;
 
 #ifdef __cplusplus
 }

@@ -87,6 +87,7 @@
 #include <libchip/sersupp.h>
 #include "sci.h"
 #include <rtems/m68k/qsm.h>
+#include <inttypes.h>
 /*#include "../misc/include/cpu332.h" */
 
 /*****************************************************************************
@@ -675,7 +676,7 @@ int   SciSetAttributes(
     /* if you look closely you will see this is the only thing we use */
     /* set the baud rate */
 
-    baud_requested = t->c_cflag & CBAUD;        /* baud rate */
+    baud_requested = t->c_ospeed;               /* baud rate */
 
     if (!baud_requested)
     {
@@ -1535,8 +1536,6 @@ void SciSendBreak( void )
 ****************************************************************************/
 
 #if 0
-#define O_RDWR LIBIO_FLAGS_READ_WRITE           /* dont like this but... */
-
 void SciUnitTest()
 {
     uint8_t   byte;                             /* a character */
@@ -1576,12 +1575,12 @@ void SciPrintStats ( void )
 
     printk( "Current baud rate is %d bps or %d cps\r\n\n", SciBaud, SciBaud / 10 );
 
-    printk( "SCI Uart chars in       %8d\r\n", SciBytesIn       );
-    printk( "SCI Uart chars out      %8d\r\n", SciBytesOut      );
-    printk( "SCI Uart framing errors %8d\r\n", SciErrorsFraming );
-    printk( "SCI Uart parity  errors %8d\r\n", SciErrorsParity  );
-    printk( "SCI Uart overrun errors %8d\r\n", SciErrorsOverrun );
-    printk( "SCI Uart noise   errors %8d\r\n", SciErrorsNoise   );
+    printk( "SCI Uart chars in       %8" PRIu32 "\r\n", SciBytesIn       );
+    printk( "SCI Uart chars out      %8" PRIu32 "\r\n", SciBytesOut      );
+    printk( "SCI Uart framing errors %8" PRIu32 "\r\n", SciErrorsFraming );
+    printk( "SCI Uart parity  errors %8" PRIu32 "\r\n", SciErrorsParity  );
+    printk( "SCI Uart overrun errors %8" PRIu32 "\r\n", SciErrorsOverrun );
+    printk( "SCI Uart noise   errors %8" PRIu32 "\r\n", SciErrorsNoise   );
 
     return;
 }

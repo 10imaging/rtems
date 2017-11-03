@@ -48,25 +48,22 @@ extern "C" {
  */
 extern Thread_Information _POSIX_Threads_Information;
 
-/**
- * This variable contains the default POSIX Thread attributes.
- */
-extern pthread_attr_t _POSIX_Threads_Default_attributes;
-
 RTEMS_INLINE_ROUTINE void _POSIX_Threads_Sporadic_timer_insert(
   Thread_Control    *the_thread,
   POSIX_API_Control *api
 )
 {
   the_thread->cpu_time_budget =
-    _Timespec_To_ticks( &api->Attributes.schedparam.sched_ss_init_budget );
+    _Timespec_To_ticks( &api->Sporadic.sched_ss_init_budget );
 
-  _Watchdog_Per_CPU_insert_relative(
+  _Watchdog_Per_CPU_insert_ticks(
     &api->Sporadic.Timer,
     _Per_CPU_Get(),
-    _Timespec_To_ticks( &api->Attributes.schedparam.sched_ss_repl_period )
+    _Timespec_To_ticks( &api->Sporadic.sched_ss_repl_period )
   );
 }
+
+void _POSIX_Threads_Sporadic_timer( Watchdog_Control *watchdog );
 
 /**
  * @brief POSIX threads sporadic budget callout.
@@ -101,14 +98,6 @@ int _POSIX_Thread_Translate_sched_param(
   Thread_CPU_budget_algorithm_callout *budget_callout
 );
 
-/*
- * rtems_pthread_attribute_compare
- */
-int rtems_pthread_attribute_compare(
-  const pthread_attr_t *attr1,
-  const pthread_attr_t *attr2
-);
-
 RTEMS_INLINE_ROUTINE Thread_Control *_POSIX_Threads_Allocate(void)
 {
   _Objects_Allocator_lock();
@@ -119,35 +108,11 @@ RTEMS_INLINE_ROUTINE Thread_Control *_POSIX_Threads_Allocate(void)
     _Objects_Allocate_unprotected( &_POSIX_Threads_Information.Objects );
 }
 
-RTEMS_INLINE_ROUTINE void _POSIX_Threads_Copy_attributes(
-  pthread_attr_t        *dst_attr,
-  const pthread_attr_t  *src_attr
-)
-{
-  *dst_attr = *src_attr;
-#if defined(RTEMS_SMP) && defined(__RTEMS_HAVE_SYS_CPUSET_H__)
-  _Assert(
-    dst_attr->affinitysetsize == sizeof(dst_attr->affinitysetpreallocated)
-  );
-  dst_attr->affinityset = &dst_attr->affinitysetpreallocated;
-#endif
-}
-
 RTEMS_INLINE_ROUTINE void _POSIX_Threads_Free (
   Thread_Control *the_pthread
 )
 {
   _Objects_Free( &_POSIX_Threads_Information.Objects, &the_pthread->Object );
-}
-
-RTEMS_INLINE_ROUTINE void _POSIX_Threads_Initialize_attributes(
-  pthread_attr_t  *attr
-)
-{
-  _POSIX_Threads_Copy_attributes(
-    attr,
-    &_POSIX_Threads_Default_attributes
-  );
 }
 
 /** @} */

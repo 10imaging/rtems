@@ -4,7 +4,6 @@
  *  Attempt to mount the IMFS file system on a mount point in the base IMFS
  */
 
-#define CONFIGURE_INIT
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"

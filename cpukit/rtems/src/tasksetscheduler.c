@@ -35,7 +35,8 @@ rtems_status_code rtems_task_set_scheduler(
   Priority_Control         core_priority;
   Status_Control           status;
 
-  if ( !_Scheduler_Get_by_id( scheduler_id, &scheduler ) ) {
+  scheduler = _Scheduler_Get_by_id( scheduler_id );
+  if ( scheduler == NULL ) {
     return RTEMS_INVALID_ID;
   }
 
@@ -57,10 +58,7 @@ rtems_status_code rtems_task_set_scheduler(
     return RTEMS_INVALID_ID;
   }
 
-  cpu_self = _Thread_Dispatch_disable_critical(
-    &queue_context.Lock_context.Lock_context
-  );
-
+  cpu_self = _Thread_queue_Dispatch_disable( &queue_context );
   _Thread_Wait_acquire_critical( the_thread, &queue_context );
   _Thread_State_acquire_critical( the_thread, &state_context );
 

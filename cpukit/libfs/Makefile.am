@@ -1,7 +1,7 @@
 include $(top_srcdir)/automake/multilib.am
 include $(top_srcdir)/automake/compile.am
 
-SUBDIRS = src/nfsclient
+_SUBDIRS = src/nfsclient
 
 EXTRA_DIST = README
 
@@ -33,6 +33,7 @@ libdefaultfs_a_SOURCES = \
     src/defaults/default_ftruncate_directory.c \
     src/defaults/default_handlers.c src/defaults/default_ops.c
 libdefaultfs_a_SOURCES += src/defaults/default_kqfilter.c
+libdefaultfs_a_SOURCES += src/defaults/default_mmap.c
 libdefaultfs_a_SOURCES += src/defaults/default_poll.c
 libdefaultfs_a_SOURCES += src/defaults/default_readv.c
 libdefaultfs_a_SOURCES += src/defaults/default_writev.c
@@ -59,6 +60,7 @@ libimfs_a_SOURCES += src/imfs/deviceio.c \
     src/imfs/imfs_stat.c src/imfs/imfs_stat_file.c src/imfs/imfs_symlink.c \
     src/imfs/imfs_unmount.c src/imfs/imfs_utime.c src/imfs/ioman.c \
     src/imfs/imfs_memfile.c src/imfs/imfs.h
+libimfs_a_SOURCES += src/imfs/imfs_node.c
 
 # POSIX FIFO/pipe
 libimfs_a_SOURCES += src/pipe/fifo.c src/pipe/pipe.c src/pipe/pipe.h

@@ -46,7 +46,6 @@
 #include <rtems/rtems_mii_ioctl.h>
 
 #include <sys/types.h>
-#include <sys/ioctl.h>
 #include <sys/param.h>
 #include <sys/mbuf.h>
 #include <sys/socket.h>
@@ -248,38 +247,33 @@ if_atsam_read_phy(Gmac *pHw,
 static void atsamv7_find_valid_phy(if_atsam_gmac *gmac_inst)
 {
 	Gmac *pHw = gmac_inst->gGmacd.pHw;
-
-	uint32_t retry_max;
 	uint32_t value = 0;
-	uint8_t rc;
 	uint8_t phy_address;
+	int i;
 
-	phy_address = gmac_inst->phy_address;
-	retry_max = gmac_inst->retries;
-
-	if (phy_address != 0xFF) {
+	if (gmac_inst->phy_address != 0xFF) {
 		return;
 	}
 
 	/* Find another one */
-	rc = 0xFF;
+	phy_address = 0xFF;
 
-	for (phy_address = 0; phy_address < 32; ++phy_address) {
+	for (i = 31; i >= 0; --i) {
 		int rv;
 
-		rv = if_atsam_read_phy(pHw, phy_address, MII_PHYIDR1,
-		    &value, retry_max);
-		if (rv == 0 && value != 0 && value >= 0xffff) {
-			rc = phy_address;
+		rv = if_atsam_read_phy(pHw, (uint8_t)i, MII_PHYIDR1,
+		    &value, gmac_inst->retries);
+		if (rv == 0 && value != 0 && value < 0xffff) {
+			phy_address = (uint8_t)i;
 			break;
 		}
 	}
 
-	if (rc != 0xFF) {
+	if (phy_address != 0xFF) {
 		if_atsam_read_phy(pHw, phy_address, MII_PHYIDR1, &value,
-		    retry_max);
+		    gmac_inst->retries);
 		if_atsam_read_phy(pHw, phy_address, MII_PHYIDR2, &value,
-		    retry_max);
+		    gmac_inst->retries);
 		gmac_inst->phy_address = phy_address;
 	}
 }
@@ -1217,8 +1211,17 @@ static int if_atsam_driver_attach(struct rtems_bsdnet_ifconfig *config)
 	sc->mdio.mdio_w = if_atsam_mdio_write;
 	sc->mdio.has_gmii = 1;
 
-	sc->amount_rx_buf = config->rbuf_count;
-	sc->amount_tx_buf = config->xbuf_count;
+	if (config->rbuf_count > 0) {
+		sc->amount_rx_buf = config->rbuf_count;
+	} else {
+		sc->amount_rx_buf = 8;
+	}
+
+	if (config->xbuf_count > 0) {
+		sc->amount_tx_buf = config->xbuf_count;
+	} else {
+		sc->amount_tx_buf = 64;
+	}
 
 	sc->tx_ring.tx_bd_used = 0;
 	sc->tx_ring.tx_bd_free = 0;

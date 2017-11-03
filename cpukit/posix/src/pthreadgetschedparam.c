@@ -25,6 +25,7 @@
 #include <errno.h>
 
 #include <rtems/posix/pthreadimpl.h>
+#include <rtems/posix/pthreadattrimpl.h>
 #include <rtems/posix/priorityimpl.h>
 #include <rtems/score/schedulerimpl.h>
 #include <rtems/score/threadimpl.h>
@@ -45,6 +46,7 @@ int pthread_getschedparam(
     return EINVAL;
   }
 
+  _Thread_queue_Context_initialize( &queue_context );
   the_thread = _Thread_Get( thread, &queue_context.Lock_context.Lock_context );
 
   if ( the_thread == NULL ) {
@@ -55,11 +57,10 @@ int pthread_getschedparam(
 
   _Thread_Wait_acquire_critical( the_thread, &queue_context );
 
-  *policy = api->Attributes.schedpolicy;
-  *param  = api->Attributes.schedparam;
-
-  scheduler = _Scheduler_Get_own( the_thread );
-  priority = the_thread->real_priority;
+  *policy = api->schedpolicy;
+  scheduler = _Thread_Scheduler_get_home( the_thread );
+  _POSIX_Threads_Get_sched_param_sporadic( the_thread, api, scheduler, param );
+  priority = the_thread->Real_priority.priority;
 
   _Thread_Wait_release( the_thread, &queue_context );
 

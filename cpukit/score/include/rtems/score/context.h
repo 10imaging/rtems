@@ -111,22 +111,6 @@ extern "C" {
    _CPU_Context_Restart_self( _the_context )
 
 /**
- *  @brief Return starting address of floating point context.
- *
- *  This function returns the starting address of the floating
- *  point context save area.  It is assumed that the are reserved
- *  for the floating point save area is large enough.
- *
- *  @param[in] _base is lowest physical address of the floating point
- *         context save area.
- *  @param[in] _offset is the offset into the floating point area
- *
- *  @retval the initial FP context pointer
- */
-#define _Context_Fp_start( _base, _offset ) \
-   _CPU_Context_Fp_start( (_base), (_offset) )
-
-/**
  *  @brief Initialize floating point context area.
  *
  *  This routine initializes the floating point context save
@@ -161,6 +145,13 @@ extern "C" {
  */
 #define _Context_Save_fp( _fp ) \
    _CPU_Context_save_fp( _fp )
+
+#if defined(_CPU_Context_Destroy)
+  #define _Context_Destroy( _the_thread, _the_context ) \
+    _CPU_Context_Destroy( _the_thread, _the_context )
+#else
+  #define _Context_Destroy( _the_thread, _the_context )
+#endif
 
 #ifdef __cplusplus
 }

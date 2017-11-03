@@ -87,17 +87,13 @@ typedef enum {
   OBJECTS_POSIX_KEYS                = 2,
   OBJECTS_POSIX_INTERRUPTS          = 3,
   OBJECTS_POSIX_MESSAGE_QUEUES      = 5,
-  OBJECTS_POSIX_MUTEXES             = 6,
   OBJECTS_POSIX_SEMAPHORES          = 7,
-  OBJECTS_POSIX_CONDITION_VARIABLES = 8,
   OBJECTS_POSIX_TIMERS              = 9,
-  OBJECTS_POSIX_BARRIERS            = 10,
-  OBJECTS_POSIX_SPINLOCKS           = 11,
-  OBJECTS_POSIX_RWLOCKS             = 12
+  OBJECTS_POSIX_SHMS                = 12
 } Objects_POSIX_API;
 
 /** This macro is used to generically specify the last API index. */
-#define OBJECTS_POSIX_CLASSES_LAST OBJECTS_POSIX_RWLOCKS
+#define OBJECTS_POSIX_CLASSES_LAST OBJECTS_POSIX_SHMS
 
 /*
  * For fake objects, which have an object identifier, but no objects
@@ -653,6 +649,27 @@ char *_Objects_Get_name_as_string(
   Objects_Id   id,
   size_t       length,
   char        *name
+);
+
+/**
+ * @brief Converts the specified object name to a text representation.
+ *
+ * Non-printable characters according to isprint() are converted to '*'.
+ *
+ * @param[in] name The object name.
+ * @param[in] is_string Indicates if the object name is a string or a four
+ *   character array (32-bit unsigned integer).
+ * @param[in] buffer The string buffer for the text representation.
+ * @param[in] buffer_size The buffer size in characters.
+ *
+ * @retval The length of the text representation.  May be greater than or equal
+ * to the buffer size if truncation occurred.
+ */
+size_t _Objects_Name_to_string(
+  Objects_Name  name,
+  bool          is_string,
+  char         *buffer,
+  size_t        buffer_size
 );
 
 /**

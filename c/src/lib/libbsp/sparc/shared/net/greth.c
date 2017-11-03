@@ -41,6 +41,16 @@
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 
+/* map via rtems_interrupt_lock_* API: */
+#define SPIN_DECLARE(lock) RTEMS_INTERRUPT_LOCK_MEMBER(lock)
+#define SPIN_INIT(lock, name) rtems_interrupt_lock_initialize(lock, name)
+#define SPIN_LOCK(lock, level) rtems_interrupt_lock_acquire_isr(lock, &level)
+#define SPIN_LOCK_IRQ(lock, level) rtems_interrupt_lock_acquire(lock, &level)
+#define SPIN_UNLOCK(lock, level) rtems_interrupt_lock_release_isr(lock, &level)
+#define SPIN_UNLOCK_IRQ(lock, level) rtems_interrupt_lock_release(lock, &level)
+#define SPIN_IRQFLAGS(k) rtems_interrupt_lock_context k
+#define SPIN_ISR_IRQFLAGS(k) SPIN_IRQFLAGS(k)
+
 #ifdef malloc
 #undef malloc
 #endif
@@ -144,6 +154,8 @@ struct greth_softc
    greth_regs *regs;
    int minor;
    int phyaddr;  /* PHY Address configured by user (or -1 to autodetect) */
+   unsigned int edcl_dis;
+   int greth_rst;
 
    int acceptBroadcast;
    rtems_id daemonTid;
@@ -177,6 +189,7 @@ struct greth_softc
    int gb;
    int gbit_mac;
    int auto_neg;
+   unsigned int advmodes; /* advertise ethernet speed modes. 0 = all modes. */
    struct timespec auto_neg_time;
 
    /*
@@ -198,6 +211,8 @@ struct greth_softc
    unsigned long txRetryLimit;
    unsigned long txUnderrun;
 
+   /* Spin-lock ISR protection */
+   SPIN_DECLARE(devlock);
 };
 
 int greth_process_tx_gbit(struct greth_softc *sc);
@@ -219,12 +234,15 @@ static void greth_interrupt (void *arg)
         uint32_t ctrl;
         rtems_event_set events = 0;
         struct greth_softc *greth = arg;
-        
+        SPIN_ISR_IRQFLAGS(flags);
+
         /* read and clear interrupt cause */
         status = greth->regs->status;
         greth->regs->status = status;
+
+        SPIN_LOCK(&greth->devlock, flags);
         ctrl = greth->regs->ctrl;
-        
+
         /* Frame received? */
         if ((ctrl & GRETH_CTRL_RXIRQ) && (status & (GRETH_STATUS_RXERR | GRETH_STATUS_RXIRQ)))
         {
@@ -233,20 +251,21 @@ static void greth_interrupt (void *arg)
                 ctrl &= ~GRETH_CTRL_RXIRQ;
                 events |= INTERRUPT_EVENT;
         }
-        
+
         if ( (ctrl & GRETH_CTRL_TXIRQ) && (status & (GRETH_STATUS_TXERR | GRETH_STATUS_TXIRQ)) )
         {
                 greth->txInterrupts++;
                 ctrl &= ~GRETH_CTRL_TXIRQ;
                 events |= GRETH_TX_WAIT_EVENT;
         }
-        
+
         /* Clear interrupt sources */
         greth->regs->ctrl = ctrl;
-        
+        SPIN_UNLOCK(&greth->devlock, flags);
+
         /* Send the event(s) */
         if ( events )
-            rtems_event_send (greth->daemonTid, events);
+            rtems_bsdnet_event_send(greth->daemonTid, events);
 }
 
 static uint32_t read_mii(struct greth_softc *sc, uint32_t phy_addr, uint32_t reg_addr)
@@ -334,19 +353,27 @@ greth_initialize_hardware (struct greth_softc *sc)
     int tmp1;
     int tmp2;
     struct timespec tstart, tnow;
-
     greth_regs *regs;
+    unsigned int advmodes, speed;
 
     regs = sc->regs;
-    
+
     /* Reset the controller.  */
     sc->rxInterrupts = 0;
     sc->rxPackets = 0;
 
-    regs->ctrl = GRETH_CTRL_RST;	/* Reset ON */
-    for (i = 0; i<100 && (regs->ctrl & GRETH_CTRL_RST); i++)
-        ;
-    regs->ctrl = GRETH_CTRL_DD; 	/* Reset OFF. SW do PHY Init */
+    if (sc->greth_rst) {
+        /* Reset ON */
+        regs->ctrl = GRETH_CTRL_RST | GRETH_CTRL_DD | GRETH_CTRL_ED;
+        for (i = 0; i<100 && (regs->ctrl & GRETH_CTRL_RST); i++)
+            ;
+        speed = 0; /* probe mode below */
+    } else {
+        /* inherit EDCL mode for now */
+        speed = sc->regs->ctrl & (GRETH_CTRL_GB|GRETH_CTRL_SP|GRETH_CTRL_FULLD);
+    }
+    /* Reset OFF and RX/TX DMA OFF. SW do PHY Init */
+    regs->ctrl = GRETH_CTRL_DD | GRETH_CTRL_ED | speed;
 
     /* Check if mac is gbit capable*/
     sc->gbit_mac = (regs->ctrl >> 27) & 1;
@@ -378,6 +405,13 @@ greth_initialize_hardware (struct greth_softc *sc)
     /* Wait for reset to complete and get default values */
     while ((phyctrl = read_mii(sc, phyaddr, 0)) & 0x8000) {}
 
+    /* Set up PHY advertising modes for auto-negotiation */
+    advmodes = sc->advmodes;
+    if (advmodes == 0)
+        advmodes = GRETH_ADV_ALL;
+    if (!sc->gbit_mac)
+        advmodes &= ~(GRETH_ADV_1000_FD | GRETH_ADV_1000_HD);
+
     /* Enable/Disable GBit auto-neg advetisement so that the link partner
      * know that we have/haven't GBit capability. The MAC may not support
      * Gbit even though PHY does...
@@ -385,11 +419,26 @@ greth_initialize_hardware (struct greth_softc *sc)
     phystatus = read_mii(sc, phyaddr, 1);
     if (phystatus & 0x0100) {
         tmp1 = read_mii(sc, phyaddr, 9);
-        if (sc->gbit_mac)
-            write_mii(sc, phyaddr, 9, tmp1 | 0x300);
-        else
-            write_mii(sc, phyaddr, 9, tmp1 & ~(0x300));
+        tmp1 &= ~0x300;
+        if (advmodes & GRETH_ADV_1000_FD)
+            tmp1 |= 0x200;
+        if (advmodes & GRETH_ADV_1000_HD)
+            tmp1 |= 0x100;
+        write_mii(sc, phyaddr, 9, tmp1);
     }
+
+    /* Optionally limit the 10/100 modes as configured by user */
+    tmp1 = read_mii(sc, phyaddr, 4);
+    tmp1 &= ~0x1e0;
+    if (advmodes & GRETH_ADV_100_FD)
+        tmp1 |= 0x100;
+    if (advmodes & GRETH_ADV_100_HD)
+        tmp1 |= 0x080;
+    if (advmodes & GRETH_ADV_10_FD)
+        tmp1 |= 0x040;
+    if (advmodes & GRETH_ADV_10_HD)
+        tmp1 |= 0x020;
+    write_mii(sc, phyaddr, 4, tmp1);
 
     /* If autonegotiation implemented we start it */
     if (phystatus & 0x0008) {
@@ -429,15 +478,15 @@ greth_initialize_hardware (struct greth_softc *sc)
             if ((phystatus >> 8) & 1) {
                     sc->phydev.extadv = read_mii(sc, phyaddr, 9);
                     sc->phydev.extpart = read_mii(sc, phyaddr, 10);
-                       if ( (sc->phydev.extadv & GRETH_MII_EXTADV_1000FD) &&
-                            (sc->phydev.extpart & GRETH_MII_EXTPRT_1000FD)) {
-                               sc->gb = 1;
-                               sc->fd = 1;
-                       }
                        if ( (sc->phydev.extadv & GRETH_MII_EXTADV_1000HD) &&
                             (sc->phydev.extpart & GRETH_MII_EXTPRT_1000HD)) {
                                sc->gb = 1;
                                sc->fd = 0;
+                       }
+                       if ( (sc->phydev.extadv & GRETH_MII_EXTADV_1000FD) &&
+                            (sc->phydev.extpart & GRETH_MII_EXTPRT_1000FD)) {
+                               sc->gb = 1;
+                               sc->fd = 1;
                        }
             }
             if ((sc->gb == 0) || ((sc->gb == 1) && (sc->gbit_mac == 0))) {
@@ -445,14 +494,12 @@ greth_initialize_hardware (struct greth_softc *sc)
                          (sc->phydev.part & GRETH_MII_100TXFD)) {
                             sc->sp = 1;
                             sc->fd = 1;
-                    }
-                    if ( (sc->phydev.adv & GRETH_MII_100TXHD) &&
-                         (sc->phydev.part & GRETH_MII_100TXHD)) {
+                    } else if ( (sc->phydev.adv & GRETH_MII_100TXHD) &&
+                                (sc->phydev.part & GRETH_MII_100TXHD)) {
                             sc->sp = 1;
                             sc->fd = 0;
-                    }
-                    if ( (sc->phydev.adv & GRETH_MII_10FD) &&
-                         (sc->phydev.part & GRETH_MII_10FD)) {
+                    } else if ( (sc->phydev.adv & GRETH_MII_10FD) &&
+                                (sc->phydev.part & GRETH_MII_10FD)) {
                             sc->fd = 1;
                     }
             }
@@ -488,10 +535,15 @@ auto_neg_done:
     }
     while ((read_mii(sc, phyaddr, 0)) & 0x8000) {}
 
-    regs->ctrl = GRETH_CTRL_RST;	/* Reset ON */
-    for (i = 0; i < 100 && (regs->ctrl & GRETH_CTRL_RST); i++)
-        ;
-    regs->ctrl = GRETH_CTRL_DD;
+    if (sc->greth_rst) {
+        /* Reset ON */
+        regs->ctrl = GRETH_CTRL_RST | GRETH_CTRL_DD | GRETH_CTRL_ED;
+        for (i = 0; i < 100 && (regs->ctrl & GRETH_CTRL_RST); i++)
+            ;
+    }
+    /* Reset OFF. Set mode matching PHY settings. */
+    speed = (sc->gb << 8) | (sc->sp << 7) | (sc->fd << 4);
+    regs->ctrl = GRETH_CTRL_DD | sc->edcl_dis | speed;
 
     /* Initialize rx/tx descriptor table pointers. Due to alignment we 
      * always allocate maximum table size.
@@ -568,7 +620,7 @@ auto_neg_done:
         sc->tx_int_gen = sc->tx_int_gen_cur = sc->txbufs/2;
     }
     sc->next_tx_mbuf = NULL;
-    
+
     if ( !sc->gbit_mac )
         sc->max_fragsize = 1;
 
@@ -578,7 +630,7 @@ auto_neg_done:
     /* install interrupt handler */
     drvmgr_interrupt_register(sc->dev, 0, "greth", greth_interrupt, sc);
 
-    regs->ctrl |= GRETH_CTRL_RXEN | (sc->fd << 4) | GRETH_CTRL_RXIRQ | (sc->sp << 7) | (sc->gb << 8);
+    regs->ctrl |= GRETH_CTRL_RXEN | GRETH_CTRL_RXIRQ;
 
     print_init_info(sc);
 }
@@ -633,11 +685,11 @@ greth_Daemon (void *arg)
     struct mbuf *m;
     unsigned int len, len_status, bad;
     rtems_event_set events;
-    rtems_interrupt_level level;
+    SPIN_IRQFLAGS(flags);
     int first;
-		int tmp;
-		unsigned int addr;
-    
+    int tmp;
+    unsigned int addr;
+
     for (;;)
       {
         rtems_bsdnet_event_receive (INTERRUPT_EVENT | GRETH_TX_WAIT_EVENT,
@@ -753,26 +805,24 @@ again:
                     } else {
                             dp->rxdesc[dp->rx_ptr].ctrl = GRETH_RXD_ENABLE | GRETH_RXD_IRQ;
                     }
-                    rtems_interrupt_disable(level);
+                    SPIN_LOCK_IRQ(&dp->devlock, flags);
                     dp->regs->ctrl |= GRETH_CTRL_RXEN;
-                    rtems_interrupt_enable(level);
+                    SPIN_UNLOCK_IRQ(&dp->devlock, flags);
                     dp->rx_ptr = (dp->rx_ptr + 1) % dp->rxbufs;
             }
-        
+
         /* Always scan twice to avoid deadlock */
         if ( first ){
             first=0;
-            rtems_interrupt_disable(level);
+            SPIN_LOCK_IRQ(&dp->devlock, flags);
             dp->regs->ctrl |= GRETH_CTRL_RXIRQ;
-            rtems_interrupt_enable(level);
+            SPIN_UNLOCK_IRQ(&dp->devlock, flags);
             goto again;
         }
 
       }
-    
 }
 
-static int inside = 0;
 static int
 sendpacket (struct ifnet *ifp, struct mbuf *m)
 {
@@ -780,18 +830,13 @@ sendpacket (struct ifnet *ifp, struct mbuf *m)
     unsigned char *temp;
     struct mbuf *n;
     unsigned int len;
-    rtems_interrupt_level level;
-        
-    /*printf("Send packet entered\n");*/
-    if (inside) printf ("error: sendpacket re-entered!!\n");
-    inside = 1;
-    
+    SPIN_IRQFLAGS(flags);
+
     /*
      * Is there a free descriptor available?
      */
     if (GRETH_MEM_LOAD(&dp->txdesc[dp->tx_ptr].ctrl) & GRETH_TXD_ENABLE){
             /* No. */
-            inside = 0;
             return 1;
     }
     
@@ -833,13 +878,12 @@ sendpacket (struct ifnet *ifp, struct mbuf *m)
                             GRETH_TXD_WRAP | GRETH_TXD_ENABLE | len;
             }
             dp->tx_ptr = (dp->tx_ptr + 1) % dp->txbufs;
-            rtems_interrupt_disable(level);
+            SPIN_LOCK_IRQ(&dp->devlock, flags);
             dp->regs->ctrl = dp->regs->ctrl | GRETH_CTRL_TXEN;
-            rtems_interrupt_enable(level);
+            SPIN_UNLOCK_IRQ(&dp->devlock, flags);
             
     }
-    inside = 0;
-    
+
     return 0;
 }
 
@@ -854,11 +898,8 @@ sendpacket_gbit (struct ifnet *ifp, struct mbuf *m)
         int frags;
         struct mbuf *mtmp;
         int int_en;
-        rtems_interrupt_level level;
+        SPIN_IRQFLAGS(flags);
 
-        if (inside) printf ("error: sendpacket re-entered!!\n");
-        inside = 1;
-        
         len = 0;
 #ifdef GRETH_DEBUG
         printf("TXD: 0x%08x\n", (int) m->m_data);
@@ -877,13 +918,11 @@ sendpacket_gbit (struct ifnet *ifp, struct mbuf *m)
             dp->max_fragsize = frags;
         
         if ( frags > dp->txbufs ){
-            inside = 0;
             printf("GRETH: MBUF-chain cannot be sent. Increase descriptor count.\n");
             return -1;
         }
         
         if ( frags > (dp->txbufs-dp->tx_cnt) ){
-            inside = 0;
             /* Return number of fragments */
             return frags;
         }
@@ -947,12 +986,10 @@ sendpacket_gbit (struct ifnet *ifp, struct mbuf *m)
         dp->tx_cnt++;
       
         /* Tell Hardware about newly enabled descriptor */
-        rtems_interrupt_disable(level);
+        SPIN_LOCK_IRQ(&dp->devlock, flags);
         dp->regs->ctrl = dp->regs->ctrl | GRETH_CTRL_TXEN;
-        rtems_interrupt_enable(level);
+        SPIN_UNLOCK_IRQ(&dp->devlock, flags);
 
-        inside = 0;
-               
         return 0;
 }
 
@@ -960,9 +997,9 @@ int greth_process_tx_gbit(struct greth_softc *sc)
 {
     struct ifnet *ifp = &sc->arpcom.ac_if;
     struct mbuf *m;
-    rtems_interrupt_level level;
+    SPIN_IRQFLAGS(flags);
     int first=1;
-    
+
     /*
      * Send packets till queue is empty
      */
@@ -1010,10 +1047,10 @@ int greth_process_tx_gbit(struct greth_softc *sc)
              */
             if ( first ){
                 first = 0;
-                rtems_interrupt_disable(level);
+                SPIN_LOCK_IRQ(&sc->devlock, flags);
                 ifp->if_flags |= IFF_OACTIVE;
                 sc->regs->ctrl |= GRETH_CTRL_TXIRQ;
-                rtems_interrupt_enable(level);
+                SPIN_UNLOCK_IRQ(&sc->devlock, flags);
                 
                 /* We must check again to be sure that we didn't 
                  * miss an interrupt (if a packet was sent just before
@@ -1021,7 +1058,7 @@ int greth_process_tx_gbit(struct greth_softc *sc)
                  */
                 continue;
             }
-            
+
             return -1;
         }else{
             /* Sent Ok, proceed to process more packets if available */
@@ -1034,9 +1071,9 @@ int greth_process_tx(struct greth_softc *sc)
 {
     struct ifnet *ifp = &sc->arpcom.ac_if;
     struct mbuf *m;
-    rtems_interrupt_level level;
+    SPIN_IRQFLAGS(flags);
     int first=1;
-    
+
     /*
      * Send packets till queue is empty
      */
@@ -1076,18 +1113,18 @@ int greth_process_tx(struct greth_softc *sc)
              */
             if ( first ){
                 first = 0;
-                rtems_interrupt_disable(level);
+                SPIN_LOCK_IRQ(&sc->devlock, flags);
                 ifp->if_flags |= IFF_OACTIVE;
                 sc->regs->ctrl |= GRETH_CTRL_TXIRQ;
-                rtems_interrupt_enable(level);
-                
+                SPIN_UNLOCK_IRQ(&sc->devlock, flags);
+
                 /* We must check again to be sure that we didn't 
                  * miss an interrupt (if a packet was sent just before
                  * enabling interrupts)
                  */
                 continue;
             }
-            
+
             return -1;
         }else{
             /* Sent Ok, proceed to process more packets if available */
@@ -1128,26 +1165,23 @@ greth_init (void *arg)
 
     if (sc->daemonTid == 0)
       {
+          /*
+           * Start driver tasks
+           */
+          name[3] += sc->minor;
+          sc->daemonTid = rtems_bsdnet_newproc (name, 4096,
+                                                greth_Daemon, sc);
 
-	  /*
-	   * Start driver tasks
-	   */
-	  name[3] += sc->minor;
-	  sc->daemonTid = rtems_bsdnet_newproc (name, 4096,
-						  greth_Daemon, sc);
-
-	  /*
-	   * Set up GRETH hardware
-	   */
-      greth_initialize_hardware (sc);
-          
+          /*
+           * Set up GRETH hardware
+           */
+          greth_initialize_hardware (sc);
       }
 
     /*
      * Tell the world that we're running.
      */
     ifp->if_flags |= IFF_RUNNING;
-
 }
 
 /*
@@ -1157,13 +1191,23 @@ static void
 greth_stop (struct greth_softc *sc)
 {
     struct ifnet *ifp = &sc->arpcom.ac_if;
+    SPIN_IRQFLAGS(flags);
+    unsigned int speed;
 
+    SPIN_LOCK_IRQ(&sc->devlock, flags);
     ifp->if_flags &= ~IFF_RUNNING;
 
-    sc->regs->ctrl = 0;		        /* RX/TX OFF */
-    sc->regs->ctrl = GRETH_CTRL_RST;	/* Reset ON */
-    sc->regs->ctrl = 0;	         	/* Reset OFF */
-    
+    speed = sc->regs->ctrl & (GRETH_CTRL_GB | GRETH_CTRL_SP | GRETH_CTRL_FULLD);
+
+    /* RX/TX OFF */
+    sc->regs->ctrl = GRETH_CTRL_DD | GRETH_CTRL_ED | speed;
+    /* Reset ON */
+    if (sc->greth_rst)
+        sc->regs->ctrl = GRETH_CTRL_RST | GRETH_CTRL_DD | GRETH_CTRL_ED | speed;
+    /* Reset OFF and restore link settings previously detected if any */
+    sc->regs->ctrl = GRETH_CTRL_DD | sc->edcl_dis | speed;
+    SPIN_UNLOCK_IRQ(&sc->devlock, flags);
+
     sc->next_tx_mbuf = NULL;
 }
 
@@ -1397,6 +1441,11 @@ int greth_init3(struct drvmgr_dev *dev)
         return DRVMGR_FAIL;
     }
 
+    /* Initialize Spin-lock for GRSPW Device. This is to protect
+     * CTRL and DMACTRL registers from ISR.
+     */
+    SPIN_INIT(&sc->devlock, sc->devName);
+
     /* Register GRETH device as an Network interface */
     ifp = malloc(sizeof(struct rtems_bsdnet_ifconfig));
     memset(ifp, 0, sizeof(*ifp));
@@ -1418,6 +1467,7 @@ int greth_device_init(struct greth_softc *sc)
     struct amba_dev_info *ambadev;
     struct ambapp_core *pnpinfo;
     union drvmgr_key_value *value;
+    unsigned int speed;
 
     /* Get device information from AMBA PnP information */
     ambadev = (struct amba_dev_info *)sc->dev->businfo;
@@ -1427,14 +1477,42 @@ int greth_device_init(struct greth_softc *sc)
     pnpinfo = &ambadev->info;
     sc->regs = (greth_regs *)pnpinfo->apb_slv->start;
     sc->minor = sc->dev->minor_drv;
+    sc->greth_rst = 1;
 
-    /* clear control register and reset NIC 
+    /* Remember EDCL enabled/disable state before reset */
+    sc->edcl_dis = sc->regs->ctrl & GRETH_CTRL_ED;
+
+    /* Default is to inherit EDCL Disable bit from HW. User can force En/Dis */
+    value = drvmgr_dev_key_get(sc->dev, "edclDis", DRVMGR_KT_INT);
+    if ( value ) {
+        /* Force EDCL mode. Has an effect later when GRETH+PHY is initialized */
+        if (value->i > 0) {
+            sc->edcl_dis = GRETH_CTRL_ED;
+        } else {
+            /* Default to avoid soft-reset the GRETH when EDCL is forced */
+            sc->edcl_dis = 0;
+            sc->greth_rst = 0;
+	}
+    }
+
+    /* let user control soft-reset of GRETH (for debug) */
+    value = drvmgr_dev_key_get(sc->dev, "soft-reset", DRVMGR_KT_INT);
+    if ( value) {
+        sc->greth_rst = value->i ? 1 : 0;
+    }
+
+    /* clear control register and reset NIC and keep current speed modes.
      * This should be done as quick as possible during startup, this is to
      * stop DMA transfers after a reboot.
+     *
+     * When EDCL is forced enabled reset is skipped, disabling RX/TX DMA is
+     * is enough during debug.
      */
-    sc->regs->ctrl = 0;
-    sc->regs->ctrl = GRETH_CTRL_RST;
-    sc->regs->ctrl = 0;
+    speed = sc->regs->ctrl & (GRETH_CTRL_GB | GRETH_CTRL_SP | GRETH_CTRL_FULLD);
+    sc->regs->ctrl = GRETH_CTRL_DD | GRETH_CTRL_ED | speed;
+    if (sc->greth_rst)
+        sc->regs->ctrl = GRETH_CTRL_RST | GRETH_CTRL_DD | GRETH_CTRL_ED | speed;
+    sc->regs->ctrl = GRETH_CTRL_DD | sc->edcl_dis | speed;
 
     /* Configure driver by overriding default config with the bus resources 
      * configured by the user
@@ -1454,6 +1532,10 @@ int greth_device_init(struct greth_softc *sc)
     value = drvmgr_dev_key_get(sc->dev, "phyAdr", DRVMGR_KT_INT);
     if ( value && (value->i < 32) )
         sc->phyaddr = value->i;
+
+    value = drvmgr_dev_key_get(sc->dev, "advModes", DRVMGR_KT_INT);
+    if ( value )
+        sc->advmodes = value->i;
 
     return 0;
 }

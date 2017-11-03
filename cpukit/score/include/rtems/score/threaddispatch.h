@@ -22,22 +22,23 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#if defined(RTEMS_HEAVY_STACK_DEBUG) || \
-    defined(RTEMS_HEAVY_MALLOC_DEBUG)
-  #define __THREAD_DO_NOT_INLINE_DISABLE_DISPATCH__
-#endif
-
-#if defined(RTEMS_SMP) || \
-   (CPU_INLINE_ENABLE_DISPATCH == FALSE) || \
-   (__RTEMS_DO_NOT_INLINE_THREAD_ENABLE_DISPATCH__ == 1)
-  #define __THREAD_DO_NOT_INLINE_ENABLE_DISPATCH__
-#endif
-
 /**
  * @addtogroup ScoreThread
  *
  * @{
  */
+
+#if defined(RTEMS_SMP) || ( CPU_ENABLE_ROBUST_THREAD_DISPATCH == TRUE )
+/**
+ * @brief Enables a robust thread dispatch.
+ *
+ * On each change of the thread dispatch disable level from one to zero the
+ * interrupt status is checked.  In case interrupts are disabled and SMP is
+ * enabled or the CPU port needs it, then the system terminates with the fatal
+ * internal error INTERNAL_ERROR_BAD_THREAD_DISPATCH_ENVIRONMENT.
+ */
+#define RTEMS_SCORE_ROBUST_THREAD_DISPATCH
+#endif
 
 /**
  * @brief Indicates if the executing thread is inside a thread dispatch
@@ -104,6 +105,20 @@ RTEMS_INLINE_ROUTINE void _Thread_Dispatch_initialization( void )
  * On entry the thread dispatch level must be equal to zero.
  */
 void _Thread_Dispatch( void );
+
+/**
+ * @brief Directly do a thread dispatch.
+ *
+ * Must be called with a thread dispatch disable level of one, otherwise the
+ * INTERNAL_ERROR_BAD_THREAD_DISPATCH_DISABLE_LEVEL will occur.  This function
+ * is useful for operations which synchronously block, e.g. self restart, self
+ * deletion, yield, sleep.
+ *
+ * @param[in] cpu_self The current processor.
+ *
+ * @see _Thread_Dispatch().
+ */
+void _Thread_Dispatch_direct( Per_CPU_Control *cpu_self );
 
 /**
  * @brief Performs a thread dispatch on the current processor.
@@ -203,7 +218,12 @@ RTEMS_INLINE_ROUTINE void _Thread_Dispatch_enable( Per_CPU_Control *cpu_self )
 
     _ISR_Local_disable( level );
 
-    if ( cpu_self->dispatch_necessary ) {
+    if (
+      cpu_self->dispatch_necessary
+#if defined(RTEMS_SCORE_ROBUST_THREAD_DISPATCH)
+        || !_ISR_Is_enabled( level )
+#endif
+    ) {
       _Thread_Do_dispatch( cpu_self, level );
     } else {
       cpu_self->thread_dispatch_disable_level = 0;
@@ -212,6 +232,7 @@ RTEMS_INLINE_ROUTINE void _Thread_Dispatch_enable( Per_CPU_Control *cpu_self )
 
     _ISR_Local_enable( level );
   } else {
+    _Assert( disable_level > 0 );
     cpu_self->thread_dispatch_disable_level = disable_level - 1;
   }
 }
@@ -223,6 +244,7 @@ RTEMS_INLINE_ROUTINE void _Thread_Dispatch_enable( Per_CPU_Control *cpu_self )
  */
 RTEMS_INLINE_ROUTINE void _Thread_Dispatch_unnest( Per_CPU_Control *cpu_self )
 {
+  _Assert( cpu_self->thread_dispatch_disable_level > 0 );
   --cpu_self->thread_dispatch_disable_level;
 }
 

@@ -88,10 +88,12 @@ librtems_a_SOURCES += src/tasks.c
 librtems_a_SOURCES += src/taskcreate.c
 librtems_a_SOURCES += src/taskdelete.c
 librtems_a_SOURCES += src/taskgetaffinity.c
+librtems_a_SOURCES += src/taskgetpriority.c
 librtems_a_SOURCES += src/taskgetscheduler.c
 librtems_a_SOURCES += src/taskident.c
 librtems_a_SOURCES += src/taskinitusers.c
 librtems_a_SOURCES += src/taskissuspended.c
+librtems_a_SOURCES += src/taskiterate.c
 librtems_a_SOURCES += src/taskmode.c
 librtems_a_SOURCES += src/taskrestart.c
 librtems_a_SOURCES += src/taskresume.c
@@ -103,8 +105,12 @@ librtems_a_SOURCES += src/taskstart.c
 librtems_a_SOURCES += src/tasksuspend.c
 librtems_a_SOURCES += src/taskwakeafter.c
 librtems_a_SOURCES += src/taskwakewhen.c
+librtems_a_SOURCES += src/scheduleraddprocessor.c
 librtems_a_SOURCES += src/schedulergetprocessorset.c
 librtems_a_SOURCES += src/schedulerident.c
+librtems_a_SOURCES += src/scheduleridentbyprocessor.c
+librtems_a_SOURCES += src/scheduleridentbyprocessorset.c
+librtems_a_SOURCES += src/schedulerremoveprocessor.c
 
 ## RATEMON_C_FILES
 librtems_a_SOURCES += src/ratemon.c

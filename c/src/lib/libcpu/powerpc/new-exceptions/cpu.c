@@ -55,8 +55,8 @@ void _CPU_Initialize(void)
  */
 void _CPU_Context_Initialize(
   Context_Control  *the_context,
-  uint32_t         *stack_base,
-  uint32_t          size,
+  void             *stack_base,
+  size_t            size,
   uint32_t          new_level,
   void             *entry_point,
   bool              is_fp,
@@ -65,13 +65,15 @@ void _CPU_Context_Initialize(
 {
   ppc_context *the_ppc_context;
   uint32_t   msr_value;
-  uint32_t   sp;
+  uintptr_t  sp;
+  uintptr_t  stack_alignment;
 
-  sp = (uint32_t)stack_base + size - PPC_MINIMUM_STACK_FRAME_SIZE;
+  sp = (uintptr_t) stack_base + size - PPC_MINIMUM_STACK_FRAME_SIZE;
 
-  sp &= ~(CPU_STACK_ALIGNMENT-1);
+  stack_alignment = CPU_STACK_ALIGNMENT;
+  sp &= ~(stack_alignment - 1);
 
-  *((uint32_t*)sp) = 0;
+  sp = (uintptr_t) memset((void *) sp, 0, PPC_MINIMUM_STACK_FRAME_SIZE);
 
   _CPU_MSR_GET( msr_value );
 
@@ -117,7 +119,8 @@ void _CPU_Context_Initialize(
 
   the_ppc_context->gpr1 = sp;
   the_ppc_context->msr = msr_value;
-  the_ppc_context->lr = (uint32_t) entry_point;
+  the_ppc_context->lr = (uintptr_t) entry_point;
+  the_ppc_context->isr_dispatch_disable = 0;
 
 #if defined(__ALTIVEC__) && !defined(PPC_MULTILIB_ALTIVEC)
   _CPU_Context_initialize_altivec( the_ppc_context );
@@ -126,10 +129,6 @@ void _CPU_Context_Initialize(
   if ( tls_area != NULL ) {
     void *tls_block = _TLS_TCB_before_TLS_block_initialize( tls_area );
 
-    the_ppc_context->gpr2 = (uint32_t) tls_block + 0x7000;
-  } else {
-    register uint32_t gpr2 __asm__("2");
-
-    the_ppc_context->gpr2 = gpr2;
+    the_ppc_context->tp = (uintptr_t) tls_block + 0x7000;
   }
 }

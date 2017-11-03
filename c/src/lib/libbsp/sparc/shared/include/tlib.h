@@ -27,6 +27,10 @@ struct tlib_dev;
 
 typedef void (*tlib_isr_t)(void *data);
 
+enum {
+	TLIB_FLAGS_BROADCAST = 0x01
+};
+
 struct tlib_drv {
 	/*** Functions ***/
 	void	(*reset)(struct tlib_dev *hand);
@@ -35,7 +39,7 @@ struct tlib_drv {
 		unsigned int *basefreq,
 		unsigned int *tickrate);
 	int	(*set_freq)(struct tlib_dev *hand, unsigned int tickrate);
-	void	(*irq_reg)(struct tlib_dev *hand, tlib_isr_t func, void *data);
+	void	(*irq_reg)(struct tlib_dev *hand, tlib_isr_t func, void *data, int flags);
 	void	(*irq_unreg)(struct tlib_dev *hand, tlib_isr_t func,void *data);
 	void	(*start)(struct tlib_dev *hand, int once);
 	void	(*stop)(struct tlib_dev *hand);
@@ -43,6 +47,7 @@ struct tlib_drv {
 	void	(*get_counter)(struct tlib_dev *hand, unsigned int *counter);
 	int	(*custom)(struct tlib_dev *hand, int cmd, void *arg);
 	int	(*int_pend)(struct tlib_dev *hand, int ack);
+	void	(*get_widthmask)(struct tlib_dev *hand, unsigned int *widthmask);
 };
 
 struct tlib_dev {
@@ -121,7 +126,7 @@ static inline void tlib_irq_unregister(void *hand)
 }
 
 /* Register ISR at Timer ISR */
-static inline void tlib_irq_register(void *hand, tlib_isr_t func, void *data)
+static inline void tlib_irq_register(void *hand, tlib_isr_t func, void *data, int flags)
 {
 	struct tlib_dev *dev = hand;
 
@@ -129,7 +134,7 @@ static inline void tlib_irq_register(void *hand, tlib_isr_t func, void *data)
 	tlib_irq_unregister(hand);
 	dev->isr_func = func;
 	dev->isr_data = data;
-	dev->drv->irq_reg(dev, func, data);
+	dev->drv->irq_reg(dev, func, data, flags);
 }
 
 /* Start Timer, ISRs will be generated if enabled.
@@ -181,6 +186,13 @@ static inline int tlib_interrupt_pending(void *hand, int ack)
 	struct tlib_dev *dev = hand;
 
 	return dev->drv->int_pend(dev, ack);
+}
+
+static inline void tlib_get_widthmask(void *hand, unsigned int *widthmask)
+{
+	struct tlib_dev *dev = hand;
+
+	dev->drv->get_widthmask(dev, widthmask);
 }
 
 #ifdef __cplusplus

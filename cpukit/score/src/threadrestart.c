@@ -50,40 +50,29 @@ static Thread_Zombie_control _Thread_Zombies = {
   .Lock = ISR_LOCK_INITIALIZER( "thread zombies" )
 };
 
-static bool _Thread_Raise_real_priority_filter(
-  Thread_Control   *the_thread,
-  Priority_Control *new_priority_ptr,
-  void             *arg
-)
-{
-  Priority_Control real_priority;
-  Priority_Control new_priority;
-  Priority_Control current_priority;
-
-  real_priority = the_thread->real_priority;
-  new_priority = *new_priority_ptr;
-  current_priority = _Thread_Get_priority( the_thread );
-
-  new_priority = _Thread_Priority_highest( real_priority, new_priority );
-  *new_priority_ptr = new_priority;
-
-  the_thread->real_priority = new_priority;
-
-  return _Thread_Priority_less_than( current_priority, new_priority );
-}
-
 static void _Thread_Raise_real_priority(
   Thread_Control   *the_thread,
   Priority_Control  priority
 )
 {
-  _Thread_Change_priority(
-    the_thread,
-    priority,
-    NULL,
-    _Thread_Raise_real_priority_filter,
-    false
-  );
+  Thread_queue_Context queue_context;
+
+  _Thread_queue_Context_initialize( &queue_context );
+  _Thread_queue_Context_clear_priority_updates( &queue_context );
+  _Thread_Wait_acquire( the_thread, &queue_context );
+
+  if ( priority < the_thread->Real_priority.priority ) {
+    _Thread_Priority_change(
+      the_thread,
+      &the_thread->Real_priority,
+      priority,
+      false,
+      &queue_context
+    );
+  }
+
+  _Thread_Wait_release( the_thread, &queue_context );
+  _Thread_Priority_update( &queue_context );
 }
 
 typedef struct {
@@ -145,13 +134,11 @@ static void _Thread_Add_to_zombie_chain( Thread_Control *the_thread )
 
 static void _Thread_Make_zombie( Thread_Control *the_thread )
 {
+#if defined(RTEMS_SCORE_THREAD_ENABLE_RESOURCE_COUNT)
   if ( _Thread_Owns_resources( the_thread ) ) {
-    _Terminate(
-      INTERNAL_ERROR_CORE,
-      false,
-      INTERNAL_ERROR_RESOURCE_IN_USE
-    );
+    _Internal_error( INTERNAL_ERROR_RESOURCE_IN_USE );
   }
+#endif
 
   _Objects_Close(
     _Objects_Get_information_id( the_thread->Object.id ),
@@ -181,8 +168,8 @@ static void _Thread_Free( Thread_Control *the_thread )
   _User_extensions_Destroy_iterators( the_thread );
   _ISR_lock_Destroy( &the_thread->Keys.Lock );
   _Scheduler_Node_destroy(
-    _Scheduler_Get( the_thread ),
-    _Scheduler_Thread_get_own_node( the_thread )
+    _Thread_Scheduler_get_home( the_thread ),
+    _Thread_Scheduler_get_home_node( the_thread )
   );
   _ISR_lock_Destroy( &the_thread->Timer.Lock );
 
@@ -212,12 +199,13 @@ static void _Thread_Free( Thread_Control *the_thread )
   _Workspace_Free( the_thread->Start.tls_area );
 
 #if defined(RTEMS_SMP)
+  _ISR_lock_Destroy( &the_thread->Scheduler.Lock );
   _ISR_lock_Destroy( &the_thread->Wait.Lock.Default );
   _SMP_lock_Stats_destroy( &the_thread->Potpourri_stats );
 #endif
 
   _Thread_queue_Destroy( &the_thread->Join_queue );
-
+  _Context_Destroy( the_thread, &the_thread->Registers );
   _Objects_Free( &information->Objects, &the_thread->Object );
 }
 
@@ -353,14 +341,8 @@ void _Thread_Life_action_handler(
 
   if ( _Thread_Is_life_terminating( previous_life_state ) ) {
     cpu_self = _Thread_Wait_for_join( executing, cpu_self );
-
     _Thread_Make_zombie( executing );
-
-    /* FIXME: Workaround for https://devel.rtems.org/ticket/2751 */
-    cpu_self->dispatch_necessary = true;
-
-    _Assert( cpu_self->heir != executing );
-    _Thread_Dispatch_enable( cpu_self );
+    _Thread_Dispatch_direct( cpu_self );
     RTEMS_UNREACHABLE();
   }
 
@@ -464,11 +446,11 @@ void _Thread_Join(
   executing->Wait.return_argument = NULL;
 #endif
 
-  _Thread_queue_Enqueue_critical(
+  _Thread_queue_Context_set_thread_state( queue_context, waiting_for_join );
+  _Thread_queue_Enqueue(
     &the_thread->Join_queue.Queue,
     THREAD_JOIN_TQ_OPERATIONS,
     executing,
-    waiting_for_join,
     queue_context
   );
 }
@@ -529,21 +511,40 @@ void _Thread_Cancel(
   _Thread_Dispatch_enable( cpu_self );
 }
 
-void _Thread_Close( Thread_Control *the_thread, Thread_Control *executing )
+static void _Thread_Close_enqueue_callout(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Per_CPU_Control      *cpu_self,
+  Thread_queue_Context *queue_context
+)
 {
-  Thread_queue_Context queue_context;
+  Thread_Close_context *context;
 
-  _Thread_queue_Context_initialize( &queue_context );
-  _Thread_queue_Context_set_expected_level( &queue_context, 2 );
-  _Thread_queue_Context_set_no_timeout( &queue_context );
-  _Thread_State_acquire( the_thread, &queue_context.Lock_context.Lock_context );
+  context = (Thread_Close_context *) queue_context;
+  _Thread_Cancel( context->cancel, the_thread, NULL );
+}
+
+void _Thread_Close(
+  Thread_Control       *the_thread,
+  Thread_Control       *executing,
+  Thread_Close_context *context
+)
+{
+  context->cancel = the_thread;
+  _Thread_queue_Context_set_enqueue_callout(
+    &context->Base,
+    _Thread_Close_enqueue_callout
+  );
+  _Thread_State_acquire_critical(
+    the_thread,
+    &context->Base.Lock_context.Lock_context
+  );
   _Thread_Join(
     the_thread,
     STATES_WAITING_FOR_JOIN,
     executing,
-    &queue_context
+    &context->Base
   );
-  _Thread_Cancel( the_thread, executing, NULL );
 }
 
 void _Thread_Exit(
@@ -622,8 +623,8 @@ void _Thread_Restart_self(
   ISR_lock_Context               *lock_context
 )
 {
-  Per_CPU_Control  *cpu_self;
-  Priority_Control  unused;
+  Per_CPU_Control      *cpu_self;
+  Thread_queue_Context  queue_context;
 
   _Assert(
     _Watchdog_Get_state( &executing->Timer.Watchdog ) == WATCHDOG_INACTIVE
@@ -633,6 +634,8 @@ void _Thread_Restart_self(
       || executing->current_state == STATES_SUSPENDED
   );
 
+  _Thread_queue_Context_initialize( &queue_context );
+  _Thread_queue_Context_clear_priority_updates( &queue_context );
   _Thread_State_acquire_critical( executing, lock_context );
 
   executing->Start.Entry = *entry;
@@ -646,13 +649,17 @@ void _Thread_Restart_self(
   cpu_self = _Thread_Dispatch_disable_critical( lock_context );
   _Thread_State_release( executing, lock_context );
 
-  _Thread_Set_priority(
+  _Thread_Wait_acquire_default( executing, lock_context );
+  _Thread_Priority_change(
     executing,
+    &executing->Real_priority,
     executing->Start.initial_priority,
-    &unused,
-    true
+    false,
+    &queue_context
   );
+  _Thread_Wait_release_default( executing, lock_context );
 
+  _Thread_Priority_update( &queue_context );
   _Thread_Dispatch_enable( cpu_self );
   RTEMS_UNREACHABLE();
 }

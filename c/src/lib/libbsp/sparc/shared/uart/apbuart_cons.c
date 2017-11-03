@@ -18,7 +18,6 @@
 
 /******************* Driver manager interface ***********************/
 #include <bsp.h>
-#include <rtems/libio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <rtems/bspIo.h>
@@ -39,7 +38,7 @@
 #ifdef DEBUG
 #define DBG(x...) printk(x)
 #else
-#define DBG(x...) 
+#define DBG(x...)
 #endif
 
 /* LEON3 Low level transmit/receive functions provided by debug-uart code */
@@ -49,29 +48,77 @@ extern void apbuart_outbyte_polled(
   int do_cr_on_newline,
   int wait_sent);
 extern int apbuart_inbyte_nonblocking(struct apbuart_regs *regs);
-extern struct apbuart_regs *dbg_uart; /* The debug UART */
+#ifdef LEON3
+extern struct apbuart_regs *leon3_debug_uart; /* The debug UART */
+#endif
 
+/* Probed hardware capabilities */
+enum {
+	CAP_FIFO = 0x01, /* FIFO available */
+	CAP_DI   = 0x02, /* RX delayed interrupt available */
+};
 struct apbuart_priv {
 	struct console_dev condev;
 	struct drvmgr_dev *dev;
 	struct apbuart_regs *regs;
+	struct rtems_termios_tty *tty;
 	char devName[32];
-	void *cookie;
-	int sending;
+	volatile int sending;
 	int mode;
+	int cap;
 };
 
-/* TERMIOS Layer Callback functions */
-void apbuart_get_attributes(struct console_dev *condev, struct termios *t);
-int apbuart_set_attributes(int minor, const struct termios *t);
-ssize_t apbuart_write_polled(int minor, const char *buf, size_t len);
-int apbuart_pollRead(int minor);
-ssize_t apbuart_write_intr(int minor, const char *buf, size_t len);
-int apbuart_pollRead_task(int minor);
-int apbuart_firstOpen(int major, int minor, void *arg);
-int apbuart_lastClose(int major, int minor, void *arg);
+/* Getters for different interfaces. It happens to be just casting which we do
+ * in one place to avoid getting cast away. */
+static struct console_dev *base_get_condev(rtems_termios_device_context *base)
+{
+	return (struct console_dev *) base;
+}
 
-void apbuart_isr(void *arg);
+static struct apbuart_priv *condev_get_priv(struct console_dev *condev)
+{
+	return (struct apbuart_priv *) condev;
+}
+
+static struct apbuart_priv *base_get_priv(rtems_termios_device_context *base)
+{
+	return condev_get_priv(base_get_condev(base));
+}
+
+/* TERMIOS Layer Callback functions */
+static bool first_open(
+  rtems_termios_tty *tty,
+  rtems_termios_device_context *base,
+  struct termios *term,
+  rtems_libio_open_close_args_t *args
+);
+static void last_close(
+  rtems_termios_tty *tty,
+  rtems_termios_device_context *base,
+  rtems_libio_open_close_args_t *args
+);
+static void write_interrupt(
+  rtems_termios_device_context *base,
+  const char *buf,
+  size_t len
+);
+static bool set_attributes(
+	rtems_termios_device_context *base,
+	const struct termios *t
+);
+static void get_attributes(
+	rtems_termios_device_context *base,
+	struct termios *t
+);
+static int read_polled(rtems_termios_device_context *base);
+static int read_task(rtems_termios_device_context *base);
+static void write_polled(
+  rtems_termios_device_context *base,
+  const char *buf,
+  size_t len
+);
+
+static void apbuart_cons_isr(void *arg);
 int apbuart_get_baud(struct apbuart_priv *uart);
 
 int apbuart_init1(struct drvmgr_dev *dev);
@@ -85,7 +132,7 @@ static int apbuart_info(
 #define APBUART_INFO_FUNC NULL
 #endif
 
-struct drvmgr_drv_ops apbuart_ops = 
+struct drvmgr_drv_ops apbuart_ops =
 {
 	.init = {apbuart_init1, NULL, NULL, NULL},
 	.remove = NULL,
@@ -121,41 +168,55 @@ void apbuart_cons_register_drv (void)
 	drvmgr_drv_register(&apbuart_drv_info.general);
 }
 
-/* Interrupt mode routines */
-static const rtems_termios_callbacks Callbacks_intr = {
-    apbuart_firstOpen,           /* firstOpen */
-    apbuart_lastClose,           /* lastClose */
-    NULL,                        /* pollRead */
-    apbuart_write_intr,          /* write */
-    apbuart_set_attributes,      /* setAttributes */
-    NULL,                        /* stopRemoteTx */
-    NULL,                        /* startRemoteTx */
-    TERMIOS_IRQ_DRIVEN           /* outputUsesInterrupts */
+static const rtems_termios_device_handler handler_interrupt = {
+	.first_open     = first_open,
+	.last_close     = last_close,
+	.write          = write_interrupt,
+	.set_attributes = set_attributes,
+	.mode           = TERMIOS_IRQ_DRIVEN
 };
 
-/* Polling mode routines */
-static const rtems_termios_callbacks Callbacks_task = {
-    apbuart_firstOpen,           /* firstOpen */
-    apbuart_lastClose,           /* lastClose */
-    apbuart_pollRead_task,       /* pollRead */
-    apbuart_write_intr,          /* write */
-    apbuart_set_attributes,      /* setAttributes */
-    NULL,                        /* stopRemoteTx */
-    NULL,                        /* startRemoteTx */
-    TERMIOS_TASK_DRIVEN          /* outputUsesInterrupts */
+static const rtems_termios_device_handler handler_task = {
+	.first_open     = first_open,
+	.last_close     = last_close,
+	.poll_read      = read_task,
+	.write          = write_interrupt,
+	.set_attributes = set_attributes,
+	.mode           = TERMIOS_TASK_DRIVEN
 };
 
-/* Polling mode routines */
-static const rtems_termios_callbacks Callbacks_poll = {
-    apbuart_firstOpen,           /* firstOpen */
-    apbuart_lastClose,           /* lastClose */
-    apbuart_pollRead,            /* pollRead */
-    apbuart_write_polled,        /* write */
-    apbuart_set_attributes,      /* setAttributes */
-    NULL,                        /* stopRemoteTx */
-    NULL,                        /* startRemoteTx */
-    TERMIOS_POLLED               /* outputUsesInterrupts */
+static const rtems_termios_device_handler handler_polled = {
+	.first_open     = first_open,
+	.last_close     = last_close,
+	.poll_read      = read_polled,
+	.write          = write_polled,
+	.set_attributes = set_attributes,
+	.mode           = TERMIOS_POLLED
 };
+
+/*
+ * APBUART hardware instantiation is flexible. Probe features here and driver
+ * can select appropriate routines for the hardware. probecap() return value
+ * is a CAP_ bitmask.
+ */
+static int probecap(struct apbuart_regs *regs)
+{
+	int cap = 0;
+
+	/* Probe FIFO */
+	if (regs->ctrl & APBUART_CTRL_FA) {
+		cap |= CAP_FIFO;
+
+		/* Probe RX delayed interrupt */
+		regs->ctrl |= APBUART_CTRL_DI;
+		if (regs->ctrl & APBUART_CTRL_DI) {
+			regs->ctrl &= ~APBUART_CTRL_DI;
+			cap |= CAP_DI;
+		}
+	}
+
+	return cap;
+}
 
 int apbuart_init1(struct drvmgr_dev *dev)
 {
@@ -204,7 +265,7 @@ int apbuart_init1(struct drvmgr_dev *dev)
 	 */
 	db = 0;
 #ifdef LEON3
-	if (priv->regs == dbg_uart) {
+	if (priv->regs == leon3_debug_uart) {
 		db = priv->regs->ctrl & (LEON_REG_UART_CTRL_RE |
 					LEON_REG_UART_CTRL_TE |
 					LEON_REG_UART_CTRL_PE |
@@ -224,6 +285,8 @@ int apbuart_init1(struct drvmgr_dev *dev)
 	}
 
 	priv->regs->ctrl = db;
+
+	priv->cap = probecap(priv->regs);
 
 	/* The system console and Debug console may depend on this device, so
 	 * initialize it straight away.
@@ -246,23 +309,22 @@ int apbuart_init1(struct drvmgr_dev *dev)
 			priv->condev.flags &= ~CONSOLE_FLAG_SYSCON;
 	}
 
-	priv->condev.fsname = NULL;
-	priv->condev.ops.get_uart_attrs = apbuart_get_attributes;
-
 	/* Select 0=Polled, 1=IRQ, 2=Task-Driven UART Mode */
 	value = drvmgr_dev_key_get(priv->dev, "mode", DRVMGR_KT_INT);
 	if (value)
 		priv->mode = value->i;
 	else
 		priv->mode = TERMIOS_POLLED;
+	/* TERMIOS device handlers */
 	if (priv->mode == TERMIOS_IRQ_DRIVEN) {
-		priv->condev.callbacks = &Callbacks_intr;
+		priv->condev.handler = &handler_interrupt;
 	} else if (priv->mode == TERMIOS_TASK_DRIVEN) {
-		priv->condev.callbacks = &Callbacks_task;
+		priv->condev.handler = &handler_task;
 	} else {
-		priv->condev.callbacks = &Callbacks_poll;
+		priv->condev.handler = &handler_polled;
 	}
 
+	priv->condev.fsname = NULL;
 	/* Get Filesystem name prefix */
 	prefix[0] = '\0';
 	if (drvmgr_get_dev_prefix(dev, prefix)) {
@@ -271,6 +333,8 @@ int apbuart_init1(struct drvmgr_dev *dev)
 		 */
 		sprintf(priv->devName, "/dev/%sapbuart%d", prefix, dev->minor_bus);
 		priv->condev.fsname = priv->devName;
+	} else {
+		sprintf(priv->devName, "/dev/apbuart%d", dev->minor_drv);
 	}
 
 	/* Register it as a console device, the console driver will register
@@ -296,8 +360,8 @@ static int apbuart_info(
 
 	if (priv->mode == TERMIOS_POLLED)
 		str1 = "TERMIOS_POLLED";
-	else if (priv->mode == TERMIOS_TASK_DRIVEN)
-		str1 = "TERMIOS_TASK_DRIVEN";
+	else if (priv->mode == TERMIOS_IRQ_DRIVEN)
+		str1 = "TERMIOS_IRQ_DRIVEN";
 	else if (priv->mode == TERMIOS_TASK_DRIVEN)
 		str1 = "TERMIOS_TASK_DRIVEN";
 	else
@@ -367,85 +431,142 @@ int apbuart_inbyte_nonblocking(struct apbuart_regs *regs)
 }
 #endif
 
-int apbuart_firstOpen(int major, int minor, void *arg)
+static bool first_open(
+	rtems_termios_tty *tty,
+	rtems_termios_device_context *base,
+	struct termios *term,
+	rtems_libio_open_close_args_t *args
+)
 {
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
-	rtems_libio_open_close_args_t *ioarg = arg;
+	struct apbuart_priv *uart = base_get_priv(base);
 
-	if ( ioarg && ioarg->iop )
-		uart->cookie = ioarg->iop->data1;
-	else
-		uart->cookie = NULL;
+	uart->tty = tty;
 
-	/* Enable TX/RX */
-	uart->regs->ctrl |= LEON_REG_UART_CTRL_RE | LEON_REG_UART_CTRL_TE;
-
-	if (uart->mode != TERMIOS_POLLED) {
-		/* Register interrupt and enable it */
-		drvmgr_interrupt_register(uart->dev, 0, "apbuart",
-						apbuart_isr, uart);
-
-		uart->sending = 0;
-		/* Turn on RX interrupts */
-		uart->regs->ctrl |= LEON_REG_UART_CTRL_RI;
+	/* Inherit UART hardware parameters from bootloader on system console */
+	if (uart->condev.flags & CONSOLE_FLAG_SYSCON_GRANT) {
+		get_attributes(base, term);
+		term->c_oflag |= ONLCR;
+		set_attributes(base, term);
 	}
 
-	return 0;
+	/* Enable TX/RX */
+	uart->regs->ctrl |= APBUART_CTRL_RE | APBUART_CTRL_TE;
+
+	if (uart->mode != TERMIOS_POLLED) {
+		int ret;
+		uint32_t ctrl;
+
+		/* Register interrupt and enable it */
+		ret = drvmgr_interrupt_register(
+			uart->dev, 0, uart->devName, apbuart_cons_isr, tty
+		);
+		if (ret) {
+			return false;
+		}
+
+		uart->sending = 0;
+
+		/* Turn on RX interrupts */
+		ctrl = uart->regs->ctrl;
+		ctrl |= APBUART_CTRL_RI;
+		if (uart->cap & CAP_DI) {
+			/* Use RX FIFO interrupt only if delayed interrupt available. */
+			ctrl |= (APBUART_CTRL_DI | APBUART_CTRL_RF);
+		}
+		uart->regs->ctrl = ctrl;
+	}
+
+	return true;
 }
 
-int apbuart_lastClose(int major, int minor, void *arg)
+static void last_close(
+	rtems_termios_tty *tty,
+	rtems_termios_device_context *base,
+	rtems_libio_open_close_args_t *args
+)
 {
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
+	struct apbuart_priv *uart = base_get_priv(base);
+	rtems_interrupt_lock_context lock_context;
 
 	if (uart->mode != TERMIOS_POLLED) {
 		/* Turn off RX interrupts */
-		uart->regs->ctrl &= ~(LEON_REG_UART_CTRL_RI);
+		rtems_termios_device_lock_acquire(base, &lock_context);
+		uart->regs->ctrl &=
+			~(APBUART_CTRL_DI | APBUART_CTRL_RI | APBUART_CTRL_RF);
+		rtems_termios_device_lock_release(base, &lock_context);
 
 		/**** Flush device ****/
 		while (uart->sending) {
 			/* Wait until all data has been sent */
 		}
+		while (
+			(uart->regs->ctrl & APBUART_CTRL_TE) &&
+			!(uart->regs->status & APBUART_STATUS_TS)
+		) {
+			/* Wait until all data has left shift register */
+		}
 
 		/* Disable and unregister interrupt handler */
-		drvmgr_interrupt_unregister(uart->dev, 0, apbuart_isr, uart);
+		drvmgr_interrupt_unregister(uart->dev, 0, apbuart_cons_isr, tty);
 	}
 
 #ifdef LEON3
 	/* Disable TX/RX if not used for DEBUG */
-	if (uart->regs != dbg_uart)
-		uart->regs->ctrl &= ~(LEON_REG_UART_CTRL_RE | LEON_REG_UART_CTRL_TE);
+	if (uart->regs != leon3_debug_uart)
+		uart->regs->ctrl &= ~(APBUART_CTRL_RE | APBUART_CTRL_TE);
 #endif
-
-	return 0;
 }
 
-int apbuart_pollRead(int minor)
+static int read_polled(rtems_termios_device_context *base)
 {
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
+	struct apbuart_priv *uart = base_get_priv(base);
 
 	return apbuart_inbyte_nonblocking(uart->regs);
 }
 
-int apbuart_pollRead_task(int minor)
+/* This function is called from TERMIOS rxdaemon task without device lock. */
+static int read_task(rtems_termios_device_context *base)
 {
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
-	int c, tot;
-	char buf[32];
+	rtems_interrupt_lock_context lock_context;
+	struct apbuart_priv *uart = base_get_priv(base);
+	struct apbuart_regs *regs = uart->regs;
+	int cnt;
+	char buf[33];
+	struct rtems_termios_tty *tty;
+	uint32_t ctrl_add;
 
-	tot = 0;
-	while ((c=apbuart_inbyte_nonblocking(uart->regs)) != EOF) {
-		buf[tot] = c;
-		tot++;
-		if (tot > 31) {
-			rtems_termios_enqueue_raw_characters(uart->cookie, buf, tot);
-			tot = 0;
-		}
+	ctrl_add = APBUART_CTRL_RI;
+	if (uart->cap & CAP_DI) {
+		ctrl_add |= (APBUART_CTRL_DI | APBUART_CTRL_RF);
 	}
-	if (tot > 0)
-		rtems_termios_enqueue_raw_characters(uart->cookie, buf, tot);
+	tty = uart->tty;
+	do {
+		cnt = 0;
+		while (
+			(regs->status & APBUART_STATUS_DR) &&
+			(cnt < sizeof(buf))
+		) {
+			buf[cnt] = regs->data;
+			cnt++;
+		}
+		if (0 < cnt) {
+			/* Tell termios layer about new characters */
+			rtems_termios_enqueue_raw_characters(tty, &buf[0], cnt);
+		}
+
+		/*
+		 * Turn on RX interrupts. A new character in FIFO now may not
+		 * cause interrupt so we must check data ready again
+		 * afterwards.
+		 */
+		rtems_termios_device_lock_acquire(base, &lock_context);
+		regs->ctrl |= ctrl_add;
+		rtems_termios_device_lock_release(base, &lock_context);
+	} while (regs->status & APBUART_STATUS_DR);
 
 	return EOF;
 }
+
 
 struct apbuart_baud {
 	unsigned int num;
@@ -517,13 +638,17 @@ static struct apbuart_baud *apbuart_get_baud_closest(struct apbuart_priv *uart)
 	return apbuart_baud_find_closest(apbuart_get_baud(uart));
 }
 
-int apbuart_set_attributes(int minor, const struct termios *t)
+static bool set_attributes(
+	rtems_termios_device_context *base,
+	const struct termios *t
+)
 {
 	unsigned int core_clk_hz;
 	unsigned int scaler;
 	unsigned int ctrl;
 	int baud;
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
+	struct apbuart_priv *uart = base_get_priv(base);
+	rtems_interrupt_lock_context lock_context;
 
 	switch(t->c_cflag & CSIZE) {
 		default:
@@ -531,10 +656,12 @@ int apbuart_set_attributes(int minor, const struct termios *t)
 		case CS6:
 		case CS7:
 			/* Hardware doesn't support other than CS8 */
-			return -1;
+			return false;
 		case CS8:
 			break;
 	}
+
+	rtems_termios_device_lock_acquire(base, &lock_context);
 
 	/* Read out current value */
 	ctrl = uart->regs->ctrl;
@@ -566,8 +693,10 @@ int apbuart_set_attributes(int minor, const struct termios *t)
 	/* Update new settings */
 	uart->regs->ctrl = ctrl;
 
+	rtems_termios_device_lock_release(base, &lock_context);
+
 	/* Baud rate */
-	baud = apbuart_baud_num2baud(t->c_cflag & CBAUD);
+  baud = apbuart_baud_num2baud(t->c_ospeed);
 	if (baud > 0){
 		/* Get APBUART core frequency */
 		drvmgr_freq_get(uart->dev, DEV_APB_SLV, &core_clk_hz);
@@ -579,16 +708,19 @@ int apbuart_set_attributes(int minor, const struct termios *t)
 		uart->regs->scaler = scaler;
 	}
 
-	return 0;
+	return true;
 }
 
-void apbuart_get_attributes(struct console_dev *condev, struct termios *t)
+static void get_attributes(
+	rtems_termios_device_context *base,
+	struct termios *t
+)
 {
-	struct apbuart_priv *uart = (struct apbuart_priv *)condev;
+	struct apbuart_priv *uart = base_get_priv(base);
 	unsigned int ctrl;
 	struct apbuart_baud *baud;
 
-	t->c_cflag = t->c_cflag & ~(CSIZE|PARENB|PARODD|CLOCAL|CBAUD);
+  t->c_cflag = t->c_cflag & ~(CSIZE|PARENB|PARODD|CLOCAL);
 
 	/* Hardware support only CS8 */
 	t->c_cflag |= CS8;
@@ -609,82 +741,127 @@ void apbuart_get_attributes(struct console_dev *condev, struct termios *t)
 	t->c_cflag |= baud->num;
 }
 
-ssize_t apbuart_write_polled(int minor, const char *buf, size_t len)
+static void write_polled(
+	rtems_termios_device_context *base,
+	const char *buf,
+	size_t len
+)
 {
+	struct apbuart_priv *uart = base_get_priv(base);
 	int nwrite = 0;
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
 
 	while (nwrite < len) {
 		apbuart_outbyte_polled(uart->regs, *buf++, 0, 0);
 		nwrite++;
 	}
-	return nwrite;
 }
 
-ssize_t apbuart_write_intr(int minor, const char *buf, size_t len)
+static void write_interrupt(
+	rtems_termios_device_context *base,
+	const char *buf,
+	size_t len
+)
 {
-	struct apbuart_priv *uart = (struct apbuart_priv *)minor;
-	unsigned int oldLevel;
+	struct apbuart_priv *uart = base_get_priv(base);
+	struct apbuart_regs *regs = uart->regs;
+	int sending;
 	unsigned int ctrl;
 
-	rtems_interrupt_disable(oldLevel);
+	ctrl = regs->ctrl;
 
-	/* Enable TX interrupt */
-	ctrl = uart->regs->ctrl;
-	uart->regs->ctrl = ctrl | LEON_REG_UART_CTRL_TI;
+	if (len > 0) {
+		/*
+		 * sending is used to remember how much we have outstanding so
+		 * we can tell termios later.
+		 */
+		/* Enable TX interrupt (interrupt is edge-triggered) */
+		regs->ctrl = ctrl | APBUART_CTRL_TI;
 
-	if (ctrl & LEON_REG_UART_CTRL_FA) {
-		/* APBUART with FIFO.. Fill as many as FIFO allows */
-		uart->sending = 0;
-		while (((uart->regs->status & LEON_REG_UART_STATUS_TF) == 0) &&
-		       (uart->sending < len)) {
-			uart->regs->data = *buf;
-			buf++;
-			uart->sending++;
+		if (ctrl & APBUART_CTRL_FA) {
+			/* APBUART with FIFO.. Fill as many as FIFO allows */
+			sending = 0;
+			while (
+				((regs->status & APBUART_STATUS_TF) == 0) &&
+				(sending < len)
+			) {
+				regs->data = *buf;
+				buf++;
+				sending++;
+			}
+		} else {
+			/* start UART TX, this will result in an interrupt when done */
+			regs->data = *buf;
+
+			sending = 1;
 		}
 	} else {
-		/* start UART TX, this will result in an interrupt when done */
-		uart->regs->data = *buf;
+		/* No more to send, disable TX interrupts */
+		regs->ctrl = ctrl & ~APBUART_CTRL_TI;
 
-		uart->sending = 1;
+		/* Tell close that we sent everything */
+		sending = 0;
 	}
 
-	rtems_interrupt_enable(oldLevel);
-
-	return 0;
+	uart->sending = sending;
 }
 
 /* Handle UART interrupts */
-void apbuart_isr(void *arg)
+static void apbuart_cons_isr(void *arg)
 {
-	struct apbuart_priv *uart = arg;
+	rtems_termios_tty *tty = arg;
+	rtems_termios_device_context *base;
+	struct console_dev *condev = rtems_termios_get_device_context(tty);
+	struct apbuart_priv *uart = condev_get_priv(condev);
+	struct apbuart_regs *regs = uart->regs;
 	unsigned int status;
-	char data;
+	char buf[33];
 	int cnt;
 
-	/* Get all received characters */
 	if (uart->mode == TERMIOS_TASK_DRIVEN) {
-		if ((status=uart->regs->status) & LEON_REG_UART_STATUS_DR)
-			rtems_termios_rxirq_occured(uart->cookie);
-	} else {
-		while ((status=uart->regs->status) & LEON_REG_UART_STATUS_DR) {
-			/* Data has arrived, get new data */
-			data = uart->regs->data;
+		if ((status = regs->status) & APBUART_STATUS_DR) {
+			rtems_interrupt_lock_context lock_context;
 
-			/* Tell termios layer about new character */
-			rtems_termios_enqueue_raw_characters(uart->cookie, &data, 1);
+			/* Turn off RX interrupts */
+			base = rtems_termios_get_device_context(tty);
+			rtems_termios_device_lock_acquire(base, &lock_context);
+			regs->ctrl &=
+			    ~(APBUART_CTRL_DI | APBUART_CTRL_RI |
+			      APBUART_CTRL_RF);
+			rtems_termios_device_lock_release(base, &lock_context);
+			/* Activate termios RX daemon task */
+			rtems_termios_rxirq_occured(tty);
+		}
+	} else {
+		/*
+		 * Get all new characters from APBUART RX (FIFO) and store them
+		 * on the stack. Then tell termios about the new characters.
+		 * Maximum APBUART RX FIFO size is 32 characters.
+		 */
+		cnt = 0;
+		while (
+			((status=regs->status) & APBUART_STATUS_DR) &&
+			(cnt < sizeof(buf))
+		) {
+			buf[cnt] = regs->data;
+			cnt++;
+		}
+		if (0 < cnt) {
+			/* Tell termios layer about new characters */
+			rtems_termios_enqueue_raw_characters(tty, &buf[0], cnt);
 		}
 	}
 
-	if (uart->sending && (status & LEON_REG_UART_STATUS_THE)) {
-		/* Sent the one char, we disable TX interrupts */
-		uart->regs->ctrl &= ~LEON_REG_UART_CTRL_TI;
-
+	if (uart->sending && (status & APBUART_STATUS_TE)) {
 		/* Tell close that we sent everything */
 		cnt = uart->sending;
-		uart->sending = 0;
 
-		/* apbuart_write_intr() will get called from this function */
-		rtems_termios_dequeue_characters(uart->cookie, cnt);
+		/*
+		 * Tell termios how much we have sent. dequeue() may call
+		 * write_interrupt() to refill the transmitter.
+		 * write_interrupt() will eventually be called with 0 len to
+		 * disable TX interrupts.
+		 */
+		rtems_termios_dequeue_characters(tty, cnt);
 	}
 }
+

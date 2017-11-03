@@ -22,7 +22,8 @@
 #include <rtems/score/schedulerpriority.h>
 #include <rtems/score/schedulersmp.h>
 #include <rtems/score/schedulerprioritysmp.h>
-#include <rtems/score/cpuset.h>
+
+#include <sys/cpuset.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,13 +59,16 @@ extern "C" {
     _Scheduler_default_Map_priority, \
     _Scheduler_default_Unmap_priority, \
     _Scheduler_priority_affinity_SMP_Ask_for_help, \
+    _Scheduler_priority_affinity_SMP_Reconsider_help_request, \
+    _Scheduler_priority_affinity_SMP_Withdraw_node, \
+    _Scheduler_priority_affinity_SMP_Add_processor, \
+    _Scheduler_priority_affinity_SMP_Remove_processor, \
     _Scheduler_priority_affinity_SMP_Node_initialize, \
     _Scheduler_default_Node_destroy, \
     _Scheduler_default_Release_job, \
     _Scheduler_default_Cancel_job, \
     _Scheduler_default_Tick, \
     _Scheduler_SMP_Start_idle, \
-    _Scheduler_priority_affinity_SMP_Get_affinity, \
     _Scheduler_priority_affinity_SMP_Set_affinity \
   }
 
@@ -86,65 +90,51 @@ void _Scheduler_priority_affinity_SMP_Node_initialize(
   Priority_Control         priority
 );
 
-/**
- * @brief SMP Priority Affinity Scheduler Block Operation
- *
- * This method is the block operation for this scheduler.
- *
- * @param[in] scheduler is the scheduler instance information
- * @param[in] thread is the thread to block
- */
 void _Scheduler_priority_affinity_SMP_Block(
   const Scheduler_Control *scheduler,
-  Thread_Control          *thread
+  Thread_Control          *thread,
+  Scheduler_Node          *node
 );
 
-/**
- * @brief SMP Priority Affinity Scheduler Unblock Operation
- *
- * This method is the unblock operation for this scheduler.
- *
- * @param[in] scheduler is the scheduler instance information
- * @param[in] thread is the thread to unblock
- */
-Thread_Control *_Scheduler_priority_affinity_SMP_Unblock(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *thread
-);
-
-/**
- * @brief Get affinity for the priority affinity SMP scheduler.
- *
- * @param[in] scheduler The scheduler of the thread.
- * @param[in] thread The associated thread.
- * @param[in] cpusetsize The size of the cpuset.
- * @param[in,out] cpuset The associated affinity set.
- *
- * @retval 0 Successfully got cpuset
- * @retval -1 The cpusetsize is invalid for the system
- */
-bool _Scheduler_priority_affinity_SMP_Get_affinity(
+void _Scheduler_priority_affinity_SMP_Unblock(
   const Scheduler_Control *scheduler,
   Thread_Control          *thread,
-  size_t                   cpusetsize,
-  cpu_set_t               *cpuset
+  Scheduler_Node          *node
 );
 
-/**
- * @brief Update priority for the priority affinity SMP scheduler.
- *
- * @param[in] scheduler The scheduler of the thread.
- * @param[in] the_thread The associated thread.
- */
-Thread_Control *_Scheduler_priority_affinity_SMP_Update_priority(
+void _Scheduler_priority_affinity_SMP_Update_priority(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-Thread_Control *_Scheduler_priority_affinity_SMP_Ask_for_help(
+bool _Scheduler_priority_affinity_SMP_Ask_for_help(
   const Scheduler_Control *scheduler,
-  Thread_Control          *offers_help,
-  Thread_Control          *needs_help
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
+);
+
+void _Scheduler_priority_affinity_SMP_Reconsider_help_request(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
+);
+
+void _Scheduler_priority_affinity_SMP_Withdraw_node(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node,
+  Thread_Scheduler_state   next_state
+);
+
+void _Scheduler_priority_affinity_SMP_Add_processor(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *idle
+);
+
+Thread_Control *_Scheduler_priority_affinity_SMP_Remove_processor(
+  const Scheduler_Control *scheduler,
+  struct Per_CPU_Control  *cpu
 );
 
 /** 
@@ -152,8 +142,7 @@ Thread_Control *_Scheduler_priority_affinity_SMP_Ask_for_help(
  *
  * @param[in] scheduler The scheduler of the thread.
  * @param[in] thread The associated thread.
- * @param[in] cpusetsize The size of the cpuset.
- * @param[in] cpuset Affinity new affinity set.
+ * @param[in] affinity The new affinity set.
  *
  * @retval true if successful
  * @retval false if unsuccessful
@@ -161,8 +150,8 @@ Thread_Control *_Scheduler_priority_affinity_SMP_Ask_for_help(
 bool _Scheduler_priority_affinity_SMP_Set_affinity(
   const Scheduler_Control *scheduler,
   Thread_Control          *thread,
-  size_t                   cpusetsize,
-  const cpu_set_t         *cpuset
+  Scheduler_Node          *node,
+  const Processor_mask    *affinity
 );
 
 /**
@@ -180,7 +169,7 @@ typedef struct {
   /**
    * Structure containing affinity set data and size
    */
-  CPU_set_Control Affinity;
+  cpu_set_t affinity;
 } Scheduler_priority_affinity_SMP_Node;
 
 /** @} */

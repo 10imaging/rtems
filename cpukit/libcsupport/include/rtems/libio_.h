@@ -66,7 +66,8 @@ extern rtems_id                          rtems_libio_semaphore;
 
 extern const uint32_t rtems_libio_number_iops;
 extern rtems_libio_t rtems_libio_iops[];
-extern rtems_libio_t *rtems_libio_iop_freelist;
+extern void *rtems_libio_iop_free_head;
+extern void **rtems_libio_iop_free_tail;
 
 extern const rtems_filesystem_file_handlers_r rtems_filesystem_null_handlers;
 
@@ -89,15 +90,103 @@ extern rtems_filesystem_mount_table_entry_t rtems_filesystem_null_mt_entry;
  */
 extern rtems_filesystem_global_location_t rtems_filesystem_global_location_null;
 
-/*
- *  rtems_libio_iop
+/**
+ * @brief Sets the iop flags to the specified flags together with
+ * LIBIO_FLAGS_OPEN.
  *
- *  Macro to return the file descriptor pointer.
+ * Use this once a file descriptor allocated via rtems_libio_allocate() is
+ * fully initialized.
+ *
+ * @param[in] iop The iop.
+ * @param[in] flags The flags.
  */
+static inline void rtems_libio_iop_flags_initialize(
+  rtems_libio_t *iop,
+  uint32_t       flags
+)
+{
+  _Atomic_Store_uint(
+    &iop->flags,
+    LIBIO_FLAGS_OPEN | flags,
+    ATOMIC_ORDER_RELEASE
+  );
+}
 
-#define rtems_libio_iop(_fd) \
-  ((((uint32_t)(_fd)) < rtems_libio_number_iops) ? \
-         &rtems_libio_iops[_fd] : 0)
+/**
+ * @brief Sets the specified flags in the iop.
+ *
+ * @param[in] iop The iop.
+ * @param[in] set The flags to set.
+ *
+ * @return The previous flags.
+ */
+static inline unsigned int rtems_libio_iop_flags_set(
+  rtems_libio_t *iop,
+  unsigned int   set
+)
+{
+  return _Atomic_Fetch_or_uint( &iop->flags, set, ATOMIC_ORDER_RELAXED );
+}
+
+/**
+ * @brief Clears the specified flags in the iop.
+ *
+ * @param[in] iop The iop.
+ * @param[in] clear The flags to clear.
+ *
+ * @return The previous flags.
+ */
+static inline unsigned int rtems_libio_iop_flags_clear(
+  rtems_libio_t *iop,
+  unsigned int   clear
+)
+{
+  return _Atomic_Fetch_and_uint( &iop->flags, ~clear, ATOMIC_ORDER_RELAXED );
+}
+
+/**
+ * @brief Maps a file descriptor to the iop.
+ *
+ * The file descriptor must be a valid index into the iop table.
+ *
+ * @param[in] fd The file descriptor.
+ *
+ * @return The iop corresponding to the specified file descriptor.
+ */
+static inline rtems_libio_t *rtems_libio_iop( int fd )
+{
+  return &rtems_libio_iops[ fd ];
+}
+
+/**
+ * @brief Holds a refernece to the iop.
+ *
+ * @param[in] iop The iop.
+ *
+ * @return The flags corresponding to the specified iop.
+ */
+static inline unsigned int rtems_libio_iop_hold( rtems_libio_t *iop )
+{
+  return _Atomic_Fetch_add_uint(
+    &iop->flags,
+    LIBIO_FLAGS_REFERENCE_INC,
+    ATOMIC_ORDER_ACQUIRE
+  );
+}
+
+/**
+ * @brief Drops a refernece to the iop.
+ *
+ * @param[in] iop The iop.
+ */
+static inline void rtems_libio_iop_drop( rtems_libio_t *iop )
+{
+  _Atomic_Fetch_sub_uint(
+    &iop->flags,
+    LIBIO_FLAGS_REFERENCE_INC,
+    ATOMIC_ORDER_RELEASE
+  );
+}
 
 /*
  *  rtems_libio_iop_to_descriptor
@@ -123,19 +212,52 @@ extern rtems_filesystem_global_location_t rtems_filesystem_global_location_null;
       }                                              \
   } while (0)
 
-/*
- *  rtems_libio_check_fd
+/**
+ * @brief Macro to get the iop for the specified file descriptor.
  *
- *  Macro to check if a file descriptor number is valid.
+ * Checks that the file descriptor is in the valid range and open.
  */
+#define LIBIO_GET_IOP( _fd, _iop ) \
+  do { \
+    unsigned int _flags; \
+    if ( (uint32_t) ( _fd ) >= rtems_libio_number_iops ) { \
+      rtems_set_errno_and_return_minus_one( EBADF ); \
+    } \
+    _iop = rtems_libio_iop( _fd ); \
+    _flags = rtems_libio_iop_hold( _iop ); \
+    if ( ( _flags & LIBIO_FLAGS_OPEN ) == 0 ) { \
+      rtems_libio_iop_drop( _iop ); \
+      rtems_set_errno_and_return_minus_one( EBADF ); \
+    } \
+  } while ( 0 )
 
-#define rtems_libio_check_fd(_fd) \
-  do {                                                     \
-      if ((uint32_t) (_fd) >= rtems_libio_number_iops) {   \
-          errno = EBADF;                                   \
-          return -1;                                       \
-      }                                                    \
-  } while (0)
+/**
+ * @brief Macro to get the iop for the specified file descriptor with access
+ * flags and error.
+ *
+ * Checks that the file descriptor is in the valid range and open.
+ */
+#define LIBIO_GET_IOP_WITH_ACCESS( _fd, _iop, _access_flags, _access_error ) \
+  do { \
+    unsigned int _flags; \
+    unsigned int _mandatory; \
+    if ( (uint32_t) ( _fd ) >= rtems_libio_number_iops ) { \
+      rtems_set_errno_and_return_minus_one( EBADF ); \
+    } \
+    _iop = rtems_libio_iop( _fd ); \
+    _flags = rtems_libio_iop_hold( _iop ); \
+    _mandatory = LIBIO_FLAGS_OPEN | ( _access_flags ); \
+    if ( ( _flags & _mandatory ) != _mandatory ) { \
+      int _error; \
+      rtems_libio_iop_drop( _iop ); \
+      if ( ( _flags & LIBIO_FLAGS_OPEN ) == 0 ) { \
+        _error = EBADF; \
+      } else { \
+        _error = _access_error; \
+      } \
+      rtems_set_errno_and_return_minus_one( _error ); \
+    } \
+  } while ( 0 )
 
 /*
  *  rtems_libio_check_buffer
@@ -163,31 +285,6 @@ extern rtems_filesystem_global_location_t rtems_filesystem_global_location_null;
           return 0;                     \
       }                                 \
   } while (0)
-
-/*
- *  rtems_libio_check_permissions_with_error
- *
- *  Macro to check if a file descriptor is open for this operation.
- *  On failure, return the user specified error.
- */
-
-#define rtems_libio_check_permissions_with_error(_iop, _flag, _errno) \
-  do {                                                      \
-      if (((_iop)->flags & (_flag)) == 0) {                 \
-            rtems_set_errno_and_return_minus_one( _errno ); \
-            return -1;                                      \
-      }                                                     \
-  } while (0)
-
-/*
- *  rtems_libio_check_permissions
- *
- *  Macro to check if a file descriptor is open for this operation.
- *  On failure, return EINVAL
- */
-
-#define rtems_libio_check_permissions(_iop, _flag) \
-   rtems_libio_check_permissions_with_error(_iop, _flag, EINVAL )
 
 /**
  * @brief Clones a node.
@@ -289,12 +386,12 @@ rtems_libio_t *rtems_libio_allocate(void);
 /**
  * Convert UNIX fnctl(2) flags to ones that RTEMS drivers understand
  */
-uint32_t rtems_libio_fcntl_flags( int fcntl_flags );
+unsigned int rtems_libio_fcntl_flags( int fcntl_flags );
 
 /**
  * Convert RTEMS internal flags to UNIX fnctl(2) flags
  */
-int rtems_libio_to_fcntl_flags( uint32_t flags );
+int rtems_libio_to_fcntl_flags( unsigned int flags );
 
 /**
  * This routine frees the resources associated with an IOP (file descriptor)
@@ -507,11 +604,14 @@ rtems_filesystem_global_location_t *rtems_filesystem_global_location_obtain(
  * deferred.  The next obtain call will do the actual release.
  *
  * @param[in] global_loc The global file system location.  It must not be NULL.
+ * @param[in] deferred If true, then do a deferred release, otherwise release
+ *   it immediately.
  *
  * @see rtems_filesystem_global_location_obtain().
  */
 void rtems_filesystem_global_location_release(
-  rtems_filesystem_global_location_t *global_loc
+  rtems_filesystem_global_location_t *global_loc,
+  bool deferred
 );
 
 void rtems_filesystem_location_detach(
@@ -850,24 +950,24 @@ static inline bool rtems_filesystem_is_parent_directory(
   return tokenlen == 2 && token [0] == '.' && token [1] == '.';
 }
 
-static inline ssize_t rtems_libio_iovec_eval(
-  int fd,
+typedef ssize_t ( *rtems_libio_iovec_adapter )(
+  rtems_libio_t      *iop,
   const struct iovec *iov,
-  int iovcnt,
-  uint32_t flags,
-  rtems_libio_t **iopp
+  int                 iovcnt,
+  ssize_t             total
+);
+
+static inline ssize_t rtems_libio_iovec_eval(
+  int                        fd,
+  const struct iovec        *iov,
+  int                        iovcnt,
+  unsigned int               flags,
+  rtems_libio_iovec_adapter  adapter
 )
 {
   ssize_t        total;
   int            v;
   rtems_libio_t *iop;
-
-  rtems_libio_check_fd( fd );
-  iop = rtems_libio_iop( fd );
-  rtems_libio_check_is_open( iop );
-  rtems_libio_check_permissions_with_error( iop, flags, EBADF );
-
-  *iopp = iop;
 
   /*
    *  Argument validation on IO vector
@@ -901,6 +1001,13 @@ static inline ssize_t rtems_libio_iovec_eval(
     }
   }
 
+  LIBIO_GET_IOP_WITH_ACCESS( fd, iop, flags, EBADF );
+
+  if ( total > 0 ) {
+    total = ( *adapter )( iop, iov, iovcnt, total );
+  }
+
+  rtems_libio_iop_drop( iop );
   return total;
 }
 

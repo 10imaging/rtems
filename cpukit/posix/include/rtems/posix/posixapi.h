@@ -26,6 +26,8 @@
 #include <rtems/score/threadimpl.h>
 #include <rtems/seterr.h>
 
+#include <pthread.h>
+
 /**
  * @defgroup POSIXAPI RTEMS POSIX API
  *
@@ -89,7 +91,7 @@ RTEMS_INLINE_ROUTINE int _POSIX_Zero_or_minus_one_plus_errno(
  * @brief Macro to generate a function body to get a POSIX object by
  * identifier.
  *
- * Generates a function body to get the object for the specified indentifier.
+ * Generates a function body to get the object for the specified identifier.
  * Performs automatic initialization if requested and necessary.  This is an
  * ugly macro, since C lacks support for templates.
  */
@@ -105,6 +107,7 @@ RTEMS_INLINE_ROUTINE int _POSIX_Zero_or_minus_one_plus_errno(
   if ( id == NULL ) { \
     return NULL; \
   } \
+  _Thread_queue_Context_initialize( queue_context ); \
   the_object = _Objects_Get( \
     (Objects_Id) *id, \
     &queue_context->Lock_context.Lock_context, \
@@ -123,6 +126,19 @@ RTEMS_INLINE_ROUTINE int _POSIX_Zero_or_minus_one_plus_errno(
     ); \
   } \
   return (type *) the_object
+
+/*
+ * See also The Open Group Base Specifications Issue 7, IEEE Std 1003.1-2008,
+ * 2016 Edition, subsection 2.9.9, Synchronization Object Copies and
+ * Alternative Mappings.
+ *
+ * http://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html#tag_15_09_09
+ */
+RTEMS_INLINE_ROUTINE bool _POSIX_Is_valid_pshared( int pshared )
+{
+  return pshared == PTHREAD_PROCESS_PRIVATE ||
+    pshared == PTHREAD_PROCESS_SHARED;
+}
 
 /** @} */
 

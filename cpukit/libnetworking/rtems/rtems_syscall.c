@@ -26,6 +26,7 @@
 #include <sys/sysctl.h>
 
 #include <net/if.h>
+#include <net/if_var.h>
 #include <net/route.h>
 
 #include "rtems_syscall.h"
@@ -43,15 +44,14 @@ rtems_bsdnet_fdToSocket (int fd)
 {
   rtems_libio_t *iop;
 
-  /* same as rtems_libio_check_fd(_fd) but different return */
   if ((uint32_t)fd >= rtems_libio_number_iops) {
     errno = EBADF;
     return NULL;
   }
-  iop = &rtems_libio_iops[fd];
 
-  /* same as rtems_libio_check_is_open(iop) but different return */
-  if ((iop->flags & LIBIO_FLAGS_OPEN) == 0) {
+  iop = rtems_libio_iop(fd);
+
+  if ((rtems_libio_iop_flags(iop) & LIBIO_FLAGS_OPEN) == 0) {
     errno = EBADF;
     return NULL;
   }
@@ -80,12 +80,12 @@ rtems_bsdnet_makeFdForSocket (void *so)
       rtems_set_errno_and_return_minus_one( ENFILE );
 
   fd = rtems_libio_iop_to_descriptor(iop);
-  iop->flags |= LIBIO_FLAGS_WRITE | LIBIO_FLAGS_READ;
   iop->data0 = fd;
   iop->data1 = so;
   iop->pathinfo.handlers = &socket_handlers;
   iop->pathinfo.mt_entry = &rtems_filesystem_null_mt_entry;
   rtems_filesystem_location_add_to_mt_entry(&iop->pathinfo);
+  rtems_libio_iop_flags_initialize(iop, LIBIO_FLAGS_READ_WRITE);
   return fd;
 }
 
@@ -793,7 +793,7 @@ rtems_bsdnet_fcntl (rtems_libio_t *iop, int cmd)
 			rtems_bsdnet_semaphore_release ();
 			return EBADF;
 		}
-		if (iop->flags & LIBIO_FLAGS_NO_DELAY)
+		if (rtems_libio_iop_is_no_delay(iop))
 			so->so_state |= SS_NBIO;
 		else
 			so->so_state &= ~SS_NBIO;
@@ -822,6 +822,7 @@ static const rtems_filesystem_file_handlers_r socket_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h = rtems_bsdnet_fcntl,
 	.kqfilter_h = rtems_filesystem_default_kqfilter,
+	.mmap_h = rtems_filesystem_default_mmap,
 	.poll_h = rtems_filesystem_default_poll,
 	.readv_h = rtems_filesystem_default_readv,
 	.writev_h = rtems_filesystem_default_writev

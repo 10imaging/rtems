@@ -55,6 +55,11 @@
 extern "C" {
 #endif
 
+/*
+ * Internal defines must be prefixed with _CONFIGURE to distinguish them from
+ * user-provided options which use a CONFIGURE prefix.
+ */
+
 /**
  * @defgroup Configuration RTEMS Configuration
  *
@@ -107,9 +112,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 #if (defined(RTEMS_NEWLIB) && !defined(CONFIGURE_DISABLE_NEWLIB_REENTRANCY))
-  #define CONFIGURE_NEWLIB_EXTENSION 1
+  #define _CONFIGURE_NEWLIB_EXTENSION 1
 #else
-  #define CONFIGURE_NEWLIB_EXTENSION 0
+  #define _CONFIGURE_NEWLIB_EXTENSION 0
 #endif
 
 #ifndef RTEMS_SCHEDSIM
@@ -135,23 +140,23 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #define CONFIGURE_LIBIO_MAXIMUM_FILE_DESCRIPTORS 3
 #endif
 
-/**
+/*
  * Semaphore count used by the IO library.
  */
-#define CONFIGURE_LIBIO_SEMAPHORES 1
+#define _CONFIGURE_LIBIO_SEMAPHORES 1
 
-/**
+/*
  * POSIX key count used by the IO library.
  */
-#define CONFIGURE_LIBIO_POSIX_KEYS 1
+#define _CONFIGURE_LIBIO_POSIX_KEYS 1
 
-/**
+/*
  *  Driver Manager Configuration
  */
 #ifdef RTEMS_DRVMGR_STARTUP
-  #define CONFIGURE_DRVMGR_SEMAPHORES 1
+  #define _CONFIGURE_DRVMGR_SEMAPHORES 1
 #else
-  #define CONFIGURE_DRVMGR_SEMAPHORES 0
+  #define _CONFIGURE_DRVMGR_SEMAPHORES 0
 #endif
 
 #ifdef CONFIGURE_INIT
@@ -164,13 +169,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   const uint32_t rtems_libio_number_iops = RTEMS_ARRAY_SIZE(rtems_libio_iops);
 #endif
 
-/**
+/*
  * This macro determines if termios is disabled by this application.
  * This only means that resources will not be reserved.  If you end
  * up using termios, it will fail.
  */
 #ifdef CONFIGURE_TERMIOS_DISABLED
-  #define CONFIGURE_TERMIOS_SEMAPHORES 0
+  #define _CONFIGURE_TERMIOS_SEMAPHORES 0
 #else
   /**
    * This macro specifies the number of serial or PTY ports that will
@@ -180,11 +185,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #define CONFIGURE_NUMBER_OF_TERMIOS_PORTS 1
   #endif
 
-  /**
+  /*
    * This macro reserves the number of semaphores required by termios
    * based upon the number of communication ports that will use it.
    */
-  #define CONFIGURE_TERMIOS_SEMAPHORES \
+  #define _CONFIGURE_TERMIOS_SEMAPHORES \
     ((CONFIGURE_NUMBER_OF_TERMIOS_PORTS * 4) + 1)
 #endif
 
@@ -206,19 +211,29 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   extern int rtems_telnetd_maximum_ptys;
 #endif
 
-#if defined(RTEMS_SMP)
-  /*
-   *  If configured for SMP, then we need to know the maximum CPU cores.
-   */
-  #if !defined(CONFIGURE_SMP_APPLICATION)
-    #if !defined(CONFIGURE_SMP_MAXIMUM_PROCESSORS)
-      #define CONFIGURE_SMP_MAXIMUM_PROCESSORS 1
-    #endif
-  #else
-    #if !defined(CONFIGURE_SMP_MAXIMUM_PROCESSORS)
-      #error "CONFIGURE_SMP_MAXIMUM_PROCESSORS not specified for SMP Application"
-    #endif
+#ifdef CONFIGURE_SMP_MAXIMUM_PROCESSORS
+  #warning "CONFIGURE_SMP_MAXIMUM_PROCESSORS has been renamed to CONFIGURE_MAXIMUM_PROCESSORS since RTEMS 4.12"
+  #define CONFIGURE_MAXIMUM_PROCESSORS CONFIGURE_SMP_MAXIMUM_PROCESSORS
+#endif
+
+#ifndef CONFIGURE_MAXIMUM_PROCESSORS
+  #define CONFIGURE_MAXIMUM_PROCESSORS 1
+#endif
+
+/*
+ * An internal define to indicate that this is an SMP application
+ * configuration.
+ */
+#ifdef RTEMS_SMP
+  #if !defined(CONFIGURE_DISABLE_SMP_CONFIGURATION)
+    #define _CONFIGURE_SMP_APPLICATION
+  #elif CONFIGURE_MAXIMUM_PROCESSORS > 1
+    #error "CONFIGURE_DISABLE_SMP_CONFIGURATION and CONFIGURE_MAXIMUM_PROCESSORS > 1 makes no sense"
   #endif
+#endif
+
+#ifdef CONFIGURE_SMP_APPLICATION
+  #warning "CONFIGURE_SMP_APPLICATION is obsolete since RTEMS 4.12"
 #endif
 
 /*
@@ -239,30 +254,26 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #define CONFIGURE_MAXIMUM_PIPES 0
 #endif
 
-/**
+/*
  * This specifies the number of barriers required for the configured
  * number of FIFOs and named pipes.
- *
- * This is an internal parameter.
  */
 #if CONFIGURE_MAXIMUM_FIFOS > 0 || CONFIGURE_MAXIMUM_PIPES > 0
-  #define CONFIGURE_BARRIERS_FOR_FIFOS \
+  #define _CONFIGURE_BARRIERS_FOR_FIFOS \
     (2 * (CONFIGURE_MAXIMUM_FIFOS + CONFIGURE_MAXIMUM_PIPES))
 #else
-  #define CONFIGURE_BARRIERS_FOR_FIFOS   0
+  #define _CONFIGURE_BARRIERS_FOR_FIFOS   0
 #endif
 
-/**
+/*
  * This specifies the number of semaphores required for the configured
  * number of FIFOs and named pipes.
- *
- * This is an internal parameter.
  */
 #if CONFIGURE_MAXIMUM_FIFOS > 0 || CONFIGURE_MAXIMUM_PIPES > 0
-  #define CONFIGURE_SEMAPHORES_FOR_FIFOS \
+  #define _CONFIGURE_SEMAPHORES_FOR_FIFOS \
     (1 + (CONFIGURE_MAXIMUM_FIFOS + CONFIGURE_MAXIMUM_PIPES))
 #else
-  #define CONFIGURE_SEMAPHORES_FOR_FIFOS 0
+  #define _CONFIGURE_SEMAPHORES_FOR_FIFOS 0
 #endif
 
 /**
@@ -433,9 +444,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #endif
   #define CONFIGURE_FILESYSTEM_ENTRY_NFS \
     { RTEMS_FILESYSTEM_TYPE_NFS, rtems_nfs_initialize }
-  #define CONFIGURE_SEMAPHORES_FOR_NFS ((CONFIGURE_MAXIMUM_NFS_MOUNTS * 2) + 1)
+  #define _CONFIGURE_SEMAPHORES_FOR_NFS ((CONFIGURE_MAXIMUM_NFS_MOUNTS * 2) + 1)
 #else
-  #define CONFIGURE_SEMAPHORES_FOR_NFS 0
+  #define _CONFIGURE_SEMAPHORES_FOR_NFS 0
 #endif
 
 /**
@@ -449,9 +460,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #endif
   #define CONFIGURE_FILESYSTEM_ENTRY_DOSFS \
     { RTEMS_FILESYSTEM_TYPE_DOSFS, rtems_dosfs_initialize }
-  #define CONFIGURE_SEMAPHORES_FOR_DOSFS CONFIGURE_MAXIMUM_DOSFS_MOUNTS
+  #define _CONFIGURE_SEMAPHORES_FOR_DOSFS CONFIGURE_MAXIMUM_DOSFS_MOUNTS
 #else
-  #define CONFIGURE_SEMAPHORES_FOR_DOSFS 0
+  #define _CONFIGURE_SEMAPHORES_FOR_DOSFS 0
 #endif
 
 /**
@@ -465,9 +476,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #endif
   #define CONFIGURE_FILESYSTEM_ENTRY_RFS \
     { RTEMS_FILESYSTEM_TYPE_RFS, rtems_rfs_rtems_initialise }
-  #define CONFIGURE_SEMAPHORES_FOR_RFS CONFIGURE_MAXIMUM_RFS_MOUNTS
+  #define _CONFIGURE_SEMAPHORES_FOR_RFS CONFIGURE_MAXIMUM_RFS_MOUNTS
 #else
-  #define CONFIGURE_SEMAPHORES_FOR_RFS 0
+  #define _CONFIGURE_SEMAPHORES_FOR_RFS 0
 #endif
 
 /**
@@ -481,23 +492,21 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #endif
   #define CONFIGURE_FILESYSTEM_ENTRY_JFFS2 \
     { RTEMS_FILESYSTEM_TYPE_JFFS2, rtems_jffs2_initialize }
-  #define CONFIGURE_SEMAPHORES_FOR_JFFS2 CONFIGURE_MAXIMUM_JFFS2_MOUNTS
+  #define _CONFIGURE_SEMAPHORES_FOR_JFFS2 CONFIGURE_MAXIMUM_JFFS2_MOUNTS
 #else
-  #define CONFIGURE_SEMAPHORES_FOR_JFFS2 0
+  #define _CONFIGURE_SEMAPHORES_FOR_JFFS2 0
 #endif
 
 /**
  * This computes the number of semaphores required for the various
  * file systems including the FIFO plugin to the IMFS.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_SEMAPHORES_FOR_FILE_SYSTEMS \
-    (CONFIGURE_SEMAPHORES_FOR_FIFOS + \
-     CONFIGURE_SEMAPHORES_FOR_NFS + \
-     CONFIGURE_SEMAPHORES_FOR_DOSFS + \
-     CONFIGURE_SEMAPHORES_FOR_RFS + \
-     CONFIGURE_SEMAPHORES_FOR_JFFS2)
+#define _CONFIGURE_SEMAPHORES_FOR_FILE_SYSTEMS \
+    (_CONFIGURE_SEMAPHORES_FOR_FIFOS + \
+     _CONFIGURE_SEMAPHORES_FOR_NFS + \
+     _CONFIGURE_SEMAPHORES_FOR_DOSFS + \
+     _CONFIGURE_SEMAPHORES_FOR_RFS + \
+     _CONFIGURE_SEMAPHORES_FOR_JFFS2)
 
 #ifdef CONFIGURE_INIT
 
@@ -716,9 +725,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  * This configures the stack checker user extension.
  */
 #ifdef CONFIGURE_STACK_CHECKER_ENABLED
-  #define CONFIGURE_STACK_CHECKER_EXTENSION 1
+  #define _CONFIGURE_STACK_CHECKER_EXTENSION 1
 #else
-  #define CONFIGURE_STACK_CHECKER_EXTENSION 0
+  #define _CONFIGURE_STACK_CHECKER_EXTENSION 0
 #endif
 
 /**
@@ -771,6 +780,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  *  - CONFIGURE_SCHEDULER_SIMPLE - Light-weight Priority Scheduler
  *  - CONFIGURE_SCHEDULER_SIMPLE_SMP - Simple SMP Priority Scheduler
  *  - CONFIGURE_SCHEDULER_EDF - EDF Scheduler
+ *  - CONFIGURE_SCHEDULER_EDF_SMP - EDF SMP Scheduler
  *  - CONFIGURE_SCHEDULER_CBS - CBS Scheduler
  *  - CONFIGURE_SCHEDULER_USER  - user provided scheduler
  *
@@ -796,13 +806,14 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     !defined(CONFIGURE_SCHEDULER_SIMPLE) && \
     !defined(CONFIGURE_SCHEDULER_SIMPLE_SMP) && \
     !defined(CONFIGURE_SCHEDULER_EDF) && \
+    !defined(CONFIGURE_SCHEDULER_EDF_SMP) && \
     !defined(CONFIGURE_SCHEDULER_CBS)
-  #if defined(RTEMS_SMP) && defined(CONFIGURE_SMP_APPLICATION)
+  #if defined(RTEMS_SMP) && CONFIGURE_MAXIMUM_PROCESSORS > 1
     /**
      * If no scheduler is specified in an SMP configuration, the
-     * priority scheduler is default.
+     * EDF scheduler is default.
      */
-    #define CONFIGURE_SCHEDULER_PRIORITY_SMP
+    #define CONFIGURE_SCHEDULER_EDF_SMP
   #else
     /**
      * If no scheduler is specified in a uniprocessor configuration, the
@@ -971,6 +982,26 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 /*
+ * If the EDF SMP Scheduler is selected, then configure for it.
+ */
+#if defined(CONFIGURE_SCHEDULER_EDF_SMP)
+  #if !defined(CONFIGURE_SCHEDULER_NAME)
+    /** Configure the name of the scheduler instance */
+    #define CONFIGURE_SCHEDULER_NAME rtems_build_name('M', 'E', 'D', 'F')
+  #endif
+
+  #if !defined(CONFIGURE_SCHEDULER_CONTROLS)
+    /** Configure the context needed by the scheduler instance */
+    #define CONFIGURE_SCHEDULER_CONTEXT \
+      RTEMS_SCHEDULER_CONTEXT_EDF_SMP(dflt, CONFIGURE_MAXIMUM_PROCESSORS)
+
+    /** Configure the controls for this scheduler instance */
+    #define CONFIGURE_SCHEDULER_CONTROLS \
+      RTEMS_SCHEDULER_CONTROL_EDF_SMP(dflt, CONFIGURE_SCHEDULER_NAME)
+  #endif
+#endif
+
+/*
  * If the CBS Scheduler is selected, then configure for it.
  */
 #if defined(CONFIGURE_SCHEDULER_CBS)
@@ -1019,117 +1050,117 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #if defined(RTEMS_SMP)
     const size_t _Scheduler_Count = CONFIGURE_SCHEDULER_COUNT;
 
-    const Scheduler_Assignment _Scheduler_Assignments[] = {
+    const Scheduler_Assignment _Scheduler_Initial_assignments[] = {
       #if defined(CONFIGURE_SMP_SCHEDULER_ASSIGNMENTS)
         CONFIGURE_SMP_SCHEDULER_ASSIGNMENTS
       #else
-        #define CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT \
+        #define _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT \
           RTEMS_SCHEDULER_ASSIGN( \
             0, \
             RTEMS_SCHEDULER_ASSIGN_PROCESSOR_OPTIONAL \
           )
-        CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 2
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 2
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 3
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 3
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 4
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 4
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 5
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 5
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 6
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 6
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 7
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 7
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 8
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 8
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 9
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 9
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 10
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 10
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 11
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 11
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 12
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 12
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 13
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 13
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 14
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 14
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 15
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 15
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 16
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 16
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 17
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 17
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 18
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 18
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 19
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 19
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 20
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 20
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 21
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 21
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 22
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 22
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 23
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 23
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 24
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 24
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 25
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 25
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 26
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 26
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 27
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 27
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 28
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 28
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 29
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 29
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 30
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 30
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 31
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 31
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #if CONFIGURE_SMP_MAXIMUM_PROCESSORS >= 32
-          , CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #if CONFIGURE_MAXIMUM_PROCESSORS >= 32
+          , _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
         #endif
-        #undef CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
+        #undef _CONFIGURE_SMP_SCHEDULER_ASSIGN_OPT
       #endif
     };
 
     RTEMS_STATIC_ASSERT(
-      CONFIGURE_SMP_MAXIMUM_PROCESSORS
-        == RTEMS_ARRAY_SIZE( _Scheduler_Assignments ),
-      _Scheduler_Assignments
+      CONFIGURE_MAXIMUM_PROCESSORS
+        == RTEMS_ARRAY_SIZE( _Scheduler_Initial_assignments ),
+      _Scheduler_Initial_assignments
     );
   #endif
 #endif
@@ -1242,9 +1273,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  *       memory from the Workspace.
  */
 #if (CPU_ALLOCATE_INTERRUPT_STACK == 0)
-  #define CONFIGURE_INTERRUPT_STACK_MEMORY 0
+  #define _CONFIGURE_INTERRUPT_STACK_MEMORY 0
 #else
-  #define CONFIGURE_INTERRUPT_STACK_MEMORY \
+  #define _CONFIGURE_INTERRUPT_STACK_MEMORY \
      _Configure_From_workspace( CONFIGURE_INTERRUPT_STACK_SIZE )
 #endif
 
@@ -1370,7 +1401,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #define _Configure_Align_up(_val, _align) \
   (((_val) + (_align) - 1) - ((_val) + (_align) - 1) % (_align))
 
-#define CONFIGURE_HEAP_MIN_BLOCK_SIZE \
+#define _CONFIGURE_HEAP_MIN_BLOCK_SIZE \
   _Configure_Align_up(sizeof(Heap_Block), CPU_HEAP_ALIGNMENT)
 
 /**
@@ -1382,7 +1413,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #define _Configure_From_workspace(_size) \
   (ssize_t) (_Configure_Zero_or_One(_size) * \
     _Configure_Align_up(_size + HEAP_BLOCK_HEADER_SIZE, \
-      CONFIGURE_HEAP_MIN_BLOCK_SIZE))
+      _CONFIGURE_HEAP_MIN_BLOCK_SIZE))
 
 /**
  * This is a helper macro used in stack space calculations in this file.  It
@@ -1499,7 +1530,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  * used to specify the initial execution mode of the single Classic API task.
  */
 #ifndef CONFIGURE_INIT_TASK_INITIAL_MODES
-  #if defined(RTEMS_SMP) && defined(CONFIGURE_SMP_APPLICATION)
+  #ifdef _CONFIGURE_SMP_APPLICATION
     #define CONFIGURE_INIT_TASK_INITIAL_MODES RTEMS_DEFAULT_MODES
   #else
     #define CONFIGURE_INIT_TASK_INITIAL_MODES RTEMS_NO_PREEMPT
@@ -1529,15 +1560,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
 /**
  * This is the name of the Initialization Tasks Table generated.
- *
- * This is an internal parameter.
  */
 #define CONFIGURE_INIT_TASK_TABLE Initialization_tasks
 
-/**
+/*
  * This is the size of the Initialization Tasks Table generated.
- *
- * This is an internal parameter.
  */
 #define CONFIGURE_INIT_TASK_TABLE_SIZE \
   RTEMS_ARRAY_SIZE(CONFIGURE_INIT_TASK_TABLE)
@@ -1546,24 +1573,18 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
 #else     /* CONFIGURE_RTEMS_INIT_TASKS_TABLE */
 
-/**
+/*
  * This is the name of the Initialization Task when none is configured.
- *
- * This is an internal parameter.
  */
 #define CONFIGURE_INIT_TASK_TABLE      NULL
 
-/**
+/*
  * This is the size of the Initialization Task when none is configured.
- *
- * This is an internal parameter.
  */
 #define CONFIGURE_INIT_TASK_TABLE_SIZE 0
 
-/**
+/*
  * This is the stack size of the Initialization Task when none is configured.
- *
- * This is an internal parameter.
  */
 #define CONFIGURE_INIT_TASK_STACK_SIZE 0
 
@@ -1798,12 +1819,12 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     };
   #endif
 
-  #define CONFIGURE_LIBBLOCK_TASKS \
+  #define _CONFIGURE_LIBBLOCK_TASKS \
     (1 + CONFIGURE_SWAPOUT_WORKER_TASKS + \
     (CONFIGURE_BDBUF_MAX_READ_AHEAD_BLOCKS != 0))
 
-  #define CONFIGURE_LIBBLOCK_TASK_EXTRA_STACKS \
-    (CONFIGURE_LIBBLOCK_TASKS * \
+  #define _CONFIGURE_LIBBLOCK_TASK_EXTRA_STACKS \
+    (_CONFIGURE_LIBBLOCK_TASKS * \
     (CONFIGURE_BDBUF_TASK_STACK_SIZE <= CONFIGURE_MINIMUM_TASK_STACK_SIZE ? \
     0 : CONFIGURE_BDBUF_TASK_STACK_SIZE - CONFIGURE_MINIMUM_TASK_STACK_SIZE))
 
@@ -1812,22 +1833,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * Semaphores:
      *   o disk lock
      */
-    #define CONFIGURE_LIBBLOCK_SEMAPHORES 1
-
-    /*
-     * POSIX Mutexes:
-     *  o bdbuf lock
-     *  o bdbuf sync lock
-     */
-    #define CONFIGURE_LIBBLOCK_POSIX_MUTEXES 2
-
-    /*
-     * POSIX Condition Variables:
-     *  o bdbuf access condition
-     *  o bdbuf transfer condition
-     *  o bdbuf buffer condition
-     */
-    #define CONFIGURE_LIBBLOCK_POSIX_CONDITION_VARIABLES 3
+    #define _CONFIGURE_LIBBLOCK_SEMAPHORES 1
   #else
     /*
      * Semaphores:
@@ -1838,10 +1844,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      *   o bdbuf transfer condition
      *   o bdbuf buffer condition
      */
-    #define CONFIGURE_LIBBLOCK_SEMAPHORES 6
-
-    #define CONFIGURE_LIBBLOCK_POSIX_MUTEXES 0
-    #define CONFIGURE_LIBBLOCK_POSIX_CONDITION_VARIABLES 0
+    #define _CONFIGURE_LIBBLOCK_SEMAPHORES 6
   #endif
 
   #if defined(CONFIGURE_HAS_OWN_BDBUF_TABLE) || \
@@ -1851,18 +1854,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #endif
 #else
   /** This specifies the number of libblock tasks. */
-  #define CONFIGURE_LIBBLOCK_TASKS 0
+  #define _CONFIGURE_LIBBLOCK_TASKS 0
   /** This specifies the extra stack space configured for libblock tasks. */
-  #define CONFIGURE_LIBBLOCK_TASK_EXTRA_STACKS 0
+  #define _CONFIGURE_LIBBLOCK_TASK_EXTRA_STACKS 0
   /** This specifies the number of Classic API semaphores needed by libblock. */
-  #define CONFIGURE_LIBBLOCK_SEMAPHORES 0
-  /** This specifies the number of POSIX Mutexes needed by libblock. */
-  #define CONFIGURE_LIBBLOCK_POSIX_MUTEXES 0
-  /**
-   * This specifies the number of POSIX Condition Variables needed
-   * by libblock.
-   */
-  #define CONFIGURE_LIBBLOCK_POSIX_CONDITION_VARIABLES 0
+  #define _CONFIGURE_LIBBLOCK_SEMAPHORES 0
 #endif /* CONFIGURE_APPLICATION_NEEDS_LIBBLOCK */
 /**@}*/
 
@@ -1891,8 +1887,8 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  * This defines the timers required for the shared memory driver in
  * a multiprocessing configuration.
  */
-#ifndef CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER
-  #define CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER 0
+#ifndef _CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER
+  #define _CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER 0
 #endif
 
 
@@ -1904,7 +1900,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
    */
 
   #ifdef CONFIGURE_MP_APPLICATION
-    #define CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER 1
+    #define _CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER 1
 
     #ifndef CONFIGURE_HAS_OWN_MULTIPROCESSING_TABLE
 
@@ -1919,7 +1915,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       #ifndef CONFIGURE_MP_MAXIMUM_GLOBAL_OBJECTS
         #define CONFIGURE_MP_MAXIMUM_GLOBAL_OBJECTS     32
       #endif
-      #define CONFIGURE_MEMORY_FOR_GLOBAL_OBJECTS(_global_objects) \
+      #define _CONFIGURE_MEMORY_FOR_GLOBAL_OBJECTS(_global_objects) \
         _Configure_From_workspace( \
           (_global_objects) * sizeof(Objects_MP_Control) \
         )
@@ -1927,7 +1923,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       #ifndef CONFIGURE_MP_MAXIMUM_PROXIES
         #define CONFIGURE_MP_MAXIMUM_PROXIES            32
       #endif
-      #define CONFIGURE_MEMORY_FOR_PROXIES(_proxies) \
+      #define _CONFIGURE_MEMORY_FOR_PROXIES(_proxies) \
         _Configure_From_workspace((_proxies) \
           * (sizeof(Thread_Proxy_control) \
             + THREAD_QUEUE_HEADS_SIZE(CONFIGURE_SCHEDULER_COUNT)))
@@ -1950,7 +1946,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
       #define CONFIGURE_MULTIPROCESSING_TABLE    &Multiprocessing_configuration
 
-      #define CONFIGURE_MPCI_RECEIVE_SERVER_COUNT 1
+      #define _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT 1
 
     #endif /* CONFIGURE_HAS_OWN_MULTIPROCESSING_TABLE */
 
@@ -1958,11 +1954,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
     #define CONFIGURE_MULTIPROCESSING_TABLE    NULL
 
-    #define CONFIGURE_MPCI_RECEIVE_SERVER_COUNT 0
+    #define _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT 0
 
   #endif /* CONFIGURE_MP_APPLICATION */
 #else
-  #define CONFIGURE_MPCI_RECEIVE_SERVER_COUNT 0
+  #define _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT 0
 #endif /* RTEMS_MULTIPROCESSING */
 /**@}*/ /* end of Multiprocessing Configuration */
 
@@ -2034,14 +2030,6 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       #define CONFIGURE_MAXIMUM_POSIX_THREADS \
         rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
     #endif
-    #if !defined(CONFIGURE_MAXIMUM_POSIX_MUTEXES)
-      #define CONFIGURE_MAXIMUM_POSIX_MUTEXES \
-        rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
-    #endif
-    #if !defined(CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES)
-      #define CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES \
-        rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
-    #endif
     #if !defined(CONFIGURE_MAXIMUM_POSIX_TIMERS)
       #define CONFIGURE_MAXIMUM_POSIX_TIMERS \
         rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
@@ -2060,16 +2048,8 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       #define CONFIGURE_MAXIMUM_POSIX_SEMAPHORES \
         rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
     #endif
-    #if !defined(CONFIGURE_MAXIMUM_POSIX_BARRIERS)
-      #define CONFIGURE_MAXIMUM_POSIX_BARRIERS \
-        rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
-    #endif
-    #if !defined(CONFIGURE_MAXIMUM_POSIX_RWLOCKS)
-      #define CONFIGURE_MAXIMUM_POSIX_RWLOCKS \
-        rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
-    #endif
-    #if !defined(CONFIGURE_MAXIMUM_POSIX_SPINLOCKS)
-      #define CONFIGURE_MAXIMUM_POSIX_SPINLOCKS \
+    #if !defined(CONFIGURE_MAXIMUM_POSIX_SHMS)
+      #define CONFIGURE_MAXIMUM_POSIX_SHMS \
         rtems_resource_unlimited(CONFIGURE_UNLIMITED_ALLOCATION_SIZE)
     #endif
   #endif /* RTEMS_POSIX_API */
@@ -2092,27 +2072,23 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MAXIMUM_TASKS               0
   #endif
 
-  /**
+  /*
    * This is calculated to account for the maximum number of Classic API
    * tasks used by the application and configured RTEMS capabilities.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_TASKS \
-    (CONFIGURE_MAXIMUM_TASKS + CONFIGURE_LIBBLOCK_TASKS)
+  #define _CONFIGURE_TASKS \
+    (CONFIGURE_MAXIMUM_TASKS + _CONFIGURE_LIBBLOCK_TASKS)
 
   #ifndef CONFIGURE_MAXIMUM_TIMERS
     /** This specifies the maximum number of Classic API timers. */
     #define CONFIGURE_MAXIMUM_TIMERS             0
-    /**
+    /*
      * This macro is calculated to specify the memory required for
      * Classic API timers.
-     *
-     * This is an internal parameter.
      */
-    #define CONFIGURE_MEMORY_FOR_TIMERS(_timers) 0
+    #define _CONFIGURE_MEMORY_FOR_TIMERS(_timers) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_TIMERS(_timers) \
+    #define _CONFIGURE_MEMORY_FOR_TIMERS(_timers) \
       _Configure_Object_RAM(_timers, sizeof(Timer_Control) )
   #endif
 
@@ -2121,63 +2097,55 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MAXIMUM_SEMAPHORES                 0
   #endif
 
-  /**
+  /*
    * This specifies the number of Classic API semaphores required
-   *
-   * This is an internal parameter.
    */
   #ifdef RTEMS_NETWORKING
-    #define CONFIGURE_NETWORKING_SEMAPHORES 1
+    #define _CONFIGURE_NETWORKING_SEMAPHORES 1
   #else
-    #define CONFIGURE_NETWORKING_SEMAPHORES 0
+    #define _CONFIGURE_NETWORKING_SEMAPHORES 0
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the number of Classic API
    * semaphores required by the application and configured RTEMS
    * capabilities.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_SEMAPHORES \
-    (CONFIGURE_MAXIMUM_SEMAPHORES + CONFIGURE_LIBIO_SEMAPHORES + \
-      CONFIGURE_TERMIOS_SEMAPHORES + CONFIGURE_LIBBLOCK_SEMAPHORES + \
-      CONFIGURE_SEMAPHORES_FOR_FILE_SYSTEMS + \
-      CONFIGURE_NETWORKING_SEMAPHORES + CONFIGURE_DRVMGR_SEMAPHORES)
+  #define _CONFIGURE_SEMAPHORES \
+    (CONFIGURE_MAXIMUM_SEMAPHORES + _CONFIGURE_LIBIO_SEMAPHORES + \
+      _CONFIGURE_TERMIOS_SEMAPHORES + _CONFIGURE_LIBBLOCK_SEMAPHORES + \
+      _CONFIGURE_SEMAPHORES_FOR_FILE_SYSTEMS + \
+      _CONFIGURE_NETWORKING_SEMAPHORES + _CONFIGURE_DRVMGR_SEMAPHORES)
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * Classic API Semaphores using MRSP. This is only available in
    * SMP configurations.
-   *
-   * This is an internal parameter.
    */
   #if !defined(RTEMS_SMP) || \
     !defined(CONFIGURE_MAXIMUM_MRSP_SEMAPHORES)
-    #define CONFIGURE_MEMORY_FOR_MRSP_SEMAPHORES 0
+    #define _CONFIGURE_MEMORY_FOR_MRSP_SEMAPHORES 0
   #else
-    #define CONFIGURE_MEMORY_FOR_MRSP_SEMAPHORES \
+    #define _CONFIGURE_MEMORY_FOR_MRSP_SEMAPHORES \
       CONFIGURE_MAXIMUM_MRSP_SEMAPHORES * \
         _Configure_From_workspace( \
           RTEMS_ARRAY_SIZE(_Scheduler_Table) * sizeof(Priority_Control) \
         )
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * Classic API Semaphores.
    *
    * If there are no user or support semaphores defined, then we can assume
    * that no memory need be allocated at all for semaphores.
-   *
-   * This is an internal parameter.
    */
-  #if CONFIGURE_SEMAPHORES == 0
-    #define CONFIGURE_MEMORY_FOR_SEMAPHORES(_semaphores) 0
+  #if _CONFIGURE_SEMAPHORES == 0
+    #define _CONFIGURE_MEMORY_FOR_SEMAPHORES(_semaphores) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_SEMAPHORES(_semaphores) \
+    #define _CONFIGURE_MEMORY_FOR_SEMAPHORES(_semaphores) \
       _Configure_Object_RAM(_semaphores, sizeof(Semaphore_Control) ) + \
-        CONFIGURE_MEMORY_FOR_MRSP_SEMAPHORES
+        _CONFIGURE_MEMORY_FOR_MRSP_SEMAPHORES
   #endif
 
   #ifndef CONFIGURE_MAXIMUM_MESSAGE_QUEUES
@@ -2186,15 +2154,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * Classic API Message Queues.
      */
     #define CONFIGURE_MAXIMUM_MESSAGE_QUEUES             0
-    /**
+    /*
      * This macro is calculated to specify the RTEMS Workspace required for
      * the Classic API Message Queues.
-     *
-     * This is an internal parameter.
      */
-    #define CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(_queues) 0
+    #define _CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(_queues) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(_queues) \
+    #define _CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(_queues) \
       _Configure_Object_RAM(_queues, sizeof(Message_queue_Control) )
   #endif
 
@@ -2204,15 +2170,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * Classic API Partitions.
      */
     #define CONFIGURE_MAXIMUM_PARTITIONS                 0
-    /**
+    /*
      * This macro is calculated to specify the memory required for
      * Classic API
-     *
-     * This is an internal parameter.
      */
-    #define CONFIGURE_MEMORY_FOR_PARTITIONS(_partitions) 0
+    #define _CONFIGURE_MEMORY_FOR_PARTITIONS(_partitions) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_PARTITIONS(_partitions) \
+    #define _CONFIGURE_MEMORY_FOR_PARTITIONS(_partitions) \
       _Configure_Object_RAM(_partitions, sizeof(Partition_Control) )
   #endif
 
@@ -2222,15 +2186,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * Classic API Regions.
      */
     #define CONFIGURE_MAXIMUM_REGIONS              0
-    /**
+    /*
      * This macro is calculated to specify the memory required for
      * Classic API Regions.
-     *
-     * This is an internal parameter.
      */
-    #define CONFIGURE_MEMORY_FOR_REGIONS(_regions) 0
+    #define _CONFIGURE_MEMORY_FOR_REGIONS(_regions) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_REGIONS(_regions) \
+    #define _CONFIGURE_MEMORY_FOR_REGIONS(_regions) \
       _Configure_Object_RAM(_regions, sizeof(Region_Control) )
   #endif
 
@@ -2243,12 +2205,10 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     /**
      * This macro is calculated to specify the memory required for
      * Classic API Dual-Ported Memory Ports.
-     *
-     * This is an internal parameter.
      */
-    #define CONFIGURE_MEMORY_FOR_PORTS(_ports) 0
+    #define _CONFIGURE_MEMORY_FOR_PORTS(_ports) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_PORTS(_ports) \
+    #define _CONFIGURE_MEMORY_FOR_PORTS(_ports) \
       _Configure_Object_RAM(_ports, sizeof(Dual_ported_memory_Control) )
   #endif
 
@@ -2258,15 +2218,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * Classic API Rate Monotonic Periods.
      */
     #define CONFIGURE_MAXIMUM_PERIODS              0
-    /**
+    /*
      * This macro is calculated to specify the memory required for
      * Classic API Rate Monotonic Periods.
-     *
-     * This is an internal parameter.
      */
-  #define CONFIGURE_MEMORY_FOR_PERIODS(_periods) 0
+  #define _CONFIGURE_MEMORY_FOR_PERIODS(_periods) 0
 #else
-    #define CONFIGURE_MEMORY_FOR_PERIODS(_periods) \
+    #define _CONFIGURE_MEMORY_FOR_PERIODS(_periods) \
       _Configure_Object_RAM(_periods, sizeof(Rate_monotonic_Control) )
   #endif
 
@@ -2278,25 +2236,21 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MAXIMUM_BARRIERS               0
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the number of Classic API
    * Barriers required by the application and configured capabilities.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_BARRIERS \
-     (CONFIGURE_MAXIMUM_BARRIERS + CONFIGURE_BARRIERS_FOR_FIFOS)
+  #define _CONFIGURE_BARRIERS \
+     (CONFIGURE_MAXIMUM_BARRIERS + _CONFIGURE_BARRIERS_FOR_FIFOS)
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * Classic API Barriers.
-   *
-   * This is an internal parameter.
    */
-  #if CONFIGURE_BARRIERS == 0
-    #define CONFIGURE_MEMORY_FOR_BARRIERS(_barriers) 0
+  #if _CONFIGURE_BARRIERS == 0
+    #define _CONFIGURE_MEMORY_FOR_BARRIERS(_barriers) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_BARRIERS(_barriers) \
+    #define _CONFIGURE_MEMORY_FOR_BARRIERS(_barriers) \
       _Configure_Object_RAM(_barriers, sizeof(Barrier_Control) )
   #endif
 
@@ -2306,15 +2260,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * Classic API User Extensions.
      */
     #define CONFIGURE_MAXIMUM_USER_EXTENSIONS                 0
-    /**
+    /*
      * This macro is calculated to specify the memory required for
      * Classic API User Extensions.
-     *
-     * This is an internal parameter.
      */
-    #define CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(_extensions) 0
+    #define _CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(_extensions) 0
   #else
-    #define CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(_extensions) \
+    #define _CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(_extensions) \
       _Configure_Object_RAM(_extensions, sizeof(Extension_Control) )
   #endif
   /**@}*/ /* end of Classic API Configuration */
@@ -2334,6 +2286,16 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MICROSECONDS_PER_TICK \
             RTEMS_MILLISECONDS_TO_MICROSECONDS(10)
   #endif
+
+  #if 1000000 % CONFIGURE_MICROSECONDS_PER_TICK != 0
+    #warning "The clock ticks per second is not an integer"
+  #endif
+
+  #if CONFIGURE_MICROSECONDS_PER_TICK <= 0
+    #error "The CONFIGURE_MICROSECONDS_PER_TICK must be positive"
+  #endif
+
+  #define _CONFIGURE_TICKS_PER_SECOND (1000000 / CONFIGURE_MICROSECONDS_PER_TICK)
 
   /** The configures the number of clock ticks per timeslice. */
   #ifndef CONFIGURE_TICKS_PER_TIMESLICE
@@ -2372,7 +2334,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   };
 
   #define CONFIGURE_INITIAL_EXTENSION_TABLE Configuration_Initial_Extensions
-  #define CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS \
+  #define _CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS \
     RTEMS_ARRAY_SIZE(Configuration_Initial_Extensions)
 
   RTEMS_SYSINIT_ITEM(
@@ -2382,7 +2344,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   );
 #else
   #define CONFIGURE_INITIAL_EXTENSION_TABLE NULL
-  #define CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS 0
+  #define _CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS 0
 #endif
 
 #if defined(RTEMS_NEWLIB)
@@ -2418,11 +2380,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #define CONFIGURE_MAXIMUM_POSIX_KEYS 0
 #endif
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * POSIX API key/value pairs.
- *
- * This is an internal parameter.
  */
 #ifndef CONFIGURE_MAXIMUM_POSIX_KEY_VALUE_PAIRS
   #define CONFIGURE_MAXIMUM_POSIX_KEY_VALUE_PAIRS \
@@ -2430,26 +2390,23 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      (CONFIGURE_MAXIMUM_POSIX_THREADS + CONFIGURE_MAXIMUM_TASKS))
 #endif
 
-/**
+/*
  * This macro is calculated to specify the total number of
  * POSIX API keys required by the application and configured
  * system capabilities.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_POSIX_KEYS \
-  (CONFIGURE_MAXIMUM_POSIX_KEYS + CONFIGURE_LIBIO_POSIX_KEYS)
+#define _CONFIGURE_POSIX_KEYS \
+  (CONFIGURE_MAXIMUM_POSIX_KEYS + _CONFIGURE_LIBIO_POSIX_KEYS)
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * POSIX API keys.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_MEMORY_FOR_POSIX_KEYS(_keys, _key_value_pairs) \
+#define _CONFIGURE_MEMORY_FOR_POSIX_KEYS(_keys, _key_value_pairs) \
    (_Configure_Object_RAM(_keys, sizeof(POSIX_Keys_Control) ) \
     + _Configure_From_workspace( \
-        _key_value_pairs * sizeof(POSIX_Keys_Key_value_pair)))
+      _Configure_Max_Objects(_key_value_pairs) \
+        * sizeof(POSIX_Keys_Key_value_pair)))
 
 /*
  *  The rest of the POSIX threads API features are only available when
@@ -2460,23 +2417,17 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #include <signal.h>
   #include <limits.h>
   #include <mqueue.h>
-  #include <rtems/posix/barrier.h>
-  #include <rtems/posix/cond.h>
   #include <rtems/posix/mqueue.h>
-  #include <rtems/posix/mutex.h>
   #include <rtems/posix/psignal.h>
   #include <rtems/posix/pthread.h>
-  #include <rtems/posix/rwlock.h>
   #include <rtems/posix/semaphore.h>
-  #include <rtems/posix/spinlock.h>
+  #include <rtems/posix/shm.h>
   #include <rtems/posix/threadsup.h>
   #include <rtems/posix/timer.h>
 
-  /**
+  /*
    * Account for the object control structures plus the name
    * of the object to be duplicated.
-   *
-   * This is an internal macro.
    */
   #define _Configure_POSIX_Named_Object_RAM(_number, _size) \
     (_Configure_Object_RAM(_number, _size) \
@@ -2493,54 +2444,17 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
   /**
    * This configuration parameter specifies the maximum number of
-   * POSIX API mutexes.
-   */
-  #ifndef CONFIGURE_MAXIMUM_POSIX_MUTEXES
-    #define CONFIGURE_MAXIMUM_POSIX_MUTEXES 0
-  #endif
-
-  /**
-   * This macro is calculated to specify the memory required for
-   * POSIX API mutexes.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_MEMORY_FOR_POSIX_MUTEXES(_mutexes) \
-    _Configure_Object_RAM(_mutexes, sizeof(POSIX_Mutex_Control) )
-
-  /**
-   * This configuration parameter specifies the maximum number of
-   * POSIX API condition variables.
-   */
-  #ifndef CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES
-    #define CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES 0
-  #endif
-
-  /**
-   * This macro is calculated to specify the memory required for
-   * POSIX API condition variables.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_MEMORY_FOR_POSIX_CONDITION_VARIABLES(_condvars) \
-      _Configure_Object_RAM(_condvars, \
-                          sizeof(POSIX_Condition_variables_Control) )
-
-  /**
-   * This configuration parameter specifies the maximum number of
    * POSIX API timers.
    */
   #ifndef CONFIGURE_MAXIMUM_POSIX_TIMERS
     #define CONFIGURE_MAXIMUM_POSIX_TIMERS 0
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * POSIX API timers.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX_TIMERS(_timers) \
+  #define _CONFIGURE_MEMORY_FOR_POSIX_TIMERS(_timers) \
     _Configure_Object_RAM(_timers, sizeof(POSIX_Timer_Control) )
 
   /**
@@ -2551,13 +2465,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MAXIMUM_POSIX_QUEUED_SIGNALS 0
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * POSIX API queued signals.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX_QUEUED_SIGNALS(_queued_signals) \
+  #define _CONFIGURE_MEMORY_FOR_POSIX_QUEUED_SIGNALS(_queued_signals) \
     _Configure_From_workspace( \
       (_queued_signals) * (sizeof(POSIX_signals_Siginfo_node)) )
 
@@ -2569,13 +2481,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES                     0
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * POSIX API message queues.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX_MESSAGE_QUEUES(_message_queues) \
+  #define _CONFIGURE_MEMORY_FOR_POSIX_MESSAGE_QUEUES(_message_queues) \
     _Configure_POSIX_Named_Object_RAM( \
        _message_queues, sizeof(POSIX_Message_queue_Control) )
 
@@ -2587,66 +2497,40 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
     #define CONFIGURE_MAXIMUM_POSIX_SEMAPHORES 0
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * POSIX API semaphores.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX_SEMAPHORES(_semaphores) \
+  #define _CONFIGURE_MEMORY_FOR_POSIX_SEMAPHORES(_semaphores) \
     _Configure_POSIX_Named_Object_RAM( \
        _semaphores, sizeof(POSIX_Semaphore_Control) )
 
   /**
-   * This configuration parameter specifies the maximum number of
-   * POSIX API barriers.
+   * Configure the maximum number of POSIX shared memory objects.
    */
-  #ifndef CONFIGURE_MAXIMUM_POSIX_BARRIERS
-    #define CONFIGURE_MAXIMUM_POSIX_BARRIERS 0
+  #if !defined(CONFIGURE_MAXIMUM_POSIX_SHMS)
+    #define CONFIGURE_MAXIMUM_POSIX_SHMS 0
+  #else
+    #ifdef CONFIGURE_INIT
+      #if !defined(CONFIGURE_HAS_OWN_POSIX_SHM_OBJECT_OPERATIONS)
+        const POSIX_Shm_Object_operations _POSIX_Shm_Object_operations = {
+          _POSIX_Shm_Object_create_from_workspace,
+          _POSIX_Shm_Object_resize_from_workspace,
+          _POSIX_Shm_Object_delete_from_workspace,
+          _POSIX_Shm_Object_read_from_workspace,
+          _POSIX_Shm_Object_mmap_from_workspace
+        };
+      #endif
+    #endif
   #endif
 
-  /**
+  /*
    * This macro is calculated to specify the memory required for
-   * POSIX API barriers.
-   *
-   * This is an internal parameter.
+   * POSIX API shared memory.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX_BARRIERS(_barriers) \
-    _Configure_Object_RAM(_barriers, sizeof(POSIX_Barrier_Control) )
+  #define _CONFIGURE_MEMORY_FOR_POSIX_SHMS(_shms) \
+    _Configure_POSIX_Named_Object_RAM(_shms, sizeof(POSIX_Shm_Control) )
 
-  /**
-   * This configuration parameter specifies the maximum number of
-   * POSIX API spinlocks.
-   */
-  #ifndef CONFIGURE_MAXIMUM_POSIX_SPINLOCKS
-    #define CONFIGURE_MAXIMUM_POSIX_SPINLOCKS 0
-  #endif
-
-  /**
-   * This macro is calculated to specify the memory required for
-   * POSIX API spinlocks.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_MEMORY_FOR_POSIX_SPINLOCKS(_spinlocks) \
-    _Configure_Object_RAM(_spinlocks, sizeof(POSIX_Spinlock_Control) )
-
-  /**
-   * This configuration parameter specifies the maximum number of
-   * POSIX API rwlocks.
-   */
-  #ifndef CONFIGURE_MAXIMUM_POSIX_RWLOCKS
-    #define CONFIGURE_MAXIMUM_POSIX_RWLOCKS 0
-  #endif
-
-  /**
-   * This macro is calculated to specify the memory required for
-   * POSIX API rwlocks.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_MEMORY_FOR_POSIX_RWLOCKS(_rwlocks) \
-    _Configure_Object_RAM(_rwlocks, sizeof(POSIX_RWLock_Control) )
 
   #ifdef CONFIGURE_POSIX_INIT_THREAD_TABLE
 
@@ -2719,13 +2603,6 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  */
 /**@{*/
 #ifdef CONFIGURE_GNAT_RTEMS
-
-  /**
-   * The GNAT run-time needs something less than (10) POSIX mutexes.
-   * We may be able to get by with less but why bother.
-   */
-  #define CONFIGURE_GNAT_MUTEXES 10
-
   /**
    * This is the maximum number of Ada tasks which can be concurrently
    * in existence.  Twenty (20) are required to run all tests in the
@@ -2741,10 +2618,8 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #ifndef CONFIGURE_MAXIMUM_FAKE_ADA_TASKS
     #define CONFIGURE_MAXIMUM_FAKE_ADA_TASKS 0
   #endif
-
 #else
   /** This defines he number of POSIX mutexes GNAT needs. */
-  #define CONFIGURE_GNAT_MUTEXES           0
   /** This defines he number of Ada tasks needed by the application. */
   #define CONFIGURE_MAXIMUM_ADA_TASKS      0
   /**
@@ -2769,15 +2644,6 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #ifndef CONFIGURE_MAXIMUM_POSIX_THREADS
     #define CONFIGURE_MAXIMUM_POSIX_THREADS 1
   #endif
-  #ifndef CONFIGURE_MAXIMUM_POSIX_MUTEXES
-    #define CONFIGURE_MAXIMUM_POSIX_MUTEXES 1
-  #endif
-  #ifndef CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES
-    #define CONFIGURE_MAXIMUM_CONDITION_VARIABLES 1
-  #endif
-
-  #define CONFIGURE_GO_INIT_MUTEXES 77
-  #define CONFIGURE_GO_INIT_CONDITION_VARIABLES 4
 
   #ifndef CONFIGURE_MAXIMUM_GOROUTINES
     #define CONFIGURE_MAXIMUM_GOROUTINES 400
@@ -2788,22 +2654,6 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #endif
 
 #else
-  /**
-   * This specifies the number of mutexes required by the Go run-time
-   * for its own use.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_GO_INIT_MUTEXES             0
-
-  /**
-   * This specifies the number of condition variables required by the Go
-   * run-time for its own use.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_GO_INIT_CONDITION_VARIABLES 0
-
   /** This specifies the maximum number of Go co-routines. */
   #define CONFIGURE_MAXIMUM_GOROUTINES          0
 
@@ -2823,67 +2673,32 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 /**
  * This macro provides a summation of the various POSIX thread requirements.
  */
-#define CONFIGURE_POSIX_THREADS \
+#define _CONFIGURE_POSIX_THREADS \
    (CONFIGURE_MAXIMUM_POSIX_THREADS + \
      CONFIGURE_MAXIMUM_ADA_TASKS + \
      CONFIGURE_MAXIMUM_GOROUTINES)
 
 #ifdef RTEMS_POSIX_API
-  /**
-   * This macro provides summation of the POSIX Mutexes.
-   */
-  #define CONFIGURE_POSIX_MUTEXES \
-    (CONFIGURE_MAXIMUM_POSIX_MUTEXES + \
-      CONFIGURE_LIBBLOCK_POSIX_MUTEXES + \
-      CONFIGURE_GNAT_MUTEXES + \
-      CONFIGURE_MAXIMUM_ADA_TASKS + \
-      CONFIGURE_MAXIMUM_FAKE_ADA_TASKS + \
-      CONFIGURE_GO_INIT_MUTEXES + \
-      CONFIGURE_MAXIMUM_GO_CHANNELS)
-
-  /**
-   * This macro provides summation of the POSIX Condition Variables.
-   *
-   * This is an internal parameter.
-   */
-  #define CONFIGURE_POSIX_CONDITION_VARIABLES \
-    (CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES + \
-      CONFIGURE_LIBBLOCK_POSIX_CONDITION_VARIABLES + \
-      CONFIGURE_MAXIMUM_ADA_TASKS + \
-      CONFIGURE_MAXIMUM_FAKE_ADA_TASKS + \
-      CONFIGURE_GO_INIT_CONDITION_VARIABLES + \
-      CONFIGURE_MAXIMUM_GO_CHANNELS)
-
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * the POSIX API in its entirety.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX \
-    (CONFIGURE_MEMORY_FOR_POSIX_MUTEXES(CONFIGURE_POSIX_MUTEXES) + \
-      CONFIGURE_MEMORY_FOR_POSIX_CONDITION_VARIABLES( \
-        CONFIGURE_POSIX_CONDITION_VARIABLES) + \
-      CONFIGURE_MEMORY_FOR_POSIX_QUEUED_SIGNALS( \
+  #define _CONFIGURE_MEMORY_FOR_POSIX \
+    (_CONFIGURE_MEMORY_FOR_POSIX_QUEUED_SIGNALS( \
         CONFIGURE_MAXIMUM_POSIX_QUEUED_SIGNALS) + \
-      CONFIGURE_MEMORY_FOR_POSIX_MESSAGE_QUEUES( \
+      _CONFIGURE_MEMORY_FOR_POSIX_MESSAGE_QUEUES( \
         CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES) + \
-      CONFIGURE_MEMORY_FOR_POSIX_SEMAPHORES( \
+      _CONFIGURE_MEMORY_FOR_POSIX_SEMAPHORES( \
         CONFIGURE_MAXIMUM_POSIX_SEMAPHORES) + \
-      CONFIGURE_MEMORY_FOR_POSIX_BARRIERS(CONFIGURE_MAXIMUM_POSIX_BARRIERS) + \
-      CONFIGURE_MEMORY_FOR_POSIX_SPINLOCKS( \
-        CONFIGURE_MAXIMUM_POSIX_SPINLOCKS) + \
-      CONFIGURE_MEMORY_FOR_POSIX_RWLOCKS( \
-        CONFIGURE_MAXIMUM_POSIX_RWLOCKS) + \
-      CONFIGURE_MEMORY_FOR_POSIX_TIMERS(CONFIGURE_MAXIMUM_POSIX_TIMERS))
+      _CONFIGURE_MEMORY_FOR_POSIX_SHMS( \
+        CONFIGURE_MAXIMUM_POSIX_SHMS) + \
+      _CONFIGURE_MEMORY_FOR_POSIX_TIMERS(CONFIGURE_MAXIMUM_POSIX_TIMERS))
 #else
-  /**
+  /*
    * This macro is calculated to specify the memory required for
    * the POSIX API in its entirety.
-   *
-   * This is an internal parameter.
    */
-  #define CONFIGURE_MEMORY_FOR_POSIX 0
+  #define _CONFIGURE_MEMORY_FOR_POSIX 0
 #endif
 
 /*
@@ -2891,7 +2706,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  * into two parts so that we have a free block for the last allocation.  See
  * _Heap_Block_split().
  */
-#define CONFIGURE_HEAP_HANDLER_OVERHEAD \
+#define _CONFIGURE_HEAP_HANDLER_OVERHEAD \
   _Configure_Align_up( HEAP_BLOCK_HEADER_SIZE, CPU_HEAP_ALIGNMENT )
 
 /*
@@ -2899,15 +2714,13 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  */
 #ifndef CONFIGURE_EXECUTIVE_RAM_SIZE
 
-/**
+/*
  * Account for allocating the following per object
  *   + array of object control structures
  *   + local pointer table -- pointer per object plus a zero'th
  *     entry in the local pointer table.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_MEMORY_FOR_TASKS(_tasks, _number_FP_tasks) \
+#define _CONFIGURE_MEMORY_FOR_TASKS(_tasks, _number_FP_tasks) \
   ( \
     _Configure_Object_RAM(_tasks, sizeof(Configuration_Thread_control)) \
       + _Configure_From_workspace(_Configure_Max_Objects(_tasks) \
@@ -2916,18 +2729,16 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
         * _Configure_From_workspace(CONTEXT_FP_SIZE) \
   )
 
-/**
+/*
  * This defines the amount of memory configured for the multiprocessing
  * support required by this application.
- *
- * This is an internal parameter.
  */
 #ifdef CONFIGURE_MP_APPLICATION
-  #define CONFIGURE_MEMORY_FOR_MP \
-    (CONFIGURE_MEMORY_FOR_PROXIES(CONFIGURE_MP_MAXIMUM_PROXIES) + \
-     CONFIGURE_MEMORY_FOR_GLOBAL_OBJECTS(CONFIGURE_MP_MAXIMUM_GLOBAL_OBJECTS))
+  #define _CONFIGURE_MEMORY_FOR_MP \
+    (_CONFIGURE_MEMORY_FOR_PROXIES(CONFIGURE_MP_MAXIMUM_PROXIES) + \
+     _CONFIGURE_MEMORY_FOR_GLOBAL_OBJECTS(CONFIGURE_MP_MAXIMUM_GLOBAL_OBJECTS))
 #else
-  #define CONFIGURE_MEMORY_FOR_MP  0
+  #define _CONFIGURE_MEMORY_FOR_MP  0
 #endif
 
 /**
@@ -2940,12 +2751,10 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       (_messages) * (_Configure_Align_up(_size, sizeof(uintptr_t)) \
         + sizeof(CORE_message_queue_Buffer_control)))
 
-/**
+/*
  * This macro is set to the amount of memory required for pending message
  * buffers in bytes.  It should be constructed by adding together a
  * set of values determined by CONFIGURE_MESSAGE_BUFFERS_FOR_QUEUE.
- *
- * This is an internal parameter.
  */
 #ifndef CONFIGURE_MESSAGE_BUFFER_MEMORY
   #define CONFIGURE_MESSAGE_BUFFER_MEMORY 0
@@ -2971,54 +2780,50 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  * RTEMS uses two instance of an internal mutex class.  This accounts
  * for these mutexes.
  */
-#define CONFIGURE_API_MUTEX_MEMORY \
+#define _CONFIGURE_API_MUTEX_MEMORY \
   _Configure_Object_RAM(2, sizeof(API_Mutex_Control))
 
 /**
  * This calculates the amount of memory reserved for the IDLE tasks.
  * In an SMP system, each CPU core has its own idle task.
  */
-#if defined(RTEMS_SMP)
-  #define CONFIGURE_IDLE_TASKS_COUNT CONFIGURE_SMP_MAXIMUM_PROCESSORS
-#else
-  #define CONFIGURE_IDLE_TASKS_COUNT 1
-#endif
+#define _CONFIGURE_IDLE_TASKS_COUNT CONFIGURE_MAXIMUM_PROCESSORS
 
 /**
  * This defines the formula used to compute the amount of memory
  * reserved for internal task control structures.
  */
 #if CPU_IDLE_TASK_IS_FP == TRUE
-  #define CONFIGURE_MEMORY_FOR_INTERNAL_TASKS \
-    CONFIGURE_MEMORY_FOR_TASKS( \
-      CONFIGURE_IDLE_TASKS_COUNT + CONFIGURE_MPCI_RECEIVE_SERVER_COUNT, \
-      CONFIGURE_IDLE_TASKS_COUNT + CONFIGURE_MPCI_RECEIVE_SERVER_COUNT \
+  #define _CONFIGURE_MEMORY_FOR_INTERNAL_TASKS \
+    _CONFIGURE_MEMORY_FOR_TASKS( \
+      _CONFIGURE_IDLE_TASKS_COUNT + _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT, \
+      _CONFIGURE_IDLE_TASKS_COUNT + _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT \
     )
 #else
-  #define CONFIGURE_MEMORY_FOR_INTERNAL_TASKS \
-    CONFIGURE_MEMORY_FOR_TASKS( \
-      CONFIGURE_IDLE_TASKS_COUNT + CONFIGURE_MPCI_RECEIVE_SERVER_COUNT, \
-      CONFIGURE_MPCI_RECEIVE_SERVER_COUNT \
+  #define _CONFIGURE_MEMORY_FOR_INTERNAL_TASKS \
+    _CONFIGURE_MEMORY_FOR_TASKS( \
+      _CONFIGURE_IDLE_TASKS_COUNT + _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT, \
+      _CONFIGURE_MPCI_RECEIVE_SERVER_COUNT \
     )
 #endif
 
 /**
  * This macro accounts for general RTEMS system overhead.
  */
-#define CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD \
-  ( CONFIGURE_MEMORY_FOR_INTERNAL_TASKS + \
-    CONFIGURE_INTERRUPT_STACK_MEMORY + \
-    CONFIGURE_API_MUTEX_MEMORY \
+#define _CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD \
+  ( _CONFIGURE_MEMORY_FOR_INTERNAL_TASKS + \
+    _CONFIGURE_INTERRUPT_STACK_MEMORY + \
+    _CONFIGURE_API_MUTEX_MEMORY \
   )
 
 /**
  * This macro reserves the memory required by the statically configured
  * user extensions.
  */
-#define CONFIGURE_MEMORY_FOR_STATIC_EXTENSIONS \
-  (CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS == 0 ? 0 : \
+#define _CONFIGURE_MEMORY_FOR_STATIC_EXTENSIONS \
+  (_CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS == 0 ? 0 : \
     _Configure_From_workspace( \
-      CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS \
+      _CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS \
         * sizeof(User_extensions_Switch_control) \
     ))
 
@@ -3026,31 +2831,29 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  * This macro provides a summation of the memory required by the
  * Classic API as configured.
  */
-#define CONFIGURE_MEMORY_FOR_CLASSIC \
-   (CONFIGURE_MEMORY_FOR_TIMERS(CONFIGURE_MAXIMUM_TIMERS + \
-    CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER ) + \
-   CONFIGURE_MEMORY_FOR_SEMAPHORES(CONFIGURE_SEMAPHORES) + \
-   CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(CONFIGURE_MAXIMUM_MESSAGE_QUEUES) + \
-   CONFIGURE_MEMORY_FOR_PARTITIONS(CONFIGURE_MAXIMUM_PARTITIONS) + \
-   CONFIGURE_MEMORY_FOR_REGIONS( CONFIGURE_MAXIMUM_REGIONS ) + \
-   CONFIGURE_MEMORY_FOR_PORTS(CONFIGURE_MAXIMUM_PORTS) + \
-   CONFIGURE_MEMORY_FOR_PERIODS(CONFIGURE_MAXIMUM_PERIODS) + \
-   CONFIGURE_MEMORY_FOR_BARRIERS(CONFIGURE_BARRIERS) + \
-   CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(CONFIGURE_MAXIMUM_USER_EXTENSIONS) \
+#define _CONFIGURE_MEMORY_FOR_CLASSIC \
+   (_CONFIGURE_MEMORY_FOR_TIMERS(CONFIGURE_MAXIMUM_TIMERS + \
+    _CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER ) + \
+   _CONFIGURE_MEMORY_FOR_SEMAPHORES(_CONFIGURE_SEMAPHORES) + \
+   _CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(CONFIGURE_MAXIMUM_MESSAGE_QUEUES) + \
+   _CONFIGURE_MEMORY_FOR_PARTITIONS(CONFIGURE_MAXIMUM_PARTITIONS) + \
+   _CONFIGURE_MEMORY_FOR_REGIONS( CONFIGURE_MAXIMUM_REGIONS ) + \
+   _CONFIGURE_MEMORY_FOR_PORTS(CONFIGURE_MAXIMUM_PORTS) + \
+   _CONFIGURE_MEMORY_FOR_PERIODS(CONFIGURE_MAXIMUM_PERIODS) + \
+   _CONFIGURE_MEMORY_FOR_BARRIERS(_CONFIGURE_BARRIERS) + \
+   _CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(CONFIGURE_MAXIMUM_USER_EXTENSIONS) \
   )
 
-/**
+/*
  * This macro provides a summation of the memory required by SMP as configured.
- *
- * This is an internal parameter.
  */
 #if defined(RTEMS_SMP)
-  #define CONFIGURE_MEMORY_FOR_SMP \
-     (CONFIGURE_SMP_MAXIMUM_PROCESSORS * \
+  #define _CONFIGURE_MEMORY_FOR_SMP \
+     (CONFIGURE_MAXIMUM_PROCESSORS * \
       _Configure_From_workspace( CONFIGURE_INTERRUPT_STACK_SIZE ) \
      )
 #else
-  #define CONFIGURE_MEMORY_FOR_SMP 0
+  #define _CONFIGURE_MEMORY_FOR_SMP 0
 #endif
 
 /**
@@ -3060,22 +2863,22 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  */
 #define CONFIGURE_EXECUTIVE_RAM_SIZE \
 ( \
-   CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD + \
-   CONFIGURE_MEMORY_FOR_TASKS( \
-     CONFIGURE_TASKS, CONFIGURE_TASKS) + \
-   CONFIGURE_MEMORY_FOR_TASKS( \
-     CONFIGURE_POSIX_THREADS, CONFIGURE_POSIX_THREADS) + \
-   CONFIGURE_MEMORY_FOR_CLASSIC + \
-   CONFIGURE_MEMORY_FOR_POSIX_KEYS( \
-      CONFIGURE_POSIX_KEYS, \
+   _CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD + \
+   _CONFIGURE_MEMORY_FOR_TASKS( \
+     _CONFIGURE_TASKS, _CONFIGURE_TASKS) + \
+   _CONFIGURE_MEMORY_FOR_TASKS( \
+     _CONFIGURE_POSIX_THREADS, _CONFIGURE_POSIX_THREADS) + \
+   _CONFIGURE_MEMORY_FOR_CLASSIC + \
+   _CONFIGURE_MEMORY_FOR_POSIX_KEYS( \
+      _CONFIGURE_POSIX_KEYS, \
       CONFIGURE_MAXIMUM_POSIX_KEY_VALUE_PAIRS ) + \
-   CONFIGURE_MEMORY_FOR_POSIX + \
-   CONFIGURE_MEMORY_FOR_STATIC_EXTENSIONS + \
-   CONFIGURE_MEMORY_FOR_MP + \
-   CONFIGURE_MEMORY_FOR_SMP + \
+   _CONFIGURE_MEMORY_FOR_POSIX + \
+   _CONFIGURE_MEMORY_FOR_STATIC_EXTENSIONS + \
+   _CONFIGURE_MEMORY_FOR_MP + \
+   _CONFIGURE_MEMORY_FOR_SMP + \
    CONFIGURE_MESSAGE_BUFFER_MEMORY + \
    (CONFIGURE_MEMORY_OVERHEAD * 1024) + \
-   CONFIGURE_HEAP_HANDLER_OVERHEAD \
+   _CONFIGURE_HEAP_HANDLER_OVERHEAD \
 )
 
 /*
@@ -3083,114 +2886,96 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  *  may have requested.
  */
 
-/**
+/*
  * This accounts for any extra memory required by the Classic API
  * Initialization Task.
- *
- * This is an internal parameter.
  */
 #if (CONFIGURE_INIT_TASK_STACK_SIZE > CONFIGURE_MINIMUM_TASK_STACK_SIZE)
-  #define CONFIGURE_INITIALIZATION_THREADS_STACKS_CLASSIC_PART \
+  #define _CONFIGURE_INITIALIZATION_THREADS_STACKS_CLASSIC_PART \
       (CONFIGURE_INIT_TASK_STACK_SIZE - CONFIGURE_MINIMUM_TASK_STACK_SIZE)
 #else
-  #define CONFIGURE_INITIALIZATION_THREADS_STACKS_CLASSIC_PART 0
+  #define _CONFIGURE_INITIALIZATION_THREADS_STACKS_CLASSIC_PART 0
 #endif
 
-/**
+/*
  * This accounts for any extra memory required by the POSIX API
  * Initialization Thread.
- *
- * This is an internal parameter.
  */
 #if defined(RTEMS_POSIX_API) && \
     (CONFIGURE_POSIX_INIT_THREAD_STACK_SIZE > \
       CONFIGURE_MINIMUM_POSIX_THREAD_STACK_SIZE)
-  #define CONFIGURE_INITIALIZATION_THREADS_STACKS_POSIX_PART \
+  #define _CONFIGURE_INITIALIZATION_THREADS_STACKS_POSIX_PART \
     (CONFIGURE_POSIX_INIT_THREAD_STACK_SIZE - \
       CONFIGURE_MINIMUM_POSIX_THREAD_STACK_SIZE)
 #else
-  #define CONFIGURE_INITIALIZATION_THREADS_STACKS_POSIX_PART 0
+  #define _CONFIGURE_INITIALIZATION_THREADS_STACKS_POSIX_PART 0
 #endif
 
-/**
+/*
  * This macro provides a summation of the various initialization task
  * and thread stack requirements.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS \
-    (CONFIGURE_INITIALIZATION_THREADS_STACKS_CLASSIC_PART + \
-    CONFIGURE_INITIALIZATION_THREADS_STACKS_POSIX_PART)
+#define _CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS \
+    (_CONFIGURE_INITIALIZATION_THREADS_STACKS_CLASSIC_PART + \
+    _CONFIGURE_INITIALIZATION_THREADS_STACKS_POSIX_PART)
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * the Idle tasks(s) stack.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_IDLE_TASKS_STACK \
-  (CONFIGURE_IDLE_TASKS_COUNT * \
+#define _CONFIGURE_IDLE_TASKS_STACK \
+  (_CONFIGURE_IDLE_TASKS_COUNT * \
     _Configure_From_stackspace( CONFIGURE_IDLE_TASK_STACK_SIZE ) )
 
-/**
+/*
  * This macro is calculated to specify the stack memory required for the MPCI
  * task.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_MPCI_RECEIVE_SERVER_STACK \
-  (CONFIGURE_MPCI_RECEIVE_SERVER_COUNT * \
+#define _CONFIGURE_MPCI_RECEIVE_SERVER_STACK \
+  (_CONFIGURE_MPCI_RECEIVE_SERVER_COUNT * \
     _Configure_From_stackspace(CONFIGURE_MINIMUM_TASK_STACK_SIZE))
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * the stacks of all tasks.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_TASKS_STACK \
-  (_Configure_Max_Objects( CONFIGURE_TASKS ) * \
+#define _CONFIGURE_TASKS_STACK \
+  (_Configure_Max_Objects( _CONFIGURE_TASKS ) * \
     _Configure_From_stackspace( CONFIGURE_MINIMUM_TASK_STACK_SIZE ) )
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * the stacks of all POSIX threads.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_POSIX_THREADS_STACK \
+#define _CONFIGURE_POSIX_THREADS_STACK \
   (_Configure_Max_Objects( CONFIGURE_MAXIMUM_POSIX_THREADS ) * \
     _Configure_From_stackspace( CONFIGURE_MINIMUM_POSIX_THREAD_STACK_SIZE ) )
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * the stacks of all Ada tasks.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_ADA_TASKS_STACK \
+#define _CONFIGURE_ADA_TASKS_STACK \
   (_Configure_Max_Objects( CONFIGURE_MAXIMUM_ADA_TASKS ) * \
     _Configure_From_stackspace( CONFIGURE_MINIMUM_POSIX_THREAD_STACK_SIZE ) )
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * the stacks of all Go routines.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_GOROUTINES_STACK \
+#define _CONFIGURE_GOROUTINES_STACK \
   (_Configure_Max_Objects( CONFIGURE_MAXIMUM_GOROUTINES ) * \
     _Configure_From_stackspace( CONFIGURE_MINIMUM_POSIX_THREAD_STACK_SIZE ) )
 
 #else /* CONFIGURE_EXECUTIVE_RAM_SIZE */
 
-#define CONFIGURE_IDLE_TASKS_STACK 0
-#define CONFIGURE_MPCI_RECEIVE_SERVER_STACK 0
-#define CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS 0
-#define CONFIGURE_TASKS_STACK 0
-#define CONFIGURE_POSIX_THREADS_STACK 0
-#define CONFIGURE_GOROUTINES_STACK 0
-#define CONFIGURE_ADA_TASKS_STACK 0
+#define _CONFIGURE_IDLE_TASKS_STACK 0
+#define _CONFIGURE_MPCI_RECEIVE_SERVER_STACK 0
+#define _CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS 0
+#define _CONFIGURE_TASKS_STACK 0
+#define _CONFIGURE_POSIX_THREADS_STACK 0
+#define _CONFIGURE_GOROUTINES_STACK 0
+#define _CONFIGURE_ADA_TASKS_STACK 0
 
 #if CONFIGURE_EXTRA_MPCI_RECEIVE_SERVER_STACK != 0
   #error "CONFIGURE_EXECUTIVE_RAM_SIZE defined with request for CONFIGURE_EXTRA_MPCI_RECEIVE_SERVER_STACK"
@@ -3202,63 +2987,79 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
 #endif /* CONFIGURE_EXECUTIVE_RAM_SIZE */
 
-/**
+/*
  * This macro is calculated to specify the memory required for
  * all tasks and threads of all varieties.
- *
- * This is an internal parameter.
  */
-#define CONFIGURE_STACK_SPACE_SIZE \
+#define _CONFIGURE_STACK_SPACE_SIZE \
   ( \
-    CONFIGURE_IDLE_TASKS_STACK + \
-    CONFIGURE_MPCI_RECEIVE_SERVER_STACK + \
-    CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS + \
-    CONFIGURE_TASKS_STACK + \
-    CONFIGURE_POSIX_THREADS_STACK + \
-    CONFIGURE_GOROUTINES_STACK + \
-    CONFIGURE_ADA_TASKS_STACK + \
+    _CONFIGURE_IDLE_TASKS_STACK + \
+    _CONFIGURE_MPCI_RECEIVE_SERVER_STACK + \
+    _CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS + \
+    _CONFIGURE_TASKS_STACK + \
+    _CONFIGURE_POSIX_THREADS_STACK + \
+    _CONFIGURE_GOROUTINES_STACK + \
+    _CONFIGURE_ADA_TASKS_STACK + \
     CONFIGURE_EXTRA_MPCI_RECEIVE_SERVER_STACK + \
-    CONFIGURE_LIBBLOCK_TASK_EXTRA_STACKS + \
+    _CONFIGURE_LIBBLOCK_TASK_EXTRA_STACKS + \
     CONFIGURE_EXTRA_TASK_STACKS + \
-    CONFIGURE_HEAP_HANDLER_OVERHEAD \
+    _CONFIGURE_HEAP_HANDLER_OVERHEAD \
   )
 
+#ifndef CONFIGURE_MAXIMUM_THREAD_NAME_SIZE
+  #define CONFIGURE_MAXIMUM_THREAD_NAME_SIZE 16
+#endif
+
 #ifdef CONFIGURE_INIT
+  typedef union {
+    Scheduler_Node Base;
+    #ifdef CONFIGURE_SCHEDULER_CBS
+      Scheduler_CBS_Node CBS;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_EDF
+      Scheduler_EDF_Node EDF;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_EDF_SMP
+      Scheduler_EDF_SMP_Node EDF_SMP;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_PRIORITY
+      Scheduler_priority_Node Priority;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_SIMPLE_SMP
+      Scheduler_SMP_Node Simple_SMP;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_PRIORITY_SMP
+      Scheduler_priority_SMP_Node Priority_SMP;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_PRIORITY_AFFINITY_SMP
+      Scheduler_priority_affinity_SMP_Node Priority_affinity_SMP;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_STRONG_APA
+      Scheduler_strong_APA_Node Strong_APA;
+    #endif
+    #ifdef CONFIGURE_SCHEDULER_USER_PER_THREAD
+      CONFIGURE_SCHEDULER_USER_PER_THREAD User;
+    #endif
+  } Configuration_Scheduler_node;
+
+  #ifdef RTEMS_SMP
+    const size_t _Scheduler_Node_size = sizeof( Configuration_Scheduler_node );
+  #endif
+
+  const size_t _Thread_Maximum_name_size = CONFIGURE_MAXIMUM_THREAD_NAME_SIZE;
+
   typedef struct {
     Thread_Control Control;
     #if CONFIGURE_MAXIMUM_USER_EXTENSIONS > 0
       void *extensions[ CONFIGURE_MAXIMUM_USER_EXTENSIONS + 1 ];
     #endif
-    union {
-      Scheduler_Node Base;
-      #ifdef CONFIGURE_SCHEDULER_CBS
-        Scheduler_CBS_Node CBS;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_EDF
-        Scheduler_EDF_Node EDF;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_PRIORITY
-        Scheduler_priority_Node Priority;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_SIMPLE_SMP
-        Scheduler_SMP_Node Simple_SMP;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_PRIORITY_SMP
-        Scheduler_priority_SMP_Node Priority_SMP;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_PRIORITY_AFFINITY_SMP
-        Scheduler_priority_affinity_SMP_Node Priority_affinity_SMP;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_STRONG_APA
-        Scheduler_strong_APA_Node Strong_APA;
-      #endif
-      #ifdef CONFIGURE_SCHEDULER_USER_PER_THREAD
-        CONFIGURE_SCHEDULER_USER_PER_THREAD User;
-      #endif
-    } Scheduler;
+    Configuration_Scheduler_node Scheduler_nodes[ CONFIGURE_SCHEDULER_COUNT ];
     RTEMS_API_Control API_RTEMS;
     #ifdef RTEMS_POSIX_API
       POSIX_API_Control API_POSIX;
+    #endif
+    #if CONFIGURE_MAXIMUM_THREAD_NAME_SIZE > 1
+      char name[ CONFIGURE_MAXIMUM_THREAD_NAME_SIZE ];
     #endif
     #if !defined(RTEMS_SCHEDSIM) \
       && defined(RTEMS_NEWLIB) \
@@ -3273,8 +3074,8 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
   const Thread_Control_add_on _Thread_Control_add_ons[] = {
     {
-      offsetof( Configuration_Thread_control, Control.Scheduler.node ),
-      offsetof( Configuration_Thread_control, Scheduler )
+      offsetof( Configuration_Thread_control, Control.Scheduler.nodes ),
+      offsetof( Configuration_Thread_control, Scheduler_nodes )
     }, {
       offsetof(
         Configuration_Thread_control,
@@ -3288,6 +3089,15 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       ),
       offsetof( Configuration_Thread_control, Newlib )
     }
+    #if CONFIGURE_MAXIMUM_THREAD_NAME_SIZE > 1
+      , {
+        offsetof(
+          Configuration_Thread_control,
+          Control.Join_queue.Queue.name
+        ),
+        offsetof( Configuration_Thread_control, name )
+      }
+    #endif
     #ifdef RTEMS_POSIX_API
       , {
         offsetof(
@@ -3302,19 +3112,27 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   const size_t _Thread_Control_add_on_count =
     RTEMS_ARRAY_SIZE( _Thread_Control_add_ons );
 
+  const uint32_t _Watchdog_Nanoseconds_per_tick =
+    1000 * CONFIGURE_MICROSECONDS_PER_TICK;
+
+  const uint32_t _Watchdog_Ticks_per_second = _CONFIGURE_TICKS_PER_SECOND;
+
+  const uint64_t _Watchdog_Monotonic_max_seconds =
+    UINT64_MAX / _CONFIGURE_TICKS_PER_SECOND;
+
   /**
    * This is the Classic API Configuration Table.
    */
   rtems_api_configuration_table Configuration_RTEMS_API = {
-    CONFIGURE_TASKS,
-    CONFIGURE_MAXIMUM_TIMERS + CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER,
-    CONFIGURE_SEMAPHORES,
+    _CONFIGURE_TASKS,
+    CONFIGURE_MAXIMUM_TIMERS + _CONFIGURE_TIMER_FOR_SHARED_MEMORY_DRIVER,
+    _CONFIGURE_SEMAPHORES,
     CONFIGURE_MAXIMUM_MESSAGE_QUEUES,
     CONFIGURE_MAXIMUM_PARTITIONS,
     CONFIGURE_MAXIMUM_REGIONS,
     CONFIGURE_MAXIMUM_PORTS,
     CONFIGURE_MAXIMUM_PERIODS,
-    CONFIGURE_BARRIERS,
+    _CONFIGURE_BARRIERS,
     CONFIGURE_INIT_TASK_TABLE_SIZE,
     CONFIGURE_INIT_TASK_TABLE
   };
@@ -3324,16 +3142,12 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
      * This is the POSIX API Configuration Table.
      */
     posix_api_configuration_table Configuration_POSIX_API = {
-      CONFIGURE_POSIX_THREADS,
-      CONFIGURE_POSIX_MUTEXES,
-      CONFIGURE_POSIX_CONDITION_VARIABLES,
+      _CONFIGURE_POSIX_THREADS,
       CONFIGURE_MAXIMUM_POSIX_TIMERS,
       CONFIGURE_MAXIMUM_POSIX_QUEUED_SIGNALS,
       CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES,
       CONFIGURE_MAXIMUM_POSIX_SEMAPHORES,
-      CONFIGURE_MAXIMUM_POSIX_BARRIERS,
-      CONFIGURE_MAXIMUM_POSIX_RWLOCKS,
-      CONFIGURE_MAXIMUM_POSIX_SPINLOCKS,
+      CONFIGURE_MAXIMUM_POSIX_SHMS,
       CONFIGURE_POSIX_INIT_THREAD_TABLE_SIZE,
       CONFIGURE_POSIX_INIT_THREAD_TABLE_NAME
     };
@@ -3355,12 +3169,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
    */
   const rtems_configuration_table Configuration = {
     CONFIGURE_EXECUTIVE_RAM_SIZE,             /* required RTEMS workspace */
-    CONFIGURE_STACK_SPACE_SIZE,               /* required stack space */
+    _CONFIGURE_STACK_SPACE_SIZE,               /* required stack space */
     CONFIGURE_MAXIMUM_USER_EXTENSIONS,        /* maximum dynamic extensions */
-    CONFIGURE_POSIX_KEYS,                     /* POSIX keys are always */
+    _CONFIGURE_POSIX_KEYS,                     /* POSIX keys are always */
     CONFIGURE_MAXIMUM_POSIX_KEY_VALUE_PAIRS,  /*   enabled */
     CONFIGURE_MICROSECONDS_PER_TICK,          /* microseconds per clock tick */
-    1000 * CONFIGURE_MICROSECONDS_PER_TICK,   /* nanoseconds per clock tick */
     CONFIGURE_TICKS_PER_TIMESLICE,            /* ticks per timeslice quantum */
     CONFIGURE_IDLE_TASK_BODY,                 /* user's IDLE task */
     CONFIGURE_IDLE_TASK_STACK_SIZE,           /* IDLE task stack size */
@@ -3382,19 +3195,19 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
       false,
     #endif
     #ifdef RTEMS_SMP
-      #ifdef CONFIGURE_SMP_APPLICATION
+      #ifdef _CONFIGURE_SMP_APPLICATION
         true,
       #else
         false,
       #endif
     #endif
-    CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS,   /* number of static extensions */
+    _CONFIGURE_NUMBER_OF_INITIAL_EXTENSIONS,   /* number of static extensions */
     CONFIGURE_INITIAL_EXTENSION_TABLE,        /* pointer to static extensions */
     #if defined(RTEMS_MULTIPROCESSING)
       CONFIGURE_MULTIPROCESSING_TABLE,        /* pointer to MP config table */
     #endif
     #ifdef RTEMS_SMP
-      CONFIGURE_SMP_MAXIMUM_PROCESSORS,
+      CONFIGURE_MAXIMUM_PROCESSORS,
     #endif
   };
 #endif
@@ -3406,7 +3219,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   * Instantiate the Per CPU information based upon the user configuration.
   */
  #if defined(CONFIGURE_INIT)
-   Per_CPU_Control_envelope _Per_CPU_Information[CONFIGURE_SMP_MAXIMUM_PROCESSORS];
+   Per_CPU_Control_envelope _Per_CPU_Information[CONFIGURE_MAXIMUM_PROCESSORS];
  #endif
 
 #endif
@@ -3541,15 +3354,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
 #ifdef RTEMS_POSIX_API
     /* POSIX API Pieces */
-    uint32_t POSIX_MUTEXES;
-    uint32_t POSIX_CONDITION_VARIABLES;
     uint32_t POSIX_TIMERS;
     uint32_t POSIX_QUEUED_SIGNALS;
     uint32_t POSIX_MESSAGE_QUEUES;
     uint32_t POSIX_SEMAPHORES;
-    uint32_t POSIX_BARRIERS;
-    uint32_t POSIX_SPINLOCKS;
-    uint32_t POSIX_RWLOCKS;
+    uint32_t POSIX_SHMS;
 #endif
 
     /* Stack space sizes */
@@ -3565,55 +3374,50 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 
   Configuration_Debug_t Configuration_Memory_Debug = {
     /* General Information */
-    CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD,
-    CONFIGURE_MEMORY_FOR_STATIC_EXTENSIONS,
-    CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS,
-    CONFIGURE_MEMORY_FOR_TASKS(1, 0),
-    CONFIGURE_MEMORY_FOR_TASKS(0, 1),
-    CONFIGURE_MEMORY_FOR_CLASSIC,
-    CONFIGURE_MEMORY_FOR_POSIX,
+    _CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD,
+    _CONFIGURE_MEMORY_FOR_STATIC_EXTENSIONS,
+    _CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS,
+    _CONFIGURE_MEMORY_FOR_TASKS(1, 0),
+    _CONFIGURE_MEMORY_FOR_TASKS(0, 1),
+    _CONFIGURE_MEMORY_FOR_CLASSIC,
+    _CONFIGURE_MEMORY_FOR_POSIX,
 
     /* System overhead pieces */
-    CONFIGURE_INTERRUPT_STACK_MEMORY,
-    CONFIGURE_MEMORY_FOR_INTERNAL_TASKS,
+    _CONFIGURE_INTERRUPT_STACK_MEMORY,
+    _CONFIGURE_MEMORY_FOR_INTERNAL_TASKS,
 
     /* Classic API Pieces */
-    CONFIGURE_MEMORY_FOR_TASKS(CONFIGURE_MAXIMUM_TASKS, 0),
-    CONFIGURE_MEMORY_FOR_TIMERS(CONFIGURE_MAXIMUM_TIMERS),
-    CONFIGURE_MEMORY_FOR_SEMAPHORES(CONFIGURE_SEMAPHORES),
-    CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(CONFIGURE_MAXIMUM_MESSAGE_QUEUES),
-    CONFIGURE_MEMORY_FOR_PARTITIONS(CONFIGURE_MAXIMUM_PARTITIONS),
-    CONFIGURE_MEMORY_FOR_REGIONS( CONFIGURE_MAXIMUM_REGIONS ),
-    CONFIGURE_MEMORY_FOR_PORTS(CONFIGURE_MAXIMUM_PORTS),
-    CONFIGURE_MEMORY_FOR_PERIODS(CONFIGURE_MAXIMUM_PERIODS),
-    CONFIGURE_MEMORY_FOR_BARRIERS(CONFIGURE_BARRIERS),
-    CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(CONFIGURE_MAXIMUM_USER_EXTENSIONS),
-    CONFIGURE_MEMORY_FOR_POSIX_KEYS( CONFIGURE_POSIX_KEYS, \
+    _CONFIGURE_MEMORY_FOR_TASKS(CONFIGURE_MAXIMUM_TASKS, 0),
+    _CONFIGURE_MEMORY_FOR_TIMERS(CONFIGURE_MAXIMUM_TIMERS),
+    _CONFIGURE_MEMORY_FOR_SEMAPHORES(_CONFIGURE_SEMAPHORES),
+    _CONFIGURE_MEMORY_FOR_MESSAGE_QUEUES(CONFIGURE_MAXIMUM_MESSAGE_QUEUES),
+    _CONFIGURE_MEMORY_FOR_PARTITIONS(CONFIGURE_MAXIMUM_PARTITIONS),
+    _CONFIGURE_MEMORY_FOR_REGIONS( CONFIGURE_MAXIMUM_REGIONS ),
+    _CONFIGURE_MEMORY_FOR_PORTS(CONFIGURE_MAXIMUM_PORTS),
+    _CONFIGURE_MEMORY_FOR_PERIODS(CONFIGURE_MAXIMUM_PERIODS),
+    _CONFIGURE_MEMORY_FOR_BARRIERS(_CONFIGURE_BARRIERS),
+    _CONFIGURE_MEMORY_FOR_USER_EXTENSIONS(CONFIGURE_MAXIMUM_USER_EXTENSIONS),
+    _CONFIGURE_MEMORY_FOR_POSIX_KEYS( _CONFIGURE_POSIX_KEYS, \
                                      CONFIGURE_MAXIMUM_POSIX_KEY_VALUE_PAIRS ),
 
 #ifdef RTEMS_POSIX_API
     /* POSIX API Pieces */
-    CONFIGURE_MEMORY_FOR_POSIX_MUTEXES( CONFIGURE_POSIX_MUTEXES ),
-    CONFIGURE_MEMORY_FOR_POSIX_CONDITION_VARIABLES(
-      CONFIGURE_POSIX_CONDITION_VARIABLES ),
-    CONFIGURE_MEMORY_FOR_POSIX_QUEUED_SIGNALS(
+    _CONFIGURE_MEMORY_FOR_POSIX_QUEUED_SIGNALS(
       CONFIGURE_MAXIMUM_POSIX_QUEUED_SIGNALS ),
-    CONFIGURE_MEMORY_FOR_POSIX_MESSAGE_QUEUES(
+    _CONFIGURE_MEMORY_FOR_POSIX_MESSAGE_QUEUES(
       CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES ),
-    CONFIGURE_MEMORY_FOR_POSIX_SEMAPHORES( CONFIGURE_MAXIMUM_POSIX_SEMAPHORES ),
-    CONFIGURE_MEMORY_FOR_POSIX_BARRIERS( CONFIGURE_MAXIMUM_POSIX_BARRIERS ),
-    CONFIGURE_MEMORY_FOR_POSIX_SPINLOCKS( CONFIGURE_MAXIMUM_POSIX_SPINLOCKS ),
-    CONFIGURE_MEMORY_FOR_POSIX_RWLOCKS( CONFIGURE_MAXIMUM_POSIX_RWLOCKS ),
-    CONFIGURE_MEMORY_FOR_POSIX_TIMERS( CONFIGURE_MAXIMUM_POSIX_TIMERS ),
+    _CONFIGURE_MEMORY_FOR_POSIX_SEMAPHORES( CONFIGURE_MAXIMUM_POSIX_SEMAPHORES ),
+    _CONFIGURE_MEMORY_FOR_POSIX_SHMS( CONFIGURE_MAXIMUM_POSIX_SHMS ),
+    _CONFIGURE_MEMORY_FOR_POSIX_TIMERS( CONFIGURE_MAXIMUM_POSIX_TIMERS ),
 #endif
 
     /* Stack space sizes */
-    CONFIGURE_IDLE_TASKS_STACK,
-    CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS,
-    CONFIGURE_TASKS_STACK,
-    CONFIGURE_POSIX_THREADS_STACK,
-    CONFIGURE_GOROUTINES_STACK,
-    CONFIGURE_ADA_TASKS_STACK,
+    _CONFIGURE_IDLE_TASKS_STACK,
+    _CONFIGURE_INITIALIZATION_THREADS_EXTRA_STACKS,
+    _CONFIGURE_TASKS_STACK,
+    _CONFIGURE_POSIX_THREADS_STACK,
+    _CONFIGURE_GOROUTINES_STACK,
+    _CONFIGURE_ADA_TASKS_STACK,
     CONFIGURE_EXTRA_MPCI_RECEIVE_SERVER_STACK,
     CONFIGURE_EXTRA_TASK_STACKS
   };
@@ -3667,15 +3471,11 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  */
 #if !defined(RTEMS_POSIX_API)
   #if ((CONFIGURE_MAXIMUM_POSIX_THREADS != 0) || \
-       (CONFIGURE_MAXIMUM_POSIX_MUTEXES != 0) || \
-       (CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES != 0) || \
        (CONFIGURE_MAXIMUM_POSIX_TIMERS != 0) || \
        (CONFIGURE_MAXIMUM_POSIX_QUEUED_SIGNALS != 0) || \
        (CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES != 0) || \
        (CONFIGURE_MAXIMUM_POSIX_SEMAPHORES != 0) || \
-       (CONFIGURE_MAXIMUM_POSIX_BARRIERS != 0) || \
-       (CONFIGURE_MAXIMUM_POSIX_SPINLOCKS != 0) || \
-       (CONFIGURE_MAXIMUM_POSIX_RWLOCKS != 0) || \
+       (CONFIGURE_MAXIMUM_POSIX_SHMS != 0) || \
       defined(CONFIGURE_POSIX_INIT_THREAD_TABLE))
   #error "CONFIGURATION ERROR: POSIX API support not configured!!"
   #endif
@@ -3739,8 +3539,28 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
   #error "Maximum priority configured higher than supported by target."
 #endif
 
+#ifdef CONFIGURE_MAXIMUM_POSIX_BARRIERS
+  #warning "The CONFIGURE_MAXIMUM_POSIX_BARRIERS configuration option is obsolete since RTEMS 4.12"
+#endif
+
+#ifdef CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES
+  #warning "The CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES configuration option is obsolete since RTEMS 4.12"
+#endif
+
 #ifdef CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUE_DESCRIPTORS
-  #warning "The CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUE_DESCRIPTOR configuration option is obsolete!"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUE_DESCRIPTORS configuration option is obsolete since RTEMS 4.12"
+#endif
+
+#ifdef CONFIGURE_MAXIMUM_POSIX_MUTEXES
+  #warning "The CONFIGURE_MAXIMUM_POSIX_MUTEXES configuration option is obsolete since RTEMS 4.12"
+#endif
+
+#ifdef CONFIGURE_MAXIMUM_POSIX_RWLOCKS
+  #warning "The CONFIGURE_MAXIMUM_POSIX_RWLOCKS configuration option is obsolete since RTEMS 4.12"
+#endif
+
+#ifdef CONFIGURE_MAXIMUM_POSIX_SPINLOCKS
+  #warning "The CONFIGURE_MAXIMUM_POSIX_SPINLOCKS configuration option is obsolete since RTEMS 4.12"
 #endif
 
 /*

@@ -84,7 +84,7 @@ void *POSIX_Init(
   /* destroy mutex */
   status = pthread_mutex_destroy( &MutexId );
   rtems_test_assert( status == 0 );
-  
+
   TEST_END();
 
   rtems_test_exit(0);
@@ -97,7 +97,6 @@ void *POSIX_Init(
 #define CONFIGURE_APPLICATION_NEEDS_TIMER_DRIVER
 
 #define CONFIGURE_MAXIMUM_POSIX_THREADS     1
-#define CONFIGURE_MAXIMUM_POSIX_MUTEXES     1
 #define CONFIGURE_POSIX_INIT_THREAD_TABLE
 
 #define CONFIGURE_INIT

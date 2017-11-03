@@ -30,22 +30,15 @@ AM_CONDITIONAL([HAS_CPLUSPLUS],[test $HAS_CPLUSPLUS = "yes"])
 # FIXME: We should get rid of this. It's a cludge.
 AC_CHECK_SIZEOF([time_t])
 
-AC_CHECK_TYPES([struct _Thread_queue_Queue],[],[],[#include <sys/lock.h>])
-AM_CONDITIONAL(HAS__THREAD_QUEUE_QUEUE,test x"${ac_cv_type_struct__Thread_queue_Queue}" = x"yes")
-
-AC_CHECK_HEADERS([threads.h])
-AM_CONDITIONAL([HAS_THREADS_H],[test x"$ac_cv_header_threads_h" = x"yes"])
-
-# Added to newlib pthreads for RTEMS SMP (np), may not be present
-AC_CHECK_HEADERS([sys/cpuset.h])
-AM_CONDITIONAL(HAS_CPUSET,test x"${ac_cv_header_sys_cpuset_h}" = x"yes")
-
 # Some tests should not be built/run in SMP configurations
 RTEMS_CHECK_CPUOPTS([RTEMS_SMP])
 AM_CONDITIONAL(HAS_SMP,test "$rtems_cv_RTEMS_SMP" = "yes")
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile
+spintrcritical24/Makefile
+spfatal31/Makefile
+spfatal30/Makefile
 spmutex01/Makefile
 spextensions01/Makefile
 sptimerserver01/Makefile
@@ -58,11 +51,11 @@ spintrcritical23/Makefile
 sptimecounter01/Makefile
 sptimecounter02/Makefile
 sptimecounter03/Makefile
+sptimecounter04/Makefile
 spatomic01/Makefile
 spglobalcon01/Makefile
 spintrcritical22/Makefile
 spsem03/Makefile
-spresource01/Makefile
 spmrsp01/Makefile
 spscheduler01/Makefile
 spfatal28/Makefile
@@ -155,6 +148,7 @@ sp74/Makefile
 sp75/Makefile
 sp76/Makefile
 sp77/Makefile
+sprmsched02/Makefile
 sp2038/Makefile
 spassoc01/Makefile
 spcbssched01/Makefile
@@ -167,6 +161,7 @@ spcoverage/Makefile
 spedfsched01/Makefile
 spedfsched02/Makefile
 spedfsched03/Makefile
+spedfsched04/Makefile
 sperror01/Makefile
 sperror02/Makefile
 sperror03/Makefile
@@ -194,6 +189,7 @@ spfatal20/Makefile
 spfatal24/Makefile
 spfatal25/Makefile
 spfatal27/Makefile
+spfatal29/Makefile
 spfifo01/Makefile
 spfifo02/Makefile
 spfifo03/Makefile
@@ -255,5 +251,6 @@ sptimer_err02/Makefile
 spcpuset01/Makefile
 spregion_err01/Makefile
 sppartition_err01/Makefile
+sprmsched01/Makefile
 ])
 AC_OUTPUT

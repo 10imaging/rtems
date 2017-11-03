@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (c) 2011, 2016 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2011, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -32,7 +32,11 @@
 
 qoriq_tlb1_write:
 	rlwinm	r3, r3, 16, 10, 15
+#ifdef __powerpc64__
+	rldicr	r8, r8, 0, 51
+#else
 	rlwinm	r8, r8, 0, 0, 19
+#endif
 	oris	r3, r3, 0x1000
 	mtspr	FSL_EIS_MAS0, r3
 	oris	r4, r4, 0xc000
@@ -43,8 +47,13 @@ qoriq_tlb1_write:
 	mtspr	FSL_EIS_MAS2, r5
 	or	r6, r8, r6
 	mtspr	FSL_EIS_MAS3, r6
+#ifdef __powerpc64__
+	srdi	r8, r8, 32
+	or	r7, r7, r8
 	mtspr	FSL_EIS_MAS7, r7
-#ifdef QORIQ_HAS_HYPERVISOR_MODE
+#endif
+	mtspr	FSL_EIS_MAS7, r7
+#if defined(QORIQ_HAS_HYPERVISOR_MODE) && !defined(QORIQ_IS_HYPERVISOR_GUEST)
 	li	r0, 0
 	mtspr	FSL_EIS_MAS8, r0
 #endif
@@ -63,7 +72,7 @@ qoriq_tlb1_invalidate:
 	mtspr	FSL_EIS_MAS2, r0
 	mtspr	FSL_EIS_MAS3, r0
 	mtspr	FSL_EIS_MAS7, r0
-#ifdef QORIQ_HAS_HYPERVISOR_MODE
+#if defined(QORIQ_HAS_HYPERVISOR_MODE) && !defined(QORIQ_IS_HYPERVISOR_GUEST)
 	mtspr	FSL_EIS_MAS8, r0
 #endif
 	isync

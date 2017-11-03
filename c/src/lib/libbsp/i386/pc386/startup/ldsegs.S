@@ -120,7 +120,6 @@ next_step:
 | it isn't fun.
 +---------------------------------------------------------------------*/
 
-#if (BSP_IS_EDISON == 0)
 	movb	$0x11, al		/* initialization sequence          */
 	outb	al, $0x20		/* send it to 8259A-1               */
 	call	SYM(pc386_delay)
@@ -156,7 +155,6 @@ next_step:
 	movb	$0xFB, al		/* mask all irq's but irq2 which    */
 	outb	al, $0x21		/* is cascaded                      */
 	call	SYM(pc386_delay)
-#endif
 	jmp	SYM (_establish_stack)	# return to the bsp entry code
 
 /*-------------------------------------------------------------------------+
@@ -171,8 +169,8 @@ next_step:
 /*---------------------------------------------------------------------------+
 | GDT itself
 +--------------------------------------------------------------------------*/
-#if GDT_SIZE < 3
-#error "GDT_SIZE must be at least 3"
+#if GDT_SIZE < NUM_SYSTEM_GDT_DESCRIPTORS
+#error "GDT_SIZE must be at least NUM_SYSTEM_GDT_DESCRIPTORS"
 #endif
 
 BEGIN_DATA
@@ -193,8 +191,12 @@ SYM (_Global_descriptor_table):
 	.word 0xffff, 0
 	.byte 0, 0x92, 0xcf, 0
 
+	/* gs segment */
+	.word 0xffff, 0
+	.byte 0, 0x92, 0xcf, 0
+
         /* allocated space for user segments */
-        .rept (GDT_SIZE - 3)
+        .rept (GDT_SIZE - NUM_SYSTEM_GDT_DESCRIPTORS)
         .word 0,0,0,0
         .endr
 

@@ -23,6 +23,13 @@ include_rtems_HEADERS += include/rtems/malloc.h
 include_rtems_HEADERS += include/rtems/termiostypes.h
 include_rtems_HEADERS += include/rtems/gxx_wrappers.h
 
+include_machinedir = $(includedir)/machine
+include_machine_HEADERS =
+include_machine_HEADERS += include/machine/_kernel_cpuset.h
+include_machine_HEADERS += include/machine/_kernel_param.h
+include_machine_HEADERS += include/machine/_kernel_time.h
+include_machine_HEADERS += include/machine/_kernel_types.h
+
 ##  General stuff
 ERROR_C_FILES = src/error.c src/__assert.c
 
@@ -33,6 +40,8 @@ ASSOCIATION_C_FILES = src/assoclocalbyname.c \
     src/assocnamebyremote.c src/assocptrbylocal.c src/assocptrbyname.c \
     src/assocptrbyremote.c src/assocremotebylocalbitfield.c \
     src/assocremotebylocal.c src/assocremotebyname.c
+ASSOCIATION_C_FILES += src/assoc32tostring.c
+ASSOCIATION_C_FILES += src/assocthreadstatestostring.c
 
 BASE_FS_C_FILES = src/base_fs.c src/mount.c src/unmount.c src/libio.c \
     src/mount-mgr.c src/mount-mktgt.c src/libio_init.c \
@@ -47,7 +56,7 @@ TERMIOS_C_FILES = src/cfgetispeed.c src/cfgetospeed.c src/cfsetispeed.c \
     src/tcsetpgrp.c src/termios.c src/termiosinitialize.c \
     src/termios_baud2index.c src/termios_baud2num.c src/termios_num2baud.c \
     src/termios_setinitialbaud.c src/termios_baudtable.c src/cfsetspeed.c \
-    src/cfmakeraw.c src/termios_setbestbaud.c
+    src/cfmakeraw.c src/cfmakesane.c src/termios_setbestbaud.c
 
 SYSTEM_CALL_C_FILES = src/open.c src/close.c src/read.c src/write.c \
     src/write_r.c \
@@ -57,6 +66,7 @@ SYSTEM_CALL_C_FILES = src/open.c src/close.c src/read.c src/write.c \
     src/fcntl.c src/fpathconf.c src/getdents.c src/fsync.c src/fdatasync.c \
     src/pipe.c src/dup.c src/dup2.c src/symlink.c src/readlink.c \
     src/chroot.c src/sync.c src/_rename_r.c src/statvfs.c src/utimes.c src/lchown.c
+SYSTEM_CALL_C_FILES += src/clock.c
 
 ## Until sys/uio.h is moved to libcsupport, we have to have networking
 ## enabled to compile these.  Hopefully this is a temporary situation.
@@ -129,11 +139,13 @@ libcsupport_a_SOURCES = src/gxx_wrappers.c src/getchark.c src/printk.c \
     $(BSD_LIBC_C_FILES) $(BASE_FS_C_FILES) $(MALLOC_C_FILES) \
     $(ERROR_C_FILES) $(ASSOCIATION_C_FILES)
 libcsupport_a_SOURCES += src/printertask.c
+libcsupport_a_SOURCES += src/printerfprintfputc.c
 
 libcsupport_a_SOURCES += $(LIBC_GLUE_C_FILES) $(PASSWORD_GROUP_C_FILES) \
     $(TERMINAL_IDENTIFICATION_C_FILES) $(SYSTEM_CALL_C_FILES) \
-    $(DIRECTORY_SCAN_C_FILES) $(ID_C_FILES) src/envlock.c \
-    $(TERMIOS_C_FILES) src/getpagesize.c src/getrusage.c
+    $(DIRECTORY_SCAN_C_FILES) $(ID_C_FILES) \
+    $(TERMIOS_C_FILES) src/getpagesize.c src/getrusage.c src/posix_devctl.c
+
 
 libcsupport_a_SOURCES += src/flockfile.c src/funlockfile.c src/ftrylockfile.c
 

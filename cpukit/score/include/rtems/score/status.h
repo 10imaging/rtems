@@ -17,10 +17,8 @@
 
 #include <rtems/score/basedefs.h>
 
-#if defined(RTEMS_POSIX_API)
 #include <errno.h>
 #include <pthread.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,13 +49,8 @@ typedef enum {
 /**
  * @brief Macro to build a status code from Classic and POSIX API parts.
  */
-#if defined(RTEMS_POSIX_API)
-  #define STATUS_BUILD( classic_status, posix_status ) \
-    ( ( ( (unsigned int) ( posix_status ) ) << 8 ) | ( classic_status ) )
-#else
-  #define STATUS_BUILD( classic_status, posix_status ) \
-    ( classic_status )
-#endif
+#define STATUS_BUILD( classic_status, posix_status ) \
+  ( ( ( (unsigned int) ( posix_status ) ) << 8 ) | ( classic_status ) )
 
 /**
  * @brief Macro to get the Classic API status code.
@@ -113,10 +106,10 @@ typedef enum {
     STATUS_BUILD( STATUS_CLASSIC_NOT_OWNER_OF_RESOURCE, EPERM ),
   STATUS_OBJECT_WAS_DELETED =
     STATUS_BUILD( STATUS_CLASSIC_OBJECT_WAS_DELETED, EINVAL ),
-  STATUS_RELEASE_ORDER_VIOLATION =
-    STATUS_BUILD( STATUS_CLASSIC_INCORRECT_STATE, EPERM ),
   STATUS_RESOURCE_IN_USE =
     STATUS_BUILD( STATUS_CLASSIC_RESOURCE_IN_USE, EBUSY ),
+  STATUS_RESULT_TOO_LARGE =
+    STATUS_BUILD( STATUS_CLASSIC_UNSATISFIED, ERANGE ),
   STATUS_SUCCESSFUL =
     STATUS_BUILD( STATUS_CLASSIC_SUCCESSFUL, 0 ),
   STATUS_TIMEOUT =

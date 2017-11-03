@@ -18,10 +18,12 @@
  * - delete a rate monotonic timer
  * - conclude current and start the next period
  * - obtain status information on a period
+ * - obtain the number of postponed jobs
  */
 
 /* COPYRIGHT (c) 1989-2009, 2016.
  * On-Line Applications Research Corporation (OAR).
+ * COPYRIGHT (c) 2016-2017 Kuan-Hsun Chen.
  *
  * The license and distribution terms for this file may be
  * found in the file LICENSE in this distribution or at
@@ -180,6 +182,9 @@ typedef struct {
    *  then this field has no meaning.
    */
   rtems_thread_cpu_usage_t             executed_since_last_period;
+
+  /** This is the count of postponed jobs of this period. */
+  uint32_t                             postponed_jobs_count;
 }  rtems_rate_monotonic_period_status;
 
 /**
@@ -204,6 +209,12 @@ typedef struct {
 
   /** This field indicates the current state of the period. */
   rtems_rate_monotonic_period_states      state;
+
+  /**
+   * @brief A priority node for use by the scheduler job release and cancel
+   * operations.
+   */
+  Priority_Node                           Priority;
 
   /**
    * This field contains the length of the next period to be
@@ -234,6 +245,18 @@ typedef struct {
    * This field contains the statistics maintained for the period.
    */
   Rate_monotonic_Statistics               Statistics;
+
+  /**
+   * This field contains the number of postponed jobs.
+   * When the watchdog timeout, this variable will be increased immediately.
+   */
+  uint32_t                                postponed_jobs;
+
+  /**
+   *  This field contains the tick of the latest deadline decided by the period
+   *  watchdog.
+  */
+  uint64_t                                latest_deadline;
 }   Rate_monotonic_Control;
 
 /**

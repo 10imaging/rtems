@@ -10,6 +10,7 @@ ACLOCAL_AMFLAGS = -I ../../../../aclocal
 include $(top_srcdir)/../../../../automake/compile.am
 
 include_bspdir = $(includedir)/bsp
+include_libcpudir = $(includedir)/libcpu
 
 include_bsp_ti_herculesdir = $(includedir)/bsp/ti_herc
 
@@ -45,6 +46,9 @@ include_bsp_HEADERS += include/tms570-pinmux.h
 
 include_bsp_HEADERS += include/tms570-pins.h
 include_bsp_HEADERS += include/tms570ls3137zwt-pins.h
+include_bsp_HEADERS += include/tms570lc4357-pins.h
+
+include_libcpu_HEADERS = ../../../libcpu/arm/shared/include/arm-cp15.h
 
 include_bsp_ti_hercules_HEADERS = include/ti_herc/reg_adc.h
 include_bsp_ti_hercules_HEADERS += include/ti_herc/reg_ccmsr.h
@@ -121,6 +125,8 @@ libbsp_a_SOURCES += ../../shared/gnatinstallhandler.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 libbsp_a_SOURCES += ../../shared/src/stackalloc.c
 libbsp_a_SOURCES += ../../shared/cpucounterdiff.c
+libbsp_a_SOURCES += ../shared/arm-cp15-set-exception-handler.c
+libbsp_a_SOURCES += ../shared/arm-cp15-set-ttb-entries.c
 
 # Startup
 libbsp_a_SOURCES += ../shared/startup/bsp-start-memcpy.S
@@ -148,15 +154,14 @@ libbsp_a_SOURCES += console/tms570-sci.c
 # Clock
 libbsp_a_SOURCES += ../../shared/clockdrv_shell.h
 libbsp_a_SOURCES += clock/clock.c
-libbsp_a_SOURCES += clock/benchmark_timer.c
 
 # RTC
 
 # GPIO
 libbsp_a_SOURCES += pinmux/pinmux.c
-# Timer
 
 # Benchmark Timer
+libbsp_a_SOURCES += ../../shared/timercpucounter.c
 
 # Misc
 libbsp_a_SOURCES += misc/cpucounterread.c
@@ -168,8 +173,30 @@ libbsp_a_SOURCES += ../../../libcpu/shared/src/cache_manager.c
 libbsp_a_SOURCES += ../../../libcpu/arm/shared/include/cache_.h
 libbsp_a_CPPFLAGS += -I$(srcdir)/../../../libcpu/arm/shared/include
 
+if TMS570_USE_HWINIT_STARTUP
+libbsp_a_SOURCES += hwinit/tms570_sys_core.S
+libbsp_a_SOURCES += hwinit/fail_notification.c
+libbsp_a_SOURCES += hwinit/init_emif_sdram.c
+libbsp_a_SOURCES += hwinit/init_esm.c
+libbsp_a_SOURCES += hwinit/init_pinmux.c
+libbsp_a_SOURCES += hwinit/init_system.c
+libbsp_a_SOURCES += hwinit/tms570_selftest.c
+libbsp_a_SOURCES += hwinit/tms570_selftest_par_can.c
+libbsp_a_SOURCES += hwinit/tms570_selftest_par_mibspi.c
+libbsp_a_SOURCES += hwinit/tms570_selftest_par_std.c
+libbsp_a_SOURCES += hwinit/tms570_selftest_parity.c
+libbsp_a_SOURCES += hwinit/tms570_tcram_tests.c
+
+include_bsp_HEADERS += hwinit/tms570_selftest_parity.h
+include_bsp_HEADERS += hwinit/tms570_hwinit.h
+include_bsp_HEADERS += hwinit/tms570_selftest.h
+
+# Start hooks
+libbsp_a_SOURCES += hwinit/bspstarthooks-hwinit.c
+else
 # Start hooks
 libbsp_a_SOURCES += startup/bspstarthooks.c
+endif
 
 # ----------------------------
 # ------  Special Rules

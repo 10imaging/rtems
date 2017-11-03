@@ -18,11 +18,8 @@
 #include "config.h"
 #endif
 
-#if defined(__RTEMS_HAVE_SYS_CPUSET_H__)
-
 #include <rtems/rtems/tasks.h>
 #include <rtems/score/threadimpl.h>
-#include <rtems/score/cpusetimpl.h>
 #include <rtems/score/schedulerimpl.h>
 
 rtems_status_code rtems_task_set_affinity(
@@ -65,4 +62,3 @@ rtems_status_code rtems_task_set_affinity(
   _Thread_Dispatch_enable( cpu_self );
   return ok ? RTEMS_SUCCESSFUL : RTEMS_INVALID_NUMBER;
 }
-#endif

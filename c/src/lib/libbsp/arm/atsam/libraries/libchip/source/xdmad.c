@@ -64,13 +64,16 @@
 #include "chip.h"
 #ifdef __rtems__
 #include "../../../utils/utility.h"
+#include <rtems/irq-extension.h>
+#include <rtems/sysinit.h>
+#include <bsp/fatal.h>
 #endif /* __rtems__ */
 #include <assert.h>
-static uint8_t xDmad_Initialized = 0;
 
 /*----------------------------------------------------------------------------
  *        Local functions
  *----------------------------------------------------------------------------*/
+static void XDMAD_Handler(void *arg);
 /**
  * \brief Try to allocate a DMA channel for on given controller.
  * \param pDmad  Pointer to DMA driver instance.
@@ -129,51 +132,47 @@ static uint32_t XDMAD_AllocateXdmacChannel(sXdmad *pXdmad,
 	return XDMAD_ALLOC_FAILED;
 }
 
+void XDMAD_DoNothingCallback(uint32_t Channel, void *pArg)
+{
+	/* Do nothing */
+}
+
 /*----------------------------------------------------------------------------
  *        Exported functions
  *----------------------------------------------------------------------------*/
 
-/**
- * \brief Initialize xDMA driver instance.
- * \param pXdmad Pointer to xDMA driver instance.
- * \param bPollingMode Polling DMA transfer:
- *                     1. Via XDMAD_IsTransferDone(); or
- *                     2. Via XDMAD_Handler().
- */
-void XDMAD_Initialize(sXdmad *pXdmad, uint8_t bPollingMode)
+sXdmad XDMAD_Instance;
+
+static void XDMAD_SysInitialize(void)
 {
+	sXdmad *pXdmad;
 	uint32_t j;
-	uint32_t volatile timer = 0x7FF;
+	rtems_status_code sc;
 
-	assert(pXdmad);
-	LockMutex(pXdmad->xdmaMutex, timer);
-
-	if (xDmad_Initialized) {
-		ReleaseMutex(pXdmad->xdmaMutex);
-		return;
-	}
+	pXdmad = &XDMAD_Instance;
 
 	pXdmad->pXdmacs = XDMAC;
-	pXdmad->pollingMode = bPollingMode;
 	pXdmad->numControllers = XDMAC_CONTROLLER_NUM;
 	pXdmad->numChannels    = (XDMAC_GTYPE_NB_CH(XDMAC_GetType(XDMAC)) + 1);
 
 	for (j = 0; j < pXdmad->numChannels; j ++) {
-		pXdmad->XdmaChannels[j].fCallback = 0;
-		pXdmad->XdmaChannels[j].pArg      = 0;
-		pXdmad->XdmaChannels[j].bIrqOwner    = 0;
-		pXdmad->XdmaChannels[j].bSrcPeriphID = 0;
-		pXdmad->XdmaChannels[j].bDstPeriphID = 0;
-		pXdmad->XdmaChannels[j].bSrcTxIfID   = 0;
-		pXdmad->XdmaChannels[j].bSrcRxIfID   = 0;
-		pXdmad->XdmaChannels[j].bDstTxIfID   = 0;
-		pXdmad->XdmaChannels[j].bDstRxIfID   = 0;
-		pXdmad->XdmaChannels[j].state = XDMAD_STATE_FREE;
+		pXdmad->XdmaChannels[j].fCallback = XDMAD_DoNothingCallback;
 	}
 
-	xDmad_Initialized = 1;
-	ReleaseMutex(pXdmad->xdmaMutex);
+	sc = rtems_interrupt_handler_install(
+		ID_XDMAC,
+		"XDMA",
+		RTEMS_INTERRUPT_UNIQUE,
+		XDMAD_Handler,
+		pXdmad
+	);
+	if (sc != RTEMS_SUCCESSFUL) {
+		bsp_fatal(ATSAM_FATAL_XDMA_IRQ_INSTALL);
+	}
 }
+
+RTEMS_SYSINIT_ITEM(XDMAD_SysInitialize, RTEMS_SYSINIT_BSP_START,
+    RTEMS_SYSINIT_ORDER_LAST);
 
 
 /**
@@ -302,109 +301,75 @@ eXdmadRC XDMAD_PrepareChannel(sXdmad *pXdmad, uint32_t dwChannel)
 
 /**
  * \brief xDMA interrupt handler
- * \param pxDmad Pointer to DMA driver instance.
+ * \param arg Pointer to DMA driver instance.
  */
-void XDMAD_Handler(sXdmad *pDmad)
+static void XDMAD_Handler(void *arg)
 {
+	sXdmad *pDmad;
 	Xdmac *pXdmac;
 	sXdmadChannel *pCh;
 	uint32_t xdmaChannelIntStatus, xdmaGlobaIntStatus, xdmaGlobalChStatus;
-	uint8_t bExec = 0;
+	uint8_t bExec;
 	uint8_t _iChannel;
-	assert(pDmad != NULL);
 
+	pDmad = arg;
 	pXdmac = pDmad->pXdmacs;
-	xdmaGlobaIntStatus = XDMAC_GetGIsr(pXdmac);
+	xdmaGlobaIntStatus = XDMAC_GetGIsr(pXdmac) & 0xFFFFFF;
+	xdmaGlobalChStatus = XDMAC_GetGlobalChStatus(pXdmac);
 
-	if ((xdmaGlobaIntStatus & 0xFFFFFF) != 0) {
-		xdmaGlobalChStatus = XDMAC_GetGlobalChStatus(pXdmac);
+	while (xdmaGlobaIntStatus != 0) {
+		_iChannel = 31 - __builtin_clz(xdmaGlobaIntStatus);
+		xdmaGlobaIntStatus &= ~(UINT32_C(1) << _iChannel);
 
-		for (_iChannel = 0; _iChannel < pDmad->numChannels; _iChannel ++) {
-			if (!(xdmaGlobaIntStatus & (1 << _iChannel))) continue;
+		pCh = &pDmad->XdmaChannels[_iChannel];
+		bExec = 0;
 
-			pCh = &pDmad->XdmaChannels[_iChannel];
+		if ((xdmaGlobalChStatus & (XDMAC_GS_ST0 << _iChannel)) == 0) {
+			xdmaChannelIntStatus = XDMAC_GetMaskChannelIsr(pXdmac, _iChannel);
 
-			if (pCh->state == XDMAD_STATE_FREE) return;
-
-			if ((xdmaGlobalChStatus & (XDMAC_GS_ST0 << _iChannel)) == 0) {
-				bExec = 0;
-				xdmaChannelIntStatus = XDMAC_GetMaskChannelIsr(pXdmac, _iChannel);
-
-				if (xdmaChannelIntStatus & XDMAC_CIS_BIS) {
-					if ((XDMAC_GetChannelItMask(pXdmac, _iChannel) & XDMAC_CIM_LIM)
-						== 0) {
-						pCh->state = XDMAD_STATE_DONE;
-						bExec = 1;
-					}
-
-					TRACE_DEBUG("XDMAC_CIS_BIS\n\r");
-				}
-
-				if (xdmaChannelIntStatus & XDMAC_CIS_FIS)
-					TRACE_DEBUG("XDMAC_CIS_FIS\n\r");
-
-				if (xdmaChannelIntStatus & XDMAC_CIS_RBEIS)
-					TRACE_DEBUG("XDMAC_CIS_RBEIS\n\r");
-
-				if (xdmaChannelIntStatus & XDMAC_CIS_WBEIS)
-					TRACE_DEBUG("XDMAC_CIS_WBEIS\n\r");
-
-				if (xdmaChannelIntStatus & XDMAC_CIS_ROIS)
-					TRACE_DEBUG("XDMAC_CIS_ROIS\n\r");
-
-				if (xdmaChannelIntStatus & XDMAC_CIS_LIS) {
-					TRACE_DEBUG("XDMAC_CIS_LIS\n\r");
+			if (xdmaChannelIntStatus & XDMAC_CIS_BIS) {
+				if ((XDMAC_GetChannelItMask(pXdmac, _iChannel) & XDMAC_CIM_LIM) == 0) {
 					pCh->state = XDMAD_STATE_DONE;
 					bExec = 1;
 				}
 
-				if (xdmaChannelIntStatus & XDMAC_CIS_DIS) {
-					pCh->state = XDMAD_STATE_DONE;
-					bExec = 1;
-				}
-
-			} else {
-				/* Block end interrupt for LLI dma mode */
-				if (XDMAC_GetChannelIsr(pXdmac, _iChannel) & XDMAC_CIS_BIS) {
-					/* Execute callback */
-					pCh->fCallback(_iChannel, pCh->pArg);
-				}
+				TRACE_DEBUG("XDMAC_CIS_BIS\n\r");
 			}
 
-			/* Execute callback */
-			if (bExec && pCh->fCallback)
-				pCh->fCallback(_iChannel, pCh->pArg);
+			if (xdmaChannelIntStatus & XDMAC_CIS_FIS)
+				TRACE_DEBUG("XDMAC_CIS_FIS\n\r");
+
+			if (xdmaChannelIntStatus & XDMAC_CIS_RBEIS)
+				TRACE_DEBUG("XDMAC_CIS_RBEIS\n\r");
+
+			if (xdmaChannelIntStatus & XDMAC_CIS_WBEIS)
+				TRACE_DEBUG("XDMAC_CIS_WBEIS\n\r");
+
+			if (xdmaChannelIntStatus & XDMAC_CIS_ROIS)
+				TRACE_DEBUG("XDMAC_CIS_ROIS\n\r");
+
+			if (xdmaChannelIntStatus & XDMAC_CIS_LIS) {
+				TRACE_DEBUG("XDMAC_CIS_LIS\n\r");
+				pCh->state = XDMAD_STATE_DONE;
+				bExec = 1;
+			}
+
+			if (xdmaChannelIntStatus & XDMAC_CIS_DIS) {
+				pCh->state = XDMAD_STATE_DONE;
+				bExec = 1;
+			}
+
+		} else {
+			/* Block end interrupt for LLI dma mode */
+			if (XDMAC_GetChannelIsr(pXdmac, _iChannel) & XDMAC_CIS_BIS) {
+				bExec = 1;
+			}
 		}
+
+		/* Execute callback */
+		if (bExec)
+			pCh->fCallback(_iChannel, pCh->pArg);
 	}
-}
-
-/**
- * \brief Check if DMA transfer is finished.
- *        In polling mode XDMAD_Handler() is polled.
- * \param pDmad     Pointer to DMA driver instance.
- * \param dwChannel ControllerNumber << 8 | ChannelNumber.
- */
-eXdmadRC XDMAD_IsTransferDone(sXdmad *pXdmad, uint32_t dwChannel)
-{
-	uint8_t iChannel = (dwChannel) & 0xFF;
-	uint8_t state;
-	assert(pXdmad != NULL);
-
-	if (iChannel >= pXdmad->numChannels)
-		return XDMAD_ERROR;
-
-	state = pXdmad->XdmaChannels[iChannel].state;
-
-	if (state == XDMAD_STATE_ALLOCATED) return XDMAD_OK;
-
-	if (state == XDMAD_STATE_FREE) return XDMAD_ERROR;
-	else if (state != XDMAD_STATE_DONE) {
-		if (pXdmad->pollingMode)  XDMAD_Handler(pXdmad);
-
-		return XDMAD_BUSY;
-	}
-
-	return XDMAD_OK;
 }
 
 
@@ -495,9 +460,7 @@ eXdmadRC XDMAD_StartTransfer(sXdmad *pXdmad, uint32_t dwChannel)
 	/* Change state to transferring */
 	pXdmad->XdmaChannels[iChannel].state = XDMAD_STATE_START;
 	XDMAC_EnableChannel(pXdmac, iChannel);
-
-	if (pXdmad->pollingMode == 0)
-		XDMAC_EnableGIt(pXdmac, iChannel);
+	XDMAC_EnableGIt(pXdmac, iChannel);
 
 	return XDMAD_OK;
 }

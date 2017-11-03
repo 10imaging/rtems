@@ -16,7 +16,6 @@
   #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #include <sys/types.h>
@@ -36,14 +35,13 @@
 #include <rtems/extensionimpl.h>
 #ifdef RTEMS_POSIX_API
 #include <rtems/posix/barrierimpl.h>
-#include <rtems/posix/condimpl.h>
 #include <rtems/posix/mqueueimpl.h>
 #include <rtems/posix/muteximpl.h>
 #include <rtems/posix/psignalimpl.h>
 #include <rtems/posix/pthreadimpl.h>
 #include <rtems/posix/rwlockimpl.h>
 #include <rtems/posix/semaphoreimpl.h>
-#include <rtems/posix/spinlockimpl.h>
+#include <rtems/posix/shmimpl.h>
 #include <rtems/posix/timerimpl.h>
 #endif /* RTEMS_POSIX_API */
 #include <rtems/posix/keyimpl.h>
@@ -73,8 +71,6 @@ typedef enum {
   INITIAL_EXTENSIONS_POST,
   DATA_STRUCTURES_PRE,
   DATA_STRUCTURES_POST,
-  CPU_SET_PRE,
-  CPU_SET_POST,
   USER_EXTENSIONS_PRE,
   USER_EXTENSIONS_POST,
   CLASSIC_TASKS_PRE,
@@ -104,27 +100,21 @@ typedef enum {
   POSIX_SIGNALS_POST,
   POSIX_THREADS_PRE,
   POSIX_THREADS_POST,
-  POSIX_CONDITION_VARIABLE_PRE,
-  POSIX_CONDITION_VARIABLE_POST,
-  POSIX_MUTEX_PRE,
-  POSIX_MUTEX_POST,
   POSIX_MESSAGE_QUEUE_PRE,
   POSIX_MESSAGE_QUEUE_POST,
   POSIX_SEMAPHORE_PRE,
   POSIX_SEMAPHORE_POST,
   POSIX_TIMER_PRE,
   POSIX_TIMER_POST,
-  POSIX_BARRIER_PRE,
-  POSIX_BARRIER_POST,
-  POSIX_RWLOCK_PRE,
-  POSIX_RWLOCK_POST,
-  POSIX_SPINLOCK_PRE,
-  POSIX_SPINLOCK_POST,
-  POSIX_CLEANUP_PRE,
-  POSIX_CLEANUP_POST,
+  POSIX_SHM_PRE,
+  POSIX_SHM_POST,
 #endif /* RTEMS_POSIX_API */
   POSIX_KEYS_PRE,
   POSIX_KEYS_POST,
+#ifdef RTEMS_POSIX_API
+  POSIX_CLEANUP_PRE,
+  POSIX_CLEANUP_POST,
+#endif /* RTEMS_POSIX_API */
   IDLE_THREADS_PRE,
   IDLE_THREADS_POST,
   LIBIO_PRE,
@@ -250,17 +240,6 @@ LAST(RTEMS_SYSINIT_DATA_STRUCTURES)
 {
   assert(_RTEMS_Allocator_Mutex != NULL);
   next_step(DATA_STRUCTURES_POST);
-}
-
-FIRST(RTEMS_SYSINIT_CPU_SET)
-{
-  /* There is nothing to do in case RTEMS_SMP is not defined */
-  next_step(CPU_SET_PRE);
-}
-
-LAST(RTEMS_SYSINIT_CPU_SET)
-{
-  next_step(CPU_SET_POST);
 }
 
 FIRST(RTEMS_SYSINIT_USER_EXTENSIONS)
@@ -443,30 +422,6 @@ LAST(RTEMS_SYSINIT_POSIX_THREADS)
   next_step(POSIX_THREADS_POST);
 }
 
-FIRST(RTEMS_SYSINIT_POSIX_CONDITION_VARIABLE)
-{
-  assert(_POSIX_Condition_variables_Information.maximum == 0);
-  next_step(POSIX_CONDITION_VARIABLE_PRE);
-}
-
-LAST(RTEMS_SYSINIT_POSIX_CONDITION_VARIABLE)
-{
-  assert(_POSIX_Condition_variables_Information.maximum != 0);
-  next_step(POSIX_CONDITION_VARIABLE_POST);
-}
-
-FIRST(RTEMS_SYSINIT_POSIX_MUTEX)
-{
-  assert(_POSIX_Mutex_Information.maximum == 0);
-  next_step(POSIX_MUTEX_PRE);
-}
-
-LAST(RTEMS_SYSINIT_POSIX_MUTEX)
-{
-  assert(_POSIX_Mutex_Information.maximum != 0);
-  next_step(POSIX_MUTEX_POST);
-}
-
 FIRST(RTEMS_SYSINIT_POSIX_MESSAGE_QUEUE)
 {
   assert(_POSIX_Message_queue_Information.maximum == 0);
@@ -503,40 +458,16 @@ LAST(RTEMS_SYSINIT_POSIX_TIMER)
   next_step(POSIX_TIMER_POST);
 }
 
-FIRST(RTEMS_SYSINIT_POSIX_BARRIER)
+FIRST(RTEMS_SYSINIT_POSIX_SHM)
 {
-  assert(_POSIX_Barrier_Information.maximum == 0);
-  next_step(POSIX_BARRIER_PRE);
+  assert(_POSIX_Shm_Information.maximum == 0);
+  next_step(POSIX_SHM_PRE);
 }
 
-LAST(RTEMS_SYSINIT_POSIX_BARRIER)
+LAST(RTEMS_SYSINIT_POSIX_SHM)
 {
-  assert(_POSIX_Barrier_Information.maximum != 0);
-  next_step(POSIX_BARRIER_POST);
-}
-
-FIRST(RTEMS_SYSINIT_POSIX_RWLOCK)
-{
-  assert(_POSIX_RWLock_Information.maximum == 0);
-  next_step(POSIX_RWLOCK_PRE);
-}
-
-LAST(RTEMS_SYSINIT_POSIX_RWLOCK)
-{
-  assert(_POSIX_RWLock_Information.maximum != 0);
-  next_step(POSIX_RWLOCK_POST);
-}
-
-FIRST(RTEMS_SYSINIT_POSIX_SPINLOCK)
-{
-  assert(_POSIX_Spinlock_Information.maximum == 0);
-  next_step(POSIX_SPINLOCK_PRE);
-}
-
-LAST(RTEMS_SYSINIT_POSIX_SPINLOCK)
-{
-  assert(_POSIX_Spinlock_Information.maximum != 0);
-  next_step(POSIX_SPINLOCK_POST);
+  assert(_POSIX_Shm_Information.maximum != 0);
+  next_step(POSIX_SHM_POST);
 }
 
 static size_t user_extensions_pre_posix_cleanup;
@@ -755,19 +686,12 @@ static void *POSIX_Init(void *arg)
 
 #ifdef RTEMS_POSIX_API
 
-#define CONFIGURE_MAXIMUM_POSIX_BARRIERS 1
-
 #define CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES 1
 
-#define CONFIGURE_MAXIMUM_POSIX_MUTEXES 1
-
-#define CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES 1
-
-#define CONFIGURE_MAXIMUM_POSIX_RWLOCKS 1
 
 #define CONFIGURE_MAXIMUM_POSIX_SEMAPHORES 1
 
-#define CONFIGURE_MAXIMUM_POSIX_SPINLOCKS 1
+#define CONFIGURE_MAXIMUM_POSIX_SHMS 1
 
 #define CONFIGURE_MAXIMUM_POSIX_TIMERS 1
 

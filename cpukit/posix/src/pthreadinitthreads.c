@@ -85,11 +85,7 @@ void _POSIX_Threads_Initialize_user_threads_body(void)
 
     thread_entry = user_threads[ index ].thread_entry;
     if ( thread_entry == NULL ) {
-      _Terminate(
-        INTERNAL_ERROR_CORE,
-        false,
-        INTERNAL_ERROR_POSIX_INIT_THREAD_ENTRY_IS_NULL
-      );
+      _Internal_error( INTERNAL_ERROR_POSIX_INIT_THREAD_ENTRY_IS_NULL );
     }
 
     if ( register_global_construction ) {
@@ -103,7 +99,8 @@ void _POSIX_Threads_Initialize_user_threads_body(void)
       thread_entry,
       NULL
     );
-    if ( eno )
-      _POSIX_Fatal_error( POSIX_FD_PTHREAD, eno );
+    if ( eno != 0 ) {
+      _Internal_error( INTERNAL_ERROR_POSIX_INIT_THREAD_CREATE_FAILED );
+    }
   }
 }

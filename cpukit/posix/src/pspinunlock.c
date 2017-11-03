@@ -11,6 +11,8 @@
  *  COPYRIGHT (c) 1989-2007.
  *  On-Line Applications Research Corporation (OAR).
  *
+ *  Copyright (c) 2016 embedded brains GmbH
+ *
  *  The license and distribution terms for this file may be
  *  found in the file LICENSE in this distribution or at
  *  http://www.rtems.org/license/LICENSE.
@@ -21,19 +23,20 @@
 #endif
 
 #include <rtems/posix/spinlockimpl.h>
-#include <rtems/posix/posixapi.h>
 
-int pthread_spin_unlock( pthread_spinlock_t *spinlock )
+int pthread_spin_unlock( pthread_spinlock_t *lock )
 {
   POSIX_Spinlock_Control *the_spinlock;
-  ISR_lock_Context        lock_context;
-  Status_Control          status;
+  ISR_Level               level;
 
-  the_spinlock = _POSIX_Spinlock_Get( spinlock, &lock_context );
-  if ( the_spinlock == NULL ) {
-    return EINVAL;
-  }
-
-  status = _CORE_spinlock_Surrender( &the_spinlock->Spinlock, &lock_context );
-  return _POSIX_Get_error( status );
+  the_spinlock = _POSIX_Spinlock_Get( lock );
+  level = the_spinlock->interrupt_state;
+#if defined(RTEMS_SMP)
+  _SMP_ticket_lock_Release(
+    &the_spinlock->Lock,
+    &_Per_CPU_Get()->Lock_stats_context
+  );
+#endif
+  _ISR_Local_enable( level );
+  return 0;
 }

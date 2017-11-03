@@ -63,6 +63,16 @@ extern "C" {
 #define SPARC_NUMBER_OF_REGISTER_WINDOWS 8
 
 /**
+ * See GRLIB-TN-0009: "LEON3FT Stale Cache Entry After Store with
+ * Data Tag Parity Error"
+ */
+#if defined(__FIX_LEON3FT_B2BST)
+  #define SPARC_LEON3FT_B2BST_NOP nop
+#else
+  #define SPARC_LEON3FT_B2BST_NOP
+#endif
+
+/**
  * This macro indicates whether this multilib variation has hardware
  * floating point or not.  We use the gcc cpp predefine _SOFT_FLOAT
  * to determine that.
@@ -153,6 +163,9 @@ extern "C" {
 #define SPARC_SWTRAP_SYSCALL 0
 #define SPARC_SWTRAP_IRQDIS 9
 #define SPARC_SWTRAP_IRQEN 10
+#if SPARC_HAS_FPU == 1
+#define SPARC_SWTRAP_IRQDIS_FP 11
+#endif
 
 #ifndef ASM
 

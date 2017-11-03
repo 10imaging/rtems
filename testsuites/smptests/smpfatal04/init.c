@@ -16,7 +16,6 @@
   #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #include <rtems.h>
@@ -34,7 +33,7 @@ static void Init(rtems_task_argument arg)
 
 static void fatal_extension(
   rtems_fatal_source source,
-  bool is_internal,
+  bool always_set_to_false,
   rtems_fatal_code code
 )
 {
@@ -42,9 +41,15 @@ static void fatal_extension(
 
   if (
     source == RTEMS_FATAL_SOURCE_SMP
-      && !is_internal
+      && !always_set_to_false
       && code == SMP_FATAL_BOOT_PROCESSOR_NOT_ASSIGNED_TO_SCHEDULER
   ) {
+    rtems_status_code sc;
+    rtems_id id;
+
+    sc = rtems_scheduler_ident_by_processor(0, &id);
+    assert(sc == RTEMS_INCORRECT_STATE);
+
     TEST_END();
   }
 }
@@ -55,10 +60,6 @@ static void fatal_extension(
 #define CONFIGURE_INITIAL_EXTENSIONS \
   { .fatal = fatal_extension }, \
   RTEMS_TEST_INITIAL_EXTENSION
-
-#define CONFIGURE_SMP_APPLICATION
-
-#define CONFIGURE_SMP_MAXIMUM_PROCESSORS 1
 
 #define CONFIGURE_SCHEDULER_CONTROLS
 

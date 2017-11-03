@@ -13,7 +13,6 @@
 #include "config.h"
 #endif
 
-#define CONFIGURE_INIT
 
 #include <bsp.h>
 #include <tmacros.h>  /* instantiate buffering code if needed */

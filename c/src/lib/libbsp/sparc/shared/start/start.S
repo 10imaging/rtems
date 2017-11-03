@@ -35,6 +35,15 @@
 /*
  * System call optimized trap table entry
  */
+#define FPDIS_TRAP(_handler)  \
+  mov   %psr, %l0 ; \
+  sethi %hi(_handler), %l4 ; \
+  jmp   %l4+%lo(_handler); \
+   sethi %hi(SPARC_PSR_EF_MASK), %l3
+
+/*
+ * System call optimized trap table entry
+ */
 #define IRQDIS_TRAP(_handler)  \
   mov   %psr, %l0 ; \
   sethi %hi(_handler), %l4 ; \
@@ -74,12 +83,14 @@
 
 #define SOFT_TRAP BAD_TRAP
 
-  .seg    "text"
+  .section    ".text"
   PUBLIC(start)
   .global start, __bsp_mem_init
 
 SYM(start):
+#if SYM(start) != start
 start:
+#endif 
 
 /*
  *  The trap table has to be the first code in a boot PROM.  But because
@@ -98,7 +109,11 @@ SYM(trap_table):
                                                 !    exception
   BAD_TRAP;                                     ! 02 illegal instruction
   BAD_TRAP;                                     ! 03 privileged instruction
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
+  FPDIS_TRAP(SYM(syscall_lazy_fp_switch));      ! 04 fp disabled
+#else
   BAD_TRAP;                                     ! 04 fp disabled
+#endif
   WOTRAP(5, SYM(window_overflow_trap_handler)); ! 05 window overflow
   WUTRAP(6, SYM(window_underflow_trap_handler));! 06 window underflow
   BAD_TRAP;                                     ! 07 memory address not aligned
@@ -207,9 +222,14 @@ SYM(CLOCK_SPEED):
    */
   IRQDIS_TRAP(SYM(syscall_irqdis));             ! 89 IRQ Disable syscall trap
   IRQEN_TRAP(SYM(syscall_irqen));               ! 8A IRQ Enable syscall trap
-
+#if defined(SPARC_USE_SYNCHRONOUS_FP_SWITCH)
+  IRQDIS_TRAP(SYM(syscall_irqdis_fp));          ! 8B IRQ disable
+                                                ! and set PSR[EF] syscall trap
+#else
   SOFT_TRAP;                                    ! 8B
+#endif
   SOFT_TRAP; SOFT_TRAP; SOFT_TRAP; SOFT_TRAP;   ! 8C - 8F
+
   SOFT_TRAP; SOFT_TRAP; SOFT_TRAP; SOFT_TRAP;   ! 90 - 93
   SOFT_TRAP; SOFT_TRAP; SOFT_TRAP; SOFT_TRAP;   ! 94 - 97
   SOFT_TRAP; SOFT_TRAP; SOFT_TRAP; SOFT_TRAP;   ! 98 - 9B
@@ -276,12 +296,15 @@ SYM(hard_reset):
 	rd	%asr17, %o0		! get CPU identifier
 	srl	%o0, LEON3_ASR17_PROCESSOR_INDEX_SHIFT, %o0
 
-	cmp	%o0, 0
-	beq	cpu0
-	 nop
-
 	sll	%o0, PER_CPU_CONTROL_SIZE_LOG2, %l0
 	add	%g6, %l0, %g6
+
+	/* If LEON3_Boot_Cpu < 0 then assign us as boot CPU and continue. */
+	set	SYM(LEON3_Boot_Cpu), %o1
+	ld	[%o1], %o2
+	tst	%o2
+	bneg	.Lbootcpu
+	 nop
 
 	ld	[%g6 + PER_CPU_INTERRUPT_STACK_HIGH], %sp ! set stack pointer
 	sub	%sp, 4, %sp		! stack starts at end of area - 4
@@ -289,8 +312,9 @@ SYM(hard_reset):
 	mov	%sp, %fp		! set frame pointer
 
 	call	SYM(bsp_start_on_secondary_processor) ! does not return
-	 sub	%sp, CPU_MINIMUM_STACK_FRAME_SIZE, %sp
-cpu0:
+	 sub	%sp, SPARC_MINIMUM_STACK_FRAME_SIZE, %sp
+.Lbootcpu:
+	st	%o0, [%o1]
 #endif
 
 	set	(SYM(rdb_start)), %g5	! End of RAM
@@ -300,78 +324,22 @@ cpu0:
         mov     %sp, %fp                ! Set frame pointer
         nop
 
-#if ENABLE_SIS_QUIRKS==1
-
-#include <erc32.h>
-
-/* Check if MEC is initialised. If not, this means that we are
-   running on the simulator. Initiate some of the parameters
-   that are done by the boot-prom otherwise.
-*/
-
-        set     SYM(ERC32_MEC), %g3  ! g3 = base address of peripherals
-	ld	[%g3], %g2
-	set	0xfe080000, %g1
-	andcc	%g1, %g2, %g0
- 	bne	2f
-
- /* Set the correct memory size in MEC memory config register */
-
- 	set	SYM(PROM_SIZE), %l0
- 	set	0, %l1
- 	srl	%l0, 18, %l0
-1:
- 	tst	%l0
- 	srl	%l0, 1, %l0
- 	bne,a	1b
- 	inc	%l1
- 	sll	%l1, 8, %l1
-
- 	set	SYM(RAM_SIZE), %l0
- 	srl	%l0, 19, %l0
-1:
- 	tst	%l0
- 	srl	%l0, 1, %l0
- 	bne,a	1b
- 	inc	%l1
- 	sll	%l1, 10, %l1
-
-	! set the Memory Configuration
-        st     %l1, [ %g3 + ERC32_MEC_MEMORY_CONFIGURATION_OFFSET ]
-	!DISABLE THE HARDWARE WATCHDOG
-        st     %g0, [ %g3 + ERC32_MEC_WATCHDOG_TRAP_DOOR_SET_OFFSET ]
-	!Reduce the number of wait states to 0 for all memory areas.
-        st     %g0, [ %g3 + ERC32_MEC_WAIT_STATE_CONFIGURATION_OFFSET ]
-
- 	set	SYM(RAM_START), %l1  ! Cannot use RAM_END due to bug in linker
- 	set	SYM(RAM_SIZE), %l2
- 	add	%l1, %l2, %sp
- 	st	%sp, [%g5]
-
-
-	set	SYM(CLOCK_SPEED), %g5	! Use 14 MHz in simulator
-	set	14, %g1
-	st	%g1, [%g5]
-
-2:
-#endif
-
         /*
          *  Copy the initialized data to RAM
          *
-         *  FROM:   _endtext
+         *  FROM:   _data_load_start
          *  TO:     _data_start
          *  LENGTH: (__bss_start - _data_start) bytes
          */
 
-        sethi %hi(_endtext),%g1
-        or    %g1,%lo(_endtext),%g1     ! g1 = start of initialized data in ROM
+        sethi %hi(_data_load_start),%g1 ! g1 = start of initialized data in ROM
+        or    %g1,%lo(_data_load_start),%g1
 
-        sethi %hi(_data_start),%g3
-        or    %g3,%lo(_data_start),%g3  ! g3 = start of initialized data in RAM
+        sethi %hi(_data_start),%g3      ! g3 = start of initialized data in RAM
+        or    %g3,%lo(_data_start),%g3
 
-        sethi %hi(__bss_start), %g2
-        or    %g2,%lo(__bss_start),%g2  ! g2 = end of initialized data in RAM
+        sethi %hi(__bss_start), %g2     ! g2 = end of initialized data in RAM
+        or    %g2,%lo(__bss_start),%g2
 
 	cmp   %g1, %g3
 	be    1f
@@ -399,7 +367,7 @@ zerobss:
         bleu,a zerobss
         nop
 
-        mov     %0, %o0                 ! command line
+        mov     %g0, %o0                ! command line
         call    SYM(boot_card)          ! does not return
          sub     %sp, 0x60, %sp         ! room for boot_card to save args
 

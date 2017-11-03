@@ -19,10 +19,13 @@
  */
 
 
+#include <inttypes.h>
+
 #include <bsp.h>
 #include <bsp/irq.h>
 #include <bsp/irq-generic.h>
 #include <libcpu/isr_entries.h>
+#include <rtems/bspIo.h>
 
 static const char *const cause_strings[32] = {
   /*  0 */ "Int",
@@ -64,14 +67,14 @@ static inline bool bsp_irq_is_valid(rtems_vector_number vector)
   return vector <= BSP_INTERRUPT_VECTOR_MAX;
 }
 
-rtems_status_code bsp_interrupt_vector_enable(rtems_vector_number vector)
+void bsp_interrupt_vector_enable(rtems_vector_number vector)
 {
-  return RTEMS_SUCCESSFUL;
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
 }
 
-rtems_status_code bsp_interrupt_vector_disable(rtems_vector_number vector)
+void bsp_interrupt_vector_disable(rtems_vector_number vector)
 {
-  return RTEMS_SUCCESSFUL;
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
 }
 
 rtems_status_code bsp_interrupt_facility_initialize(void)
@@ -88,8 +91,8 @@ void bsp_interrupt_handler_default(rtems_vector_number vector)
   mips_get_sr( sr );
   mips_get_cause( cause );
 
-  printk( "Unhandled exception %d\n", vector );
-  printk( "sr: 0x%08x  cause: 0x%08x --> %s\n", sr, cause,
+  printk( "Unhandled exception %" PRId32 "\n", vector );
+  printk( "sr: 0x%08" PRIu32 "  cause: 0x%08" PRIu32 " --> %s\n", sr, cause,
      cause_strings[(cause >> 2) &0x1f] );
   #if 0
     mips_dump_exception_frame( frame );

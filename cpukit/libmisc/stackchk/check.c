@@ -43,6 +43,7 @@
 #include <rtems/printer.h>
 #include <rtems/stackchk.h>
 #include <rtems/score/percpu.h>
+#include <rtems/score/threadimpl.h>
 
 /*
  *  This structure is used to fill in and compare the "end of stack"
@@ -238,10 +239,8 @@ static void Stack_check_report_blown_task(
     "task name: 0x%08" PRIx32 "\n",
     running->Object.name.name_u32
   );
-  printk(
-    "task name string: %s\n",
-    rtems_object_get_name(running->Object.id, sizeof(name), name)
-  );
+  _Thread_Get_name(running, name, sizeof(name));
+  printk("task name string: %s\n", name);
   printk(
     "task stack area (%lu Bytes): 0x%08" PRIxPTR " .. 0x%08" PRIxPTR "\n",
     (unsigned long) stack->size,
@@ -352,23 +351,21 @@ static inline void *Stack_check_find_high_water_mark(
  *
  *  Try to print out how much stack was actually used by the task.
  */
-static const rtems_printer* printer;
-
-static void Stack_check_Dump_threads_usage(
-  Thread_Control *the_thread
+static bool Stack_check_Dump_threads_usage(
+  Thread_Control *the_thread,
+  void           *arg
 )
 {
-  uint32_t        size, used;
-  void           *low;
-  void           *high_water_mark;
-  void           *current;
-  Stack_Control  *stack;
-  char            name[5];
+  uint32_t             size, used;
+  void                *low;
+  void                *high_water_mark;
+  void                *current;
+  Stack_Control       *stack;
+  char                 name[ 22 ];
+  const rtems_printer *printer;
+  uint32_t             id;
 
-  /*
-   *  The pointer passed in for the_thread is guaranteed to be non-NULL from
-   *  rtems_iterate_over_all_threads() so no need to check it here.
-   */
+  printer = arg;
 
   /*
    *  Obtain interrupt stack information
@@ -376,7 +373,7 @@ static void Stack_check_Dump_threads_usage(
   #if (CPU_ALLOCATE_INTERRUPT_STACK == TRUE)
     if (the_thread == (Thread_Control *) -1) {
       if (!Stack_check_Interrupt_stack.area)
-        return;
+        return false;
       stack = &Stack_check_Interrupt_stack;
       the_thread = 0;
       current = 0;
@@ -397,40 +394,35 @@ static void Stack_check_Dump_threads_usage(
   else
     used = 0;
 
-
-  #if (CPU_ALLOCATE_INTERRUPT_STACK == TRUE)
-    if ( the_thread )
-  #endif
-    {
-      rtems_printf(
-        printer,
-        "0x%08" PRIx32 "  %4s",
-        the_thread->Object.id,
-        rtems_object_get_name( the_thread->Object.id, sizeof(name), name )
-      );
-    }
-    #if (CPU_ALLOCATE_INTERRUPT_STACK == TRUE)
-      else {
-        rtems_printf( printer, "0x%08x  INTR", ~0 );
-      }
-    #endif
+#if (CPU_ALLOCATE_INTERRUPT_STACK == TRUE)
+  if ( the_thread == NULL ) {
+    id = 0xffffffff;
+    strlcpy( name, "INTR", sizeof( name ) );
+  } else
+#endif
+  {
+    id = the_thread->Object.id;
+    _Thread_Get_name( the_thread, name, sizeof( name ) );
+  }
 
   rtems_printf(
     printer,
-    " %p - %p %p  %8" PRId32 "   ",
-    stack->area,
-    stack->area + stack->size - 1,
-    current,
+    "0x%08" PRIx32 " %-21s 0x%08" PRIuPTR " 0x%08" PRIuPTR " 0x%08" PRIuPTR " %6" PRId32 " ",
+    id,
+    name,
+    (uintptr_t) stack->area,
+    (uintptr_t) stack->area + (uintptr_t) stack->size - 1,
+    (uintptr_t) current,
     size
   );
 
   if (Stack_check_Initialized == 0) {
-    rtems_printf( printer, "Unavailable\n" );
+    rtems_printf( printer, "N/A\n" );
   } else {
-    rtems_printf( printer, "%8" PRId32 "\n", used );
+    rtems_printf( printer, "%6" PRId32 "\n", used );
   }
 
-
+  return false;
 }
 
 /*
@@ -439,7 +431,7 @@ static void Stack_check_Dump_threads_usage(
 #ifndef DONT_USE_FATAL_EXTENSION
   void rtems_stack_checker_fatal_extension(
     Internal_errors_Source  source,
-    bool                    is_internal,
+    bool                    always_set_to_false,
     uint32_t                status
   )
   {
@@ -453,28 +445,28 @@ static void Stack_check_Dump_threads_usage(
  */
 
 void rtems_stack_checker_report_usage_with_plugin(
-  const rtems_printer* printer_
+  const rtems_printer* printer
 )
 {
-  if ( printer != NULL || ! rtems_print_printer_valid ( printer_ ) )
-    return;
-
-  printer = printer_;
-
-  rtems_printf( printer, "Stack usage by thread\n");
-  rtems_printf( printer,
-"    ID      NAME    LOW          HIGH     CURRENT     AVAILABLE     USED\n"
+  rtems_printf(
+     printer,
+     "                             STACK USAGE BY THREAD\n"
+     "ID         NAME                  LOW        HIGH       CURRENT    AVAIL  USED\n"
   );
 
   /* iterate over all threads and dump the usage */
-  rtems_iterate_over_all_threads( Stack_check_Dump_threads_usage );
+  rtems_task_iterate(
+    Stack_check_Dump_threads_usage,
+    RTEMS_DECONST( rtems_printer *, printer )
+  );
 
   #if (CPU_ALLOCATE_INTERRUPT_STACK == TRUE)
     /* dump interrupt stack info if any */
-    Stack_check_Dump_threads_usage((Thread_Control *) -1);
+    Stack_check_Dump_threads_usage(
+      (Thread_Control *) -1,
+      RTEMS_DECONST( rtems_printer *, printer )
+    );
   #endif
-
-  printer = NULL;
 }
 
 void rtems_stack_checker_report_usage( void )

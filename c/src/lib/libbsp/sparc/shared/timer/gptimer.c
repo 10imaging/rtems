@@ -34,6 +34,7 @@
 #include <rtems.h>
 #include <bsp.h>
 #include <stdlib.h>
+#include <string.h>
 #include <drvmgr/drvmgr.h>
 #include <drvmgr/ambapp_bus.h>
 #include <grlib.h>
@@ -46,6 +47,11 @@
 
 #ifdef GPTIMER_INFO_AVAIL
 #include <stdio.h>
+#endif
+
+#ifdef RTEMS_SMP
+#include <rtems/score/processormask.h>
+#include <rtems/score/smpimpl.h>
 #endif
 
 /* GPTIMER Core Configuration Register (READ-ONLY) */
@@ -93,6 +99,7 @@ struct gptimer_priv {
 	struct gptimer_regs *regs;
 	unsigned int base_clk;
 	unsigned int base_freq;
+	unsigned int widthmask;
 	char separate_interrupt;
 	char isr_installed;
 
@@ -265,6 +272,10 @@ int gptimer_init1(struct drvmgr_dev *dev)
 	else
 		irq_ack_mask = ~0;
 
+	/* Probe timer register width mask */
+	priv->regs->timer[timer_start].value = 0xffffffff;
+	priv->widthmask = priv->regs->timer[timer_start].value;
+
 	priv->timer_cnt = timer_cnt;
 	for (i=0; i<timer_cnt; i++) {
 		timer = &priv->timers[i];
@@ -283,7 +294,7 @@ int gptimer_init1(struct drvmgr_dev *dev)
 	 *  B. Each Timer have an individual IRQ. The number is:
 	 *        BASE_IRQ + timer_index
 	 */
-	priv->separate_interrupt = regs->cfg & GPTIMER_CFG_SI;
+	priv->separate_interrupt = (regs->cfg & GPTIMER_CFG_SI) != 0;
 
 	return DRVMGR_OK;
 }
@@ -377,7 +388,8 @@ static void gptimer_tlib_reset(struct tlib_dev *hand)
 {
 	struct gptimer_timer *timer = (struct gptimer_timer *)hand;
 
-	timer->tregs->ctrl = 0;
+	timer->tregs->ctrl = (timer->tregs->ctrl & timer->irq_ack_mask) &
+			     GPTIMER_CTRL_IP;
 	timer->tregs->reload = 0xffffffff;
 	timer->tregs->ctrl = GPTIMER_CTRL_LD;
 }
@@ -410,7 +422,7 @@ static int gptimer_tlib_set_freq(struct tlib_dev *hand, unsigned int tickrate)
 		return 0;
 }
 
-static void gptimer_tlib_irq_reg(struct tlib_dev *hand, tlib_isr_t func, void *data)
+static void gptimer_tlib_irq_reg(struct tlib_dev *hand, tlib_isr_t func, void *data, int flags)
 {
 	struct gptimer_timer *timer = (struct gptimer_timer *)hand;
 	struct gptimer_priv *priv = priv_from_timer(timer);
@@ -430,6 +442,19 @@ static void gptimer_tlib_irq_reg(struct tlib_dev *hand, tlib_isr_t func, void *d
 		}
 		priv->isr_installed++;
 	}
+
+#if RTEMS_SMP
+	if (flags & TLIB_FLAGS_BROADCAST) {
+		int tindex = 0;
+
+		if (priv->separate_interrupt) {
+			/* Offset interrupt number with HW subtimer index */
+			tindex = timer->tindex;
+		}
+		drvmgr_interrupt_set_affinity(priv->dev, tindex,
+					      _SMP_Get_online_processors());
+	}
+#endif
 
 	timer->tregs->ctrl |= GPTIMER_CTRL_IE;
 }
@@ -464,7 +489,8 @@ static void gptimer_tlib_start(struct tlib_dev *hand, int once)
 	ctrl = GPTIMER_CTRL_LD | GPTIMER_CTRL_EN;
 	if ( once == 0 )
 		ctrl |= GPTIMER_CTRL_RS; /* Restart Timer */
-	timer->tregs->ctrl |= ctrl;
+	timer->tregs->ctrl = ctrl | (timer->tregs->ctrl & timer->irq_ack_mask &
+			     ~GPTIMER_CTRL_RS);
 }
 
 static void gptimer_tlib_stop(struct tlib_dev *hand)
@@ -491,6 +517,16 @@ static void gptimer_tlib_get_counter(
 	*counter = timer->tregs->value;
 }
 
+static void gptimer_tlib_get_widthmask(
+	struct tlib_dev *hand,
+	unsigned int *widthmask)
+{
+	struct gptimer_timer *timer = (struct gptimer_timer *)hand;
+	struct gptimer_priv *priv = priv_from_timer(timer);
+
+	*widthmask = priv->widthmask;
+}
+
 static struct tlib_drv gptimer_tlib_drv =
 {
 	.reset = gptimer_tlib_reset,
@@ -504,4 +540,5 @@ static struct tlib_drv gptimer_tlib_drv =
 	.get_counter = gptimer_tlib_get_counter,
 	.custom = NULL,
 	.int_pend = gptimer_tlib_int_pend,
+	.get_widthmask = gptimer_tlib_get_widthmask,
 };

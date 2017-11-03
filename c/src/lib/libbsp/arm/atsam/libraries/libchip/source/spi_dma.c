@@ -139,8 +139,6 @@ static void SPID_Rx_Cb(uint32_t channel, Spid *pArg)
 static uint8_t _spid_configureDmaChannels(Spid *pSpid)
 {
 	/* Driver initialize */
-	XDMAD_Initialize(pSpid->pXdmad, 0);
-
 	XDMAD_FreeChannel(pSpid->pXdmad, spiDmaTxChannel);
 	XDMAD_FreeChannel(pSpid->pXdmad, spiDmaRxChannel);
 
@@ -290,6 +288,7 @@ uint32_t SPID_Configure(Spid *pSpid ,
 	pSpid->spiId  = spiId;
 	pSpid->semaphore = 1;
 	pSpid->pCurrentCommand = 0;
+	assert(pXdmad == &XDMAD_Instance);
 	pSpid->pXdmad = pXdmad;
 
 	/* Enable the SPI Peripheral ,Execute a software reset of the SPI,

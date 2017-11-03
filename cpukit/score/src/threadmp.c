@@ -75,11 +75,9 @@ void _Thread_MP_Handler_initialization (
     _Thread_Timer_initialize( &proxy->Timer, _Per_CPU_Get_by_index( 0 ) );
     _RBTree_Initialize_node( &proxy->Active );
 
-#if defined(RTEMS_SMP)
-    proxy->Scheduler.own_node = &proxy->Scheduler_node;
-#endif
-    proxy->Scheduler.node = &proxy->Scheduler_node;
+    proxy->Scheduler.nodes = &proxy->Scheduler_node;
     _Scheduler_Node_do_initialize(
+      &_Scheduler_Table[ 0 ],
       &proxy->Scheduler_node,
       (Thread_Control *) proxy,
       0
@@ -150,7 +148,7 @@ Thread_Control *_Thread_MP_Allocate_proxy (
 
     the_proxy->receive_packet = receive_packet;
     the_proxy->Object.id = source_tid;
-    the_proxy->current_priority = receive_packet->source_priority;
+    the_proxy->Real_priority.priority = receive_packet->source_priority;
     the_proxy->current_state = _States_Set( STATES_DORMANT, the_state );
 
     the_proxy->Wait.count                   = executing->Wait.count;
@@ -175,11 +173,7 @@ Thread_Control *_Thread_MP_Allocate_proxy (
 
   _Thread_MP_Proxies_release( &lock_context );
 
-  _Terminate(
-    INTERNAL_ERROR_CORE,
-    true,
-    INTERNAL_ERROR_OUT_OF_PROXIES
-  );
+  _Internal_error( INTERNAL_ERROR_OUT_OF_PROXIES );
 
   /*
    *  NOTE: The following return ensures that the compiler will

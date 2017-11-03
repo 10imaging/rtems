@@ -16,7 +16,6 @@
   #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #include <assert.h>
@@ -151,7 +150,7 @@ void boot_card(const char *cmdline)
 
   TEST_END();
 
-  _Terminate(RTEMS_FATAL_SOURCE_EXIT, false, 0);
+  _Terminate(RTEMS_FATAL_SOURCE_EXIT, 0);
 }
 
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER

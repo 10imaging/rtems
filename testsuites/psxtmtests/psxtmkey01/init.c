@@ -71,10 +71,10 @@ void *POSIX_Init(void *argument)
 
   /*key creation, using NULL destructor*/
   benchmark_pthread_key_create();
-  
+
   /* key deletion*/
   benchmark_pthread_key_delete();
-  
+
   TEST_END();
 
   rtems_test_exit(0);

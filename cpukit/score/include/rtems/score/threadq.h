@@ -24,11 +24,14 @@
 #include <rtems/score/object.h>
 #include <rtems/score/priority.h>
 #include <rtems/score/rbtree.h>
+#include <rtems/score/states.h>
 #include <rtems/score/watchdog.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct Scheduler_Node;
 
 /**
  *  @defgroup ScoreThreadQueue Thread Queue Handler
@@ -43,11 +46,28 @@ extern "C" {
 
 typedef struct _Thread_Control Thread_Control;
 
+typedef struct Thread_queue_Context Thread_queue_Context;
+
 typedef struct Thread_queue_Queue Thread_queue_Queue;
 
 typedef struct Thread_queue_Operations Thread_queue_Operations;
 
-typedef struct Thread_queue_Path Thread_queue_Path;
+/**
+ * @brief Thread queue enqueue callout.
+ *
+ * @param[in] queue The actual thread queue.
+ * @param[in] the_thread The thread to enqueue.
+ * @param[in] cpu_self The current processor.
+ * @param[in] queue_context The thread queue context of the lock acquire.
+ *
+ * @see _Thread_queue_Context_set_enqueue_callout().
+ */
+typedef void ( *Thread_queue_Enqueue_callout )(
+  Thread_queue_Queue     *queue,
+  Thread_Control         *the_thread,
+  struct Per_CPU_Control *cpu_self,
+  Thread_queue_Context   *queue_context
+);
 
 /**
  * @brief Thread queue deadlock callout.
@@ -168,7 +188,7 @@ typedef struct {
  *
  * @see _Thread_queue_Context_initialize().
  */
-typedef struct {
+struct Thread_queue_Context {
   /**
    * @brief The lock context for the thread queue acquire and release
    * operations.
@@ -176,29 +196,100 @@ typedef struct {
   Thread_queue_Lock_context Lock_context;
 
   /**
-   * @brief The expected thread dispatch disable level for
-   * _Thread_queue_Enqueue_critical().
-   *
-   * In case the actual thread dispatch disable level is not equal to the
-   * expected level, then a fatal error occurs.
+   * @brief The thread state for _Thread_queue_Enqueue().
    */
-  uint32_t expected_thread_dispatch_disable_level;
+  States_Control thread_state;
 
   /**
-   * @brief The clock discipline for the interval timeout.
-   * Use WATCHDOG_NO_TIMEOUT to block indefinitely.
+   * @brief The enqueue callout for _Thread_queue_Enqueue().
+   *
+   * The callout is invoked after the release of the thread queue lock with
+   * thread dispatching disabled.  Afterwards the thread is blocked.  This
+   * callout must be used to install the thread watchdog for timeout handling.
+   *
+   * @see _Thread_queue_Enqueue_do_nothing_extra().
+   *   _Thread_queue_Add_timeout_ticks(), and
+   *   _Thread_queue_Add_timeout_realtime_timespec().
    */
-  Watchdog_Discipline timeout_discipline;
+  Thread_queue_Enqueue_callout enqueue_callout;
 
   /**
    * @brief Interval to wait.
+   *
+   * May be used by the enqueue callout to register a timeout handler.
    */
-  uint64_t timeout;
+  union {
+    /**
+     * @brief The timeout in ticks.
+     */
+    Watchdog_Interval ticks;
+
+    /**
+     * @brief The timeout argument, e.g. pointer to struct timespec.
+     */
+    const void *arg;
+  } Timeout;
+
+#if defined(RTEMS_SMP)
+  /**
+   * @brief Representation of a thread queue path from a start thread queue to
+   * the terminal thread queue.
+   *
+   * The start thread queue is determined by the object on which a thread intends
+   * to block.  The terminal thread queue is the thread queue reachable via
+   * thread queue links whose owner is not blocked on a thread queue.  The thread
+   * queue links are determined by the thread queue owner and thread wait queue
+   * relationships.
+   */
+  struct {
+    /**
+     * @brief The chain of thread queue links defining the thread queue path.
+     */
+    Chain_Control Links;
+
+    /**
+     * @brief The start of a thread queue path.
+     */
+    Thread_queue_Link Start;
+
+    /**
+     * @brief In case of a deadlock, a link for the first thread on the path
+     * that tries to enqueue on a thread queue.
+     */
+    Thread_queue_Link Deadlock;
+  } Path;
+#endif
+
+  /**
+   * @brief Block to manage thread priority changes due to a thread queue
+   * operation.
+   */
+  struct {
+    /**
+     * @brief A priority action list.
+     */
+    Priority_Actions Actions;
+
+    /**
+     * @brief Count of threads to update the priority via
+     * _Thread_Priority_update().
+     */
+    size_t update_count;
+
+    /**
+     * @brief Threads to update the priority via _Thread_Priority_update().
+     *
+     * Currently, a maximum of two threads need an update in one rush, for
+     * example the thread of the thread queue operation and the owner of the
+     * thread queue.
+     */
+    Thread_Control *update[ 2 ];
+  } Priority;
 
   /**
    * @brief Invoked in case of a detected deadlock.
    *
-   * Must be initialized for _Thread_queue_Enqueue_critical() in case the
+   * Must be initialized for _Thread_queue_Enqueue() in case the
    * thread queue may have an owner, e.g. for mutex objects.
    *
    * @see _Thread_queue_Context_set_deadlock_callout().
@@ -218,7 +309,7 @@ typedef struct {
    */
   Thread_queue_MP_callout mp_callout;
 #endif
-} Thread_queue_Context;
+};
 
 /**
  * @brief Thread priority queue.
@@ -237,7 +328,13 @@ typedef struct {
   /**
    * @brief The actual thread priority queue.
    */
-  RBTree_Control Queue;
+  Priority_Aggregation Queue;
+
+  /**
+   * @brief This priority queue is added to a scheduler node of the owner in
+   * case of priority inheritance.
+   */
+  struct Scheduler_Node *scheduler_node;
 } Thread_queue_Priority_queue;
 
 /**
@@ -334,37 +431,41 @@ struct Thread_queue_Queue {
    * @brief The thread queue owner.
    */
   Thread_Control *owner;
+
+  /**
+   * @brief The thread queue name.
+   */
+  const char *name;
 };
 
 /**
- * @brief Thread queue priority change operation.
+ * @brief Thread queue action operation.
  *
  * @param[in] queue The actual thread queue.
  * @param[in] the_thread The thread.
- * @param[in] new_priority The new priority value.
- *
- * @see Thread_queue_Operations.
+ * @param[in] queue_context The thread queue context providing the thread queue
+ *   action set to perform.  Returns the thread queue action set to perform on
+ *   the thread queue owner or the empty set in case there is nothing to do.
  */
-typedef void ( *Thread_queue_Priority_change_operation )(
-  Thread_queue_Queue *queue,
-  Thread_Control     *the_thread,
-  Priority_Control    new_priority
+typedef void ( *Thread_queue_Priority_actions_operation )(
+  Thread_queue_Queue   *queue,
+  Priority_Actions     *priority_actions
 );
 
 /**
  * @brief Thread queue enqueue operation.
  *
  * A potential thread to update the priority due to priority inheritance is
- * returned via the thread queue path.  This thread is handed over to
- * _Thread_Update_priority().
+ * returned via the thread queue context.  This thread is handed over to
+ * _Thread_Priority_update().
  *
  * @param[in] queue The actual thread queue.
  * @param[in] the_thread The thread to enqueue on the queue.
  */
 typedef void ( *Thread_queue_Enqueue_operation )(
-  Thread_queue_Queue *queue,
-  Thread_Control     *the_thread,
-  Thread_queue_Path  *path
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Thread_queue_Context *queue_context
 );
 
 /**
@@ -374,8 +475,9 @@ typedef void ( *Thread_queue_Enqueue_operation )(
  * @param[in] the_thread The thread to extract from the thread queue.
  */
 typedef void ( *Thread_queue_Extract_operation )(
-  Thread_queue_Queue *queue,
-  Thread_Control     *the_thread
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Thread_queue_Context *queue_context
 );
 
 /**
@@ -390,9 +492,10 @@ typedef void ( *Thread_queue_Extract_operation )(
  * @return The previous first thread on the queue.
  */
 typedef Thread_Control *( *Thread_queue_Surrender_operation )(
-  Thread_queue_Queue *queue,
-  Thread_queue_Heads *heads,
-  Thread_Control     *previous_owner
+  Thread_queue_Queue   *queue,
+  Thread_queue_Heads   *heads,
+  Thread_Control       *previous_owner,
+  Thread_queue_Context *queue_context
 );
 
 /**
@@ -415,16 +518,9 @@ typedef Thread_Control *( *Thread_queue_First_operation )(
  */
 struct Thread_queue_Operations {
   /**
-   * @brief Thread queue priority change operation.
-   *
-   * Called by _Thread_Change_priority() to notify a thread about a priority
-   * change.  In case this thread waits currently for a resource the handler
-   * may adjust its data structures according to the new priority value.  This
-   * handler must not be NULL, instead the default handler
-   * _Thread_Do_nothing_priority_change() should be used in case nothing needs
-   * to be done during a priority change.
+   * @brief Thread queue priority actions operation.
    */
-  Thread_queue_Priority_change_operation priority_change;
+  Thread_queue_Priority_actions_operation priority_actions;
 
   /**
    * @brief Thread queue enqueue operation.

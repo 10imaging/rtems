@@ -23,17 +23,20 @@
 #include <ambapp.h>
 #include <bsp/grtc.h>
 
-#ifndef IRQ_GLOBAL_PREPARE
- #define IRQ_GLOBAL_PREPARE(level) rtems_interrupt_level level
-#endif
+/* map via rtems_interrupt_lock_* API: */
+#define SPIN_DECLARE(lock) RTEMS_INTERRUPT_LOCK_MEMBER(lock)
+#define SPIN_INIT(lock, name) rtems_interrupt_lock_initialize(lock, name)
+#define SPIN_LOCK(lock, level) rtems_interrupt_lock_acquire_isr(lock, &level)
+#define SPIN_LOCK_IRQ(lock, level) rtems_interrupt_lock_acquire(lock, &level)
+#define SPIN_UNLOCK(lock, level) rtems_interrupt_lock_release_isr(lock, &level)
+#define SPIN_UNLOCK_IRQ(lock, level) rtems_interrupt_lock_release(lock, &level)
+#define SPIN_IRQFLAGS(k) rtems_interrupt_lock_context k
+#define SPIN_ISR_IRQFLAGS(k) SPIN_IRQFLAGS(k)
 
-#ifndef IRQ_GLOBAL_DISABLE
- #define IRQ_GLOBAL_DISABLE(level) rtems_interrupt_disable(level)
-#endif
-
-#ifndef IRQ_GLOBAL_ENABLE
- #define IRQ_GLOBAL_ENABLE(level) rtems_interrupt_enable(level)
-#endif
+/* turn on/off local CPU's interrupt to ensure HW timing - not SMP safe. */
+#define IRQ_LOCAL_DECLARE(_level) rtems_interrupt_level _level
+#define IRQ_LOCAL_DISABLE(_level) rtems_interrupt_local_disable(_level)
+#define IRQ_LOCAL_ENABLE(_level) rtems_interrupt_local_enable(_level)
 
 /*
 #define DEBUG
@@ -236,6 +239,7 @@ struct grtc_priv {
 	char			devName[32];	/* Device Name */
 	struct grtc_regs	*regs;		/* TC Hardware Register MAP */
 	int			irq;		/* IRQ number of TC core */
+	SPIN_DECLARE(devlock);			/* spin-lock of registers */
 
 	int			major;		/* Driver major */
 	int			minor;		/* Device Minor */
@@ -398,6 +402,8 @@ static int grtc_init3(struct drvmgr_dev *dev)
 		sprintf(priv->devName, "/dev/%sgrtc%d", prefix, dev->minor_bus);
 	}
 
+	SPIN_INIT(&priv->devlock, priv->devName);
+
 	/* Register Device */
 	status = rtems_io_register_name(priv->devName, grtc_driver_io_major, dev->minor_drv);
 	if (status != RTEMS_SUCCESSFUL) {
@@ -523,7 +529,7 @@ static int __inline__ grtc_hw_data_avail(unsigned int rrp, unsigned rwp, unsigne
 	return rwp+(bufsize-rrp);
 }
 
-/* Reads as much as possiböe but not more than 'max' bytes from the TC receive buffer.
+/* Reads as much as possible but not more than 'max' bytes from the TC receive buffer.
  * Number of bytes put into 'buf' is returned.
  */
 static int grtc_hw_read_try(struct grtc_priv *pDev, char *buf, int max)
@@ -599,7 +605,7 @@ static int grtc_hw_read_try(struct grtc_priv *pDev, char *buf, int max)
 	return count;
 }
 
-/* Reads as much as possiböe but not more than 'max' bytes from the TC receive buffer.
+/* Reads as much as possible but not more than 'max' bytes from the TC receive buffer.
  * Number of bytes put into 'buf' is returned.
  */
 static int grtc_data_avail(struct grtc_priv *pDev)
@@ -659,6 +665,12 @@ static int grtc_start(struct grtc_priv *pDev)
 		return RTEMS_IO_ERROR;
 	}
 
+	/* make sure the RX semaphore is in the correct state when starting.
+	 * In case of a previous overrun condition it could be in incorrect
+	 * state (where rtems_semaphore_flush was used).
+	 */
+	rtems_semaphore_obtain(pDev->sem_rx, RTEMS_NO_WAIT, 0);
+
 	/* Set operating modes */
 	tmp = 0;
 	if ( pDev->config.psr_enable )
@@ -697,9 +709,12 @@ static int grtc_start(struct grtc_priv *pDev)
 	return 0;
 }
 
-static void grtc_stop(struct grtc_priv *pDev)
+static void grtc_stop(struct grtc_priv *pDev, int overrun)
 {
 	struct grtc_regs *regs = pDev->regs;
+	SPIN_IRQFLAGS(irqflags);
+
+	SPIN_LOCK_IRQ(&pDev->devlock, irqflags);
 
 	/* Disable the receiver */
 	regs->cor = GRTC_SEB;
@@ -710,6 +725,14 @@ static void grtc_stop(struct grtc_priv *pDev)
 	regs->picr = GRTC_INT_ALL;
 
 	DBG("GRTC: STOPPED\n");
+
+	if (overrun) {
+		pDev->overrun_condition = 1;
+	} else {
+		pDev->running = 0;
+	}
+
+	SPIN_UNLOCK_IRQ(&pDev->devlock, irqflags);
 
 	/* Flush semaphores in case a thread is stuck waiting for CLTUs (RX data) */
 	rtems_semaphore_flush(pDev->sem_rx);
@@ -722,14 +745,14 @@ static int grtc_wait_data(struct grtc_priv *pDev, int count, rtems_interval time
 {
 	int avail;
 	int ret;
-	IRQ_GLOBAL_PREPARE(oldLevel);
+	SPIN_IRQFLAGS(irqflags);
 
 	FUNCDBG();
 
 	if ( count < 1 )
 		return 0;
 
-	IRQ_GLOBAL_DISABLE(oldLevel);
+	SPIN_LOCK_IRQ(&pDev->devlock, irqflags);
 
 	/* Enable interrupts when receiving CLTUs, Also clear old pending CLTUs store
 	 * interrupts.
@@ -741,7 +764,7 @@ static int grtc_wait_data(struct grtc_priv *pDev, int count, rtems_interval time
 	if ( avail < count ) {
 		/* Wait for interrupt. */
 
-		IRQ_GLOBAL_ENABLE(oldLevel);
+		SPIN_UNLOCK_IRQ(&pDev->devlock, irqflags);
 
 		if ( timeout == 0 ){
 			timeout = RTEMS_NO_TIMEOUT;
@@ -753,7 +776,7 @@ static int grtc_wait_data(struct grtc_priv *pDev, int count, rtems_interval time
 		 *                     which should cancel this operation.
 		 * RTEMS_OBJECT_WAS_DELETED, RTEMS_INVALID_ID = driver error.
 		 */
-		IRQ_GLOBAL_DISABLE(oldLevel);
+		SPIN_LOCK_IRQ(&pDev->devlock, irqflags);
 	}else{
 		ret = RTEMS_SUCCESSFUL;	
 	}
@@ -761,7 +784,7 @@ static int grtc_wait_data(struct grtc_priv *pDev, int count, rtems_interval time
 	/* Disable interrupts when receiving CLTUs */
 	pDev->regs->imr = READ_REG(&pDev->regs->imr) & ~GRTC_INT_CS;
 
-	IRQ_GLOBAL_ENABLE(oldLevel);
+	SPIN_UNLOCK_IRQ(&pDev->devlock, irqflags);
 
 	return ret;
 }
@@ -814,6 +837,7 @@ static rtems_device_driver grtc_open(
 	pDev->ready.cnt = 0;
 
 	pDev->running = 0;
+	pDev->overrun_condition = 0;
 
 	memset(&pDev->config,0,sizeof(pDev->config));
 
@@ -838,10 +862,9 @@ static rtems_device_driver grtc_close(rtems_device_major_number major, rtems_dev
 	pDev = (struct grtc_priv *)dev->priv;
 
 	if ( pDev->running ){
-		grtc_stop(pDev);
-		pDev->running = 0;
+		grtc_stop(pDev, 0);
 	}
-	
+
 	/* Reset core */
 	grtc_hw_reset(pDev);
 	
@@ -910,16 +933,22 @@ read_from_buffer:
 		/* Non-blocking mode and no data read. */
 		return RTEMS_TIMEOUT;
 	}
-	
+
 	/* Tell caller how much was read. */
-	
+
 	DBG("READ returning %d bytes, left: %d\n",rw_args->count-left,left);
-	
+
 	rw_args->bytes_moved = rw_args->count - left;
-	if ( rw_args->bytes_moved == 0 ){
+	if ( rw_args->bytes_moved == 0 ) {
+		if ( pDev->overrun_condition ) {
+			/* signal to the user that overrun has happend when
+			 * no more data can be read out.
+			 */
+			return RTEMS_IO_ERROR;
+		}
 		return RTEMS_TIMEOUT;
 	}
-	
+
 	return RTEMS_SUCCESSFUL;
 }
 
@@ -1529,8 +1558,7 @@ static rtems_device_driver grtc_ioctl(rtems_device_major_number major, rtems_dev
 	struct grtc_list *frmlist;
 	struct grtc_ioc_stats *stats;
 	unsigned int mem;
-	
-	IRQ_GLOBAL_PREPARE(oldLevel);
+	IRQ_LOCAL_DECLARE(oldLevel);
 
 	FUNCDBG();
 
@@ -1562,13 +1590,14 @@ static rtems_device_driver grtc_ioctl(rtems_device_major_number major, rtems_dev
 			return RTEMS_RESOURCE_IN_USE;
 		}
 		drvmgr_interrupt_unregister(pDev->dev, 0, grtc_interrupt, pDev);
-		grtc_stop(pDev);
-		pDev->running = 0;
+		grtc_stop(pDev, 0);
 		break;
 
 		case GRTC_IOC_ISSTARTED:
 		if ( !pDev->running ) {
 			return RTEMS_RESOURCE_IN_USE;
+		} else if ( pDev->overrun_condition ) {
+			return RTEMS_IO_ERROR;
 		}
 		break;
 
@@ -1701,15 +1730,17 @@ static rtems_device_driver grtc_ioctl(rtems_device_major_number major, rtems_dev
 		if ( !hwregs ) {
 			return RTEMS_INVALID_NAME;
 		}
-		/* We disable interrupt in order to get a snapshot of the registers */
-		IRQ_GLOBAL_DISABLE(oldLevel);
+		/* We disable interrupt on the local CPU in order to get a
+		 * snapshot of the registers.
+		 */
+		IRQ_LOCAL_DISABLE(oldLevel);
 		hwregs->sir	= READ_REG(&pDev->regs->sir);
 		hwregs->far	= READ_REG(&pDev->regs->far);
 		hwregs->clcw1	= READ_REG(&pDev->regs->clcw1);
 		hwregs->clcw2	= READ_REG(&pDev->regs->clcw2);
 		hwregs->phir	= READ_REG(&pDev->regs->phir);
 		hwregs->str	= READ_REG(&pDev->regs->str);
-		IRQ_GLOBAL_ENABLE(oldLevel);
+		IRQ_LOCAL_ENABLE(oldLevel);
 		break;
 
 		case GRTC_IOC_GET_STATS:
@@ -1850,13 +1881,20 @@ static rtems_device_driver grtc_ioctl(rtems_device_major_number major, rtems_dev
 		frmlist->head = pDev->ready.head;
 		frmlist->tail = pDev->ready.tail;
 		frmlist->cnt = pDev->ready.cnt;
-		
+
 		/* Empty list */
 		pDev->ready.head = NULL;
 		pDev->ready.tail = NULL;
 		pDev->ready.cnt = 0;
+
+		if ((frmlist->cnt == 0) && pDev->overrun_condition) {
+			/* signal to the user that overrun has happend when
+			 * no more data can be read out.
+			 */
+			return RTEMS_IO_ERROR;
+		}
 		break;
-		
+
 		case GRTC_IOC_GET_CLCW_ADR:
 		if ( !data ) {
 			return RTEMS_INVALID_NAME;
@@ -1875,45 +1913,46 @@ static void grtc_interrupt(void *arg)
 	struct grtc_priv *pDev = arg;
 	struct grtc_regs *regs = pDev->regs;
 	unsigned int status;
+	SPIN_ISR_IRQFLAGS(irqflags);
 
 	/* Clear interrupt by reading it */
 	status = READ_REG(&regs->pisr);
-	
+
 	/* Spurious Interrupt? */
 	if ( !pDev->running )
 		return;
 
 	if ( status & GRTC_INT_OV ){
-		
 		/* Stop core (Disable receiver, interrupts), set overrun condition, 
 		 * Flush semaphore if thread waiting for data in grtc_wait_data(). 
 		 */
-		pDev->overrun_condition = 1;
-
-		grtc_stop(pDev);
+		grtc_stop(pDev, 1);
 
 		/* No need to handle the reset of interrupts, we are still */
 		goto out;
 	}
 
 	if ( status & GRTC_INT_CS ){
+		SPIN_LOCK(&pDev->devlock, irqflags);
+
 		if ( (pDev->blocking==GRTC_BLKMODE_COMPLETE) && pDev->timeout ){
 			/* Signal to thread only if enough data is available */
 			if ( pDev->wait_for_nbytes > grtc_data_avail(pDev) ){
 				/* Not enough data available */
 				goto procceed_processing_interrupts;
 			}
-			
-			/* Enough data is available which means that we should wake 
-			 * up thread sleeping.
+
+			/* Enough data is available which means that we should
+			 * wake up the thread sleeping.
 			 */
 		}
-		
-		/* Disable further CLTUs Stored interrupts, no point until thread waiting for them
-		 * say it want to wait for more.
+
+		/* Disable further CLTUs Stored interrupts, no point until
+		 * thread waiting for them says it want to wait for more.
 		 */
 		regs->imr = READ_REG(&regs->imr) & ~GRTC_INT_CS;
-		
+		SPIN_UNLOCK(&pDev->devlock, irqflags);
+
 		/* Signal Semaphore to wake waiting thread in read() */
 		rtems_semaphore_release(pDev->sem_rx);
 	}

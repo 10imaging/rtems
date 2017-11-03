@@ -26,8 +26,9 @@
     lm32_interrupt_ack(1 << MM_IRQ_TIMER0); \
   } while (0)
 
-#define Clock_driver_support_install_isr(_new, _old ) \
+#define Clock_driver_support_install_isr(_new ) \
   do { \
+    rtems_isr_entry _old; \
     rtems_interrupt_catch(_new, MM_IRQ_TIMER0, &_old); \
   } while (0)
 
@@ -40,11 +41,11 @@ static void Clock_driver_support_initialize_hardware(void)
   bsp_interrupt_vector_enable(MM_IRQ_TIMER0);
 }
 
-static void Clock_driver_support_shutdown_hardware(void)
-{
-  bsp_interrupt_vector_disable(MM_IRQ_TIMER0);
-  MM_WRITE(MM_TIMER0_CONTROL, 0);
-}
+#define Clock_driver_support_shutdown_hardware() \
+  do { \
+    bsp_interrupt_vector_disable(MM_IRQ_TIMER0); \
+    MM_WRITE(MM_TIMER0_CONTROL, 0); \
+  } while (0)
 
 #define CLOCK_DRIVER_USE_DUMMY_TIMECOUNTER
 

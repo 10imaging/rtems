@@ -23,7 +23,7 @@
  *  COPYRIGHT (c) 1989-1997.
  *  On-Line Applications Research Corporation (OAR).
  *
- *  Copyright (c) 2011, 2016 embedded brains GmbH
+ *  Copyright (c) 2011, 2017 embedded brains GmbH
  *
  *  The license and distribution terms for this file may in
  *  the file LICENSE in this distribution or at
@@ -265,9 +265,11 @@ PROC (_CPU_Context_switch):
 
 	/* Save context to r3 */
 
+	GET_SELF_CPU_CONTROL	r12
 	mfmsr	r6
-	mflr	r7
-	mfcr	r8
+	mfcr	r7
+	mflr	r8
+	lwz	r11, PER_CPU_ISR_DISPATCH_DISABLE(r12)
 
 	/*
 	 * We have to clear the reservation of the executing thread.  See also
@@ -285,10 +287,11 @@ PROC (_CPU_Context_switch):
 	stwcx.	r1, r3, r10
 #endif
 
-	stw	r1, PPC_CONTEXT_OFFSET_GPR1(r3)
 	stw	r6, PPC_CONTEXT_OFFSET_MSR(r3)
-	stw	r7, PPC_CONTEXT_OFFSET_LR(r3)
-	stw	r8, PPC_CONTEXT_OFFSET_CR(r3)
+	stw	r7, PPC_CONTEXT_OFFSET_CR(r3)
+	PPC_REG_STORE	r1, PPC_CONTEXT_OFFSET_GPR1(r3)
+	PPC_REG_STORE	r8, PPC_CONTEXT_OFFSET_LR(r3)
+
 	PPC_GPR_STORE	r14, PPC_CONTEXT_OFFSET_GPR14(r3)
 	PPC_GPR_STORE	r15, PPC_CONTEXT_OFFSET_GPR15(r3)
 
@@ -334,7 +337,7 @@ PROC (_CPU_Context_switch):
 	PPC_GPR_STORE	r30, PPC_CONTEXT_OFFSET_GPR30(r3)
 	PPC_GPR_STORE	r31, PPC_CONTEXT_OFFSET_GPR31(r3)
 
-	stw	r2, PPC_CONTEXT_OFFSET_GPR2(r3)
+	stw	r11, PPC_CONTEXT_OFFSET_ISR_DISPATCH_DISABLE(r3)
 
 #ifdef PPC_MULTILIB_ALTIVEC
 	li	r9, PPC_CONTEXT_OFFSET_V20
@@ -402,23 +405,29 @@ PROC (_CPU_Context_switch):
 #endif
 
 #ifdef RTEMS_SMP
-	/* The executing context no longer executes on this processor */
+	/*
+	 * The executing thread no longer executes on this processor.  Switch
+	 * the stack to the temporary interrupt stack of this processor.  Mark
+	 * the context of the executing thread as not executing.
+	 */
 	msync
+
+	addi	r1, r12, PER_CPU_INTERRUPT_FRAME_AREA + CPU_INTERRUPT_FRAME_SIZE
 	li	r6, 0
 	stw	r6, PPC_CONTEXT_OFFSET_IS_EXECUTING(r3)
 
-check_is_executing:
+.Lcheck_is_executing:
 
 	/* Check the is executing indicator of the heir context */
 	addi	r6, r5, PPC_CONTEXT_OFFSET_IS_EXECUTING
 	lwarx	r7, r0, r6
 	cmpwi	r7, 0
-	bne	get_potential_new_heir
+	bne	.Lget_potential_new_heir
 
 	/* Try to update the is executing indicator of the heir context */
 	li	r7, 1
 	stwcx.	r7, r0, r6
-	bne	get_potential_new_heir
+	bne	.Lget_potential_new_heir
 	isync
 #endif
 
@@ -426,17 +435,15 @@ check_is_executing:
 restore_context:
 
 #if defined(__ALTIVEC__) && !defined(PPC_MULTILIB_ALTIVEC)
-	mr	r14, r5
 	mr	r4, r5
 	.extern	_CPU_Context_switch_altivec
 	bl	_CPU_Context_switch_altivec
-	mr	r5, r14
 #endif
 
-	lwz	r1, PPC_CONTEXT_OFFSET_GPR1(r5)
 	lwz	r6, PPC_CONTEXT_OFFSET_MSR(r5)
-	lwz	r7, PPC_CONTEXT_OFFSET_LR(r5)
-	lwz	r8, PPC_CONTEXT_OFFSET_CR(r5)
+	lwz	r7, PPC_CONTEXT_OFFSET_CR(r5)
+	PPC_REG_LOAD	r1, PPC_CONTEXT_OFFSET_GPR1(r5)
+	PPC_REG_LOAD	r8, PPC_CONTEXT_OFFSET_LR(r5)
 
 	PPC_GPR_LOAD	r14, PPC_CONTEXT_OFFSET_GPR14(r5)
 	PPC_GPR_LOAD	r15, PPC_CONTEXT_OFFSET_GPR15(r5)
@@ -463,7 +470,12 @@ restore_context:
 	PPC_GPR_LOAD	r30, PPC_CONTEXT_OFFSET_GPR30(r5)
 	PPC_GPR_LOAD	r31, PPC_CONTEXT_OFFSET_GPR31(r5)
 
-	lwz	r2, PPC_CONTEXT_OFFSET_GPR2(r5)
+#ifdef __powerpc64__
+	ld	r13, PPC_CONTEXT_OFFSET_TP(r5)
+#else
+	lwz	r2, PPC_CONTEXT_OFFSET_TP(r5)
+#endif
+	lwz	r11, PPC_CONTEXT_OFFSET_ISR_DISPATCH_DISABLE(r5)
 
 #ifdef PPC_MULTILIB_ALTIVEC
 	li	r9, PPC_CONTEXT_OFFSET_V20
@@ -515,9 +527,10 @@ restore_context:
 	lfd	f31, PPC_CONTEXT_OFFSET_F31(r5)
 #endif
 
-	mtcr	r8
-	mtlr	r7
+	mtlr	r8
+	mtcr	r7
 	mtmsr	r6
+	stw	r11, PER_CPU_ISR_DISPATCH_DISABLE(r12)
 
 #ifdef BSP_USE_SYNC_IN_CONTEXT_SWITCH
 	isync
@@ -530,6 +543,8 @@ PROC (_CPU_Context_restore):
 	/* Align to a cache line */
 	clrrwi	r5, r3, PPC_DEFAULT_CACHE_LINE_POWER
 
+	GET_SELF_CPU_CONTROL	r12
+
 #if defined(__ALTIVEC__) && !defined(PPC_MULTILIB_ALTIVEC)
 	li	r3, 0
 #endif
@@ -537,22 +552,20 @@ PROC (_CPU_Context_restore):
 	b	restore_context
 
 #ifdef RTEMS_SMP
-get_potential_new_heir:
-
-	GET_SELF_CPU_CONTROL	r6
+.Lget_potential_new_heir:
 
 	/* We may have a new heir */
 
 	/* Read the executing and heir */
-	lwz	r7, PER_CPU_OFFSET_EXECUTING(r6)
-	lwz	r8, PER_CPU_OFFSET_HEIR(r6)
+	PPC_REG_LOAD	r7, PER_CPU_OFFSET_EXECUTING(r12)
+	PPC_REG_LOAD	r8, PER_CPU_OFFSET_HEIR(r12)
 
 	/*
 	 * Update the executing only if necessary to avoid cache line
 	 * monopolization.
 	 */
-	cmpw	r7, r8
-	beq	check_is_executing
+	PPC_REG_CMP	r7, r8
+	beq	.Lcheck_is_executing
 
 	/* Calculate the heir context pointer */
 	sub	r7, r4, r7
@@ -560,7 +573,7 @@ get_potential_new_heir:
 	clrrwi	r5, r4, PPC_DEFAULT_CACHE_LINE_POWER
 
 	/* Update the executing */
-	stw	r8, PER_CPU_OFFSET_EXECUTING(r6)
+	PPC_REG_STORE	r8, PER_CPU_OFFSET_EXECUTING(r12)
 
-	b	check_is_executing
+	b	.Lcheck_is_executing
 #endif

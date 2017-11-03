@@ -64,18 +64,6 @@ typedef struct {
 
   /**
    * This field contains the maximum number of POSIX API
-   * mutexes which are configured for this application.
-   */
-  uint32_t                            maximum_mutexes;
-
-  /**
-   * This field contains the maximum number of POSIX API
-   * condition variables which are configured for this application.
-   */
-  uint32_t                            maximum_condition_variables;
-
-  /**
-   * This field contains the maximum number of POSIX API
    * timers which are configured for this application.
    */
   uint32_t                            maximum_timers;
@@ -99,22 +87,9 @@ typedef struct {
   uint32_t                            maximum_semaphores;
 
   /**
-   * This field contains the maximum number of POSIX API
-   * barriers which are configured for this application.
+   * Maximum configured number of POSIX Shared memory objects.
    */
-  uint32_t                            maximum_barriers;
-
-  /**
-   * This field contains the maximum number of POSIX API
-   * read/write locks which are configured for this application.
-   */
-  uint32_t                            maximum_rwlocks;
-
-  /**
-   * This field contains the maximum number of POSIX API
-   * spinlocks which are configured for this application.
-   */
-  uint32_t                            maximum_spinlocks;
+  uint32_t                            maximum_shms;
 
   /**
    * This field contains the number of POSIX API Initialization

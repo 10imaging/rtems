@@ -9,6 +9,8 @@
  *  COPYRIGHT (c) 1989-2011.
  *  On-Line Applications Research Corporation (OAR).
  *
+ *  Copyright (c) 2012, 2016 embedded brains GmbH
+ *
  *  The license and distribution terms for this file may be
  *  found in the file LICENSE in this distribution or at
  *  http://www.rtems.org/license/LICENSE.
@@ -17,12 +19,13 @@
 #ifndef _RTEMS_PERCPU_H
 #define _RTEMS_PERCPU_H
 
-#include <rtems/score/cpu.h>
+#include <rtems/score/cpuimpl.h>
 
 #if defined( ASM )
   #include <rtems/asm.h>
 #else
   #include <rtems/score/assert.h>
+  #include <rtems/score/chain.h>
   #include <rtems/score/isrlock.h>
   #include <rtems/score/smp.h>
   #include <rtems/score/smplock.h>
@@ -34,16 +37,28 @@
 extern "C" {
 #endif
 
-#if defined( RTEMS_SMP )
+#if defined(RTEMS_SMP)
+  #if defined(RTEMS_PROFILING)
+    #define PER_CPU_CONTROL_SIZE_APPROX ( 512 + CPU_INTERRUPT_FRAME_SIZE )
+  #elif defined(RTEMS_DEBUG)
+    #define PER_CPU_CONTROL_SIZE_APPROX ( 256 + CPU_INTERRUPT_FRAME_SIZE )
+  #else
+    #define PER_CPU_CONTROL_SIZE_APPROX ( 128 + CPU_INTERRUPT_FRAME_SIZE )
+  #endif
+
   /*
    * This ensures that on SMP configurations the individual per-CPU controls
    * are on different cache lines to prevent false sharing.  This define can be
    * used in assembler code to easily get the per-CPU control for a particular
    * processor.
    */
-  #if defined( RTEMS_PROFILING )
+  #if PER_CPU_CONTROL_SIZE_APPROX > 1024
+    #define PER_CPU_CONTROL_SIZE_LOG2 11
+  #elif PER_CPU_CONTROL_SIZE_APPROX > 512
+    #define PER_CPU_CONTROL_SIZE_LOG2 10
+  #elif PER_CPU_CONTROL_SIZE_APPROX > 256
     #define PER_CPU_CONTROL_SIZE_LOG2 9
-  #elif defined( RTEMS_DEBUG )
+  #elif PER_CPU_CONTROL_SIZE_APPROX > 128
     #define PER_CPU_CONTROL_SIZE_LOG2 8
   #else
     #define PER_CPU_CONTROL_SIZE_LOG2 7
@@ -233,20 +248,23 @@ typedef struct {
  */
 typedef enum {
   /**
-   * @brief Index for relative per-CPU watchdog header.
+   * @brief Index for monotonic clock per-CPU watchdog header.
    *
-   * The reference time point for this header is current ticks value
-   * during insert.  Time is measured in clock ticks.
+   * The reference time point for the monotonic clock is the system start.  The
+   * clock resolution is one system clock tick.  It is used for the system
+   * clock tick based time services and the POSIX services using
+   * CLOCK_MONOTONIC.
    */
-  PER_CPU_WATCHDOG_RELATIVE,
+  PER_CPU_WATCHDOG_MONOTONIC,
 
   /**
-   * @brief Index for absolute per-CPU watchdog header.
+   * @brief Index for realtime clock per-CPU watchdog header.
    *
-   * The reference time point for this header is the POSIX Epoch.  Time is
-   * measured in nanoseconds since POSIX Epoch.
+   * The reference time point for the realtime clock is the POSIX Epoch.  The
+   * clock resolution is one nanosecond.  It is used for the time of day
+   * services and the POSIX services using CLOCK_REALTIME.
    */
-  PER_CPU_WATCHDOG_ABSOLUTE,
+  PER_CPU_WATCHDOG_REALTIME,
 
   /**
    * @brief Count of per-CPU watchdog headers.
@@ -260,10 +278,12 @@ typedef enum {
  *  This structure is used to hold per core state information.
  */
 typedef struct Per_CPU_Control {
-  /**
-   * @brief CPU port specific control.
-   */
-  CPU_Per_CPU_control cpu_per_cpu;
+  #if CPU_PER_CPU_CONTROL_SIZE > 0
+    /**
+     * @brief CPU port specific control.
+     */
+    CPU_Per_CPU_control cpu_per_cpu;
+  #endif
 
   #if (CPU_ALLOCATE_INTERRUPT_STACK == TRUE) || \
       (CPU_HAS_SOFTWARE_INTERRUPT_STACK == TRUE)
@@ -287,10 +307,42 @@ typedef struct Per_CPU_Control {
   uint32_t isr_nest_level;
 
   /**
+   * @brief Indicetes if an ISR thread dispatch is disabled.
+   *
+   * This flag is context switched with each thread.  It indicates that this
+   * thread has an interrupt stack frame on its stack.  By using this flag, we
+   * can avoid nesting more interrupt dispatching attempts on a previously
+   * interrupted thread's stack.
+   */
+  uint32_t isr_dispatch_disable;
+
+  /**
    * @brief The thread dispatch critical section nesting counter which is used
    * to prevent context switches at inopportune moments.
    */
   volatile uint32_t thread_dispatch_disable_level;
+
+  /**
+   * @brief This is set to true when this processor needs to run the thread
+   * dispatcher.
+   *
+   * It is volatile since interrupts may alter this flag.
+   *
+   * This field is not protected by a lock and must be accessed only by this
+   * processor.  Code (e.g. scheduler and post-switch action requests) running
+   * on another processors must use an inter-processor interrupt to set the
+   * thread dispatch necessary indicator to true.
+   *
+   * @see _Thread_Get_heir_and_make_it_executing().
+   */
+  volatile bool dispatch_necessary;
+
+  /*
+   * Ensure that the executing member is at least 4-byte aligned, see
+   * PER_CPU_OFFSET_EXECUTING.  This is necessary on CPU ports with relaxed
+   * alignment restrictions, e.g. type alignment is less than the type size.
+   */
+  bool reserved_for_executing_alignment[ 3 ];
 
   /**
    * @brief This is the thread executing on this processor.
@@ -320,20 +372,9 @@ typedef struct Per_CPU_Control {
    */
   struct _Thread_Control *heir;
 
-  /**
-   * @brief This is set to true when this processor needs to run the thread
-   * dispatcher.
-   *
-   * It is volatile since interrupts may alter this flag.
-   *
-   * This field is not protected by a lock and must be accessed only by this
-   * processor.  Code (e.g. scheduler and post-switch action requests) running
-   * on another processors must use an inter-processor interrupt to set the
-   * thread dispatch necessary indicator to true.
-   *
-   * @see _Thread_Get_heir_and_make_it_executing().
-   */
-  volatile bool dispatch_necessary;
+#if defined(RTEMS_SMP)
+  CPU_Interrupt_frame Interrupt_frame;
+#endif
 
   /**
    * @brief The CPU usage timestamp contains the time point of the last heir
@@ -357,7 +398,8 @@ typedef struct Per_CPU_Control {
     ISR_LOCK_MEMBER( Lock )
 
     /**
-     * @brief Watchdog ticks on this processor used for relative watchdogs.
+     * @brief Watchdog ticks on this processor used for monotonic clock
+     * watchdogs.
      */
     uint64_t ticks;
 
@@ -393,6 +435,13 @@ typedef struct Per_CPU_Control {
     #endif
 
     /**
+     * @brief Chain of threads in need for help.
+     *
+     * This field is protected by the Per_CPU_Control::Lock lock.
+     */
+    Chain_Control Threads_in_need_for_help;
+
+    /**
      * @brief Bit field for SMP messages.
      *
      * This bit field is not protected locks.  Atomic operations are used to
@@ -400,10 +449,29 @@ typedef struct Per_CPU_Control {
      */
     Atomic_Ulong message;
 
-    /**
-     * @brief The scheduler context of the scheduler owning this processor.
-     */
-    const struct Scheduler_Context *scheduler_context;
+    struct {
+      /**
+       * @brief The scheduler control of the scheduler owning this processor.
+       *
+       * This pointer is NULL in case this processor is currently not used by a
+       * scheduler instance.
+       */
+      const struct _Scheduler_Control *control;
+
+      /**
+       * @brief The scheduler context of the scheduler owning this processor.
+       *
+       * This pointer is NULL in case this processor is currently not used by a
+       * scheduler instance.
+       */
+      const struct Scheduler_Context *context;
+
+      /**
+       * @brief The idle thread for this processor in case it is online and
+       * currently not used by a scheduler instance.
+       */
+      struct _Thread_Control *idle_if_online_and_unused;
+    } Scheduler;
 
     /**
      * @brief Indicates the current state of the CPU.
@@ -671,8 +739,15 @@ bool _Per_CPU_State_wait_for_non_initial_state(
   _Per_CPU_Get()->thread_dispatch_disable_level
 #define _Thread_Heir \
   _Per_CPU_Get()->heir
+
+#if defined(_CPU_Get_thread_executing)
 #define _Thread_Executing \
-  _Per_CPU_Get()->executing
+  _CPU_Get_thread_executing()
+#else
+#define _Thread_Executing \
+  _Per_CPU_Get_executing( _Per_CPU_Get() )
+#endif
+
 #define _ISR_Nest_level \
   _Per_CPU_Get()->isr_nest_level
 #define _CPU_Interrupt_stack_low \
@@ -685,9 +760,10 @@ bool _Per_CPU_State_wait_for_non_initial_state(
 /**
  * @brief Returns the thread control block of the executing thread.
  *
- * This function can be called in any context.  On SMP configurations
+ * This function can be called in any thread context.  On SMP configurations,
  * interrupts are disabled to ensure that the processor index is used
- * consistently.
+ * consistently if no CPU port specific method is available to get the
+ * executing thread.
  *
  * @return The thread control block of the executing thread.
  */
@@ -695,7 +771,7 @@ RTEMS_INLINE_ROUTINE struct _Thread_Control *_Thread_Get_executing( void )
 {
   struct _Thread_Control *executing;
 
-  #if defined( RTEMS_SMP )
+  #if defined(RTEMS_SMP) && !defined(_CPU_Get_thread_executing)
     ISR_Level level;
 
     _ISR_Local_disable( level );
@@ -703,7 +779,7 @@ RTEMS_INLINE_ROUTINE struct _Thread_Control *_Thread_Get_executing( void )
 
   executing = _Thread_Executing;
 
-  #if defined( RTEMS_SMP )
+  #if defined(RTEMS_SMP) && !defined(_CPU_Get_thread_executing)
     _ISR_Local_enable( level );
   #endif
 
@@ -743,14 +819,20 @@ RTEMS_INLINE_ROUTINE struct _Thread_Control *_Thread_Get_executing( void )
  */
 #define PER_CPU_ISR_NEST_LEVEL \
   PER_CPU_END_STACK
-#define PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL \
+#define PER_CPU_ISR_DISPATCH_DISABLE \
   PER_CPU_ISR_NEST_LEVEL + 4
-#define PER_CPU_OFFSET_EXECUTING \
+#define PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL \
+  PER_CPU_ISR_DISPATCH_DISABLE + 4
+#define PER_CPU_DISPATCH_NEEDED \
   PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL + 4
+#define PER_CPU_OFFSET_EXECUTING \
+  PER_CPU_DISPATCH_NEEDED + 4
 #define PER_CPU_OFFSET_HEIR \
   PER_CPU_OFFSET_EXECUTING + CPU_SIZEOF_POINTER
-#define PER_CPU_DISPATCH_NEEDED \
+#if defined(RTEMS_SMP)
+#define PER_CPU_INTERRUPT_FRAME_AREA \
   PER_CPU_OFFSET_HEIR + CPU_SIZEOF_POINTER
+#endif
 
 #define THREAD_DISPATCH_DISABLE_LEVEL \
   (SYM(_Per_CPU_Information) + PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL)

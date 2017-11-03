@@ -148,6 +148,7 @@ bool ns16550_probe(rtems_termios_device_context *base)
   /* Set the divisor latch and set the baud rate. */
 
   ulBaudDivisor = NS16550_GetBaudDivisor(ctx, ctx->initial_baud);
+  ctx->baud_divisor = ulBaudDivisor;
   ucDataByte = SP_LINE_DLAB;
   (*setReg)(pNS16550, NS16550_LINE_CONTROL, ucDataByte);
 
@@ -161,6 +162,7 @@ bool ns16550_probe(rtems_termios_device_context *base)
   /* Clear the divisor latch and set the character size to eight bits */
   /* with one stop bit and no parity checking. */
   ucDataByte = EIGHT_BITS;
+  ctx->line_control = ucDataByte;
   (*setReg)(pNS16550, NS16550_LINE_CONTROL, ucDataByte);
 
   /* Enable and reset transmit and receive FIFOs. TJA     */
@@ -188,7 +190,7 @@ static size_t ns16550_write_to_fifo(
   size_t len
 )
 {
-  uint32_t port = ctx->port;
+  uintptr_t port = ctx->port;
   ns16550_set_reg set = ctx->set_reg;
   size_t out = len > SP_FIFO_SIZE ? SP_FIFO_SIZE : len;
   size_t i;
@@ -207,7 +209,7 @@ static void ns16550_isr(void *arg)
 {
   rtems_termios_tty *tty = arg;
   ns16550_context *ctx = rtems_termios_get_device_context(tty);
-  uint32_t port = ctx->port;
+  uintptr_t port = ctx->port;
   ns16550_get_reg get = ctx->get_reg;
   int i = 0;
   char buf [SP_FIFO_SIZE];
@@ -277,7 +279,7 @@ static void ns16550_isr_task(void *arg)
 static int ns16550_read_task(rtems_termios_device_context *base)
 {
   ns16550_context *ctx = (ns16550_context *) base;
-  uint32_t port = ctx->port;
+  uintptr_t port = ctx->port;
   ns16550_get_reg get = ctx->get_reg;
   char buf[SP_FIFO_SIZE];
   int i;
@@ -585,7 +587,6 @@ static bool ns16550_set_attributes(
   uint8_t                 ucLineControl;
   uint32_t                baud_requested;
   ns16550_set_reg         setReg;
-  rtems_interrupt_lock_context lock_context;
 
   pNS16550 = ctx->port;
   setReg   = ctx->set_reg;
@@ -596,7 +597,7 @@ static bool ns16550_set_attributes(
    *  Assert ensures there is no division by 0.
    */
 
-  baud_requested = rtems_termios_baud_to_number(t->c_cflag);
+  baud_requested = rtems_termios_baud_to_number(t->c_ospeed);
   _Assert( baud_requested != 0 );
 
   ulBaudDivisor = NS16550_GetBaudDivisor(ctx, baud_requested);
@@ -642,7 +643,13 @@ static bool ns16550_set_attributes(
    *  Now actually set the chip
    */
 
-  rtems_termios_device_lock_acquire(base, &lock_context);
+  if (ulBaudDivisor != ctx->baud_divisor || ucLineControl != ctx->line_control) {
+    rtems_interrupt_lock_context lock_context;
+
+    ctx->baud_divisor = ulBaudDivisor;
+    ctx->line_control = ucLineControl;
+
+    rtems_termios_device_lock_acquire(base, &lock_context);
 
     /*
      *  Set the baud rate
@@ -661,7 +668,8 @@ static bool ns16550_set_attributes(
      */
     (*setReg)(pNS16550, NS16550_LINE_CONTROL, ucLineControl );
 
-  rtems_termios_device_lock_release(base, &lock_context);
+    rtems_termios_device_lock_release(base, &lock_context);
+  }
 
   return true;
 }

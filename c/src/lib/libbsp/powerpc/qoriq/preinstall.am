@@ -33,6 +33,16 @@ $(PROJECT_INCLUDE)/bsp/$(dirstamp):
 	@: > $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 PREINSTALL_DIRS += $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 
+$(PROJECT_INCLUDE)/asm/$(dirstamp):
+	@$(MKDIR_P) $(PROJECT_INCLUDE)/asm
+	@: > $(PROJECT_INCLUDE)/asm/$(dirstamp)
+PREINSTALL_DIRS += $(PROJECT_INCLUDE)/asm/$(dirstamp)
+
+$(PROJECT_INCLUDE)/uapi/asm/$(dirstamp):
+	@$(MKDIR_P) $(PROJECT_INCLUDE)/uapi/asm
+	@: > $(PROJECT_INCLUDE)/uapi/asm/$(dirstamp)
+PREINSTALL_DIRS += $(PROJECT_INCLUDE)/uapi/asm/$(dirstamp)
+
 $(PROJECT_LIB)/bsp_specs: bsp_specs $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/bsp_specs
 PREINSTALL_FILES += $(PROJECT_LIB)/bsp_specs
@@ -68,10 +78,6 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq-info.h
 $(PROJECT_INCLUDE)/bsp/bootcard.h: ../../shared/include/bootcard.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/bootcard.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/bootcard.h
-
-$(PROJECT_INCLUDE)/bsp/fdt.h: ../../shared/include/fdt.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/fdt.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/fdt.h
 
 $(PROJECT_INCLUDE)/bsp/utility.h: ../../shared/include/utility.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/utility.h
@@ -109,6 +115,18 @@ $(PROJECT_INCLUDE)/bsp/qoriq.h: include/qoriq.h $(PROJECT_INCLUDE)/bsp/$(dirstam
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/qoriq.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/qoriq.h
 
+$(PROJECT_INCLUDE)/asm/epapr_hcalls.h: include/asm/epapr_hcalls.h $(PROJECT_INCLUDE)/asm/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/asm/epapr_hcalls.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/asm/epapr_hcalls.h
+
+$(PROJECT_INCLUDE)/asm/fsl_hcalls.h: include/asm/fsl_hcalls.h $(PROJECT_INCLUDE)/asm/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/asm/fsl_hcalls.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/asm/fsl_hcalls.h
+
+$(PROJECT_INCLUDE)/uapi/asm/epapr_hcalls.h: include/uapi/asm/epapr_hcalls.h $(PROJECT_INCLUDE)/uapi/asm/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/uapi/asm/epapr_hcalls.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/uapi/asm/epapr_hcalls.h
+
 $(PROJECT_LIB)/start.$(OBJEXT): start.$(OBJEXT) $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/start.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/start.$(OBJEXT)
@@ -116,6 +134,10 @@ TMPINSTALL_FILES += $(PROJECT_LIB)/start.$(OBJEXT)
 $(PROJECT_LIB)/rtems_crti.$(OBJEXT): rtems_crti.$(OBJEXT) $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/rtems_crti.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/rtems_crti.$(OBJEXT)
+
+$(PROJECT_LIB)/rtems_crtn.$(OBJEXT): rtems_crtn.$(OBJEXT) $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/rtems_crtn.$(OBJEXT)
+TMPINSTALL_FILES += $(PROJECT_LIB)/rtems_crtn.$(OBJEXT)
 
 $(PROJECT_LIB)/linkcmds: startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds
@@ -133,15 +155,15 @@ $(PROJECT_LIB)/linkcmds.qoriq_core_1: startup/linkcmds.qoriq_core_1 $(PROJECT_LI
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_core_1
 PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_core_1
 
-$(PROJECT_LIB)/linkcmds.qoriq_p1020rdb: startup/linkcmds.qoriq_p1020rdb $(PROJECT_LIB)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_p1020rdb
-PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_p1020rdb
+$(PROJECT_LIB)/linkcmds.qoriq_e500: startup/linkcmds.qoriq_e500 $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_e500
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_e500
 
-$(PROJECT_LIB)/linkcmds.qoriq_t2080rdb: startup/linkcmds.qoriq_t2080rdb $(PROJECT_LIB)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_t2080rdb
-PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_t2080rdb
+$(PROJECT_LIB)/linkcmds.qoriq_e6500_32: startup/linkcmds.qoriq_e6500_32 $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_e6500_32
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_e6500_32
 
-$(PROJECT_LIB)/linkcmds.qoriq_t4240rdb: startup/linkcmds.qoriq_t4240rdb $(PROJECT_LIB)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_t4240rdb
-PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_t4240rdb
+$(PROJECT_LIB)/linkcmds.qoriq_e6500_64: startup/linkcmds.qoriq_e6500_64 $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qoriq_e6500_64
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qoriq_e6500_64
 

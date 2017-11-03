@@ -148,6 +148,8 @@ SECTIONS
       *(.rela.dtors)
       *(.rela.got)
       *(.rela.bss .rela.bss.* .rela.gnu.linkonce.b.*)
+      *(.rela.rtemsroset*)
+      *(.rela.rtemsrwset*)
     } >ram
   .data :
   {
@@ -162,6 +164,7 @@ SECTIONS
     edata = .;
     _edata = .;
   } > ram
+  _data_load_start = LOADADDR (.data);
   .rtemsrwset : {
     KEEP (*(SORT(.rtemsrwset.*)))
   } >ram

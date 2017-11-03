@@ -62,25 +62,6 @@ extern "C" {
 /* conditional compilation parameters */
 
 /*
- *  Should the calls to _Thread_Enable_dispatch be inlined?
- *
- *  If TRUE, then they are inlined.
- *  If FALSE, then a subroutine call is made.
- *
- *  Basically this is an example of the classic trade-off of size
- *  versus speed.  Inlining the call (TRUE) typically increases the
- *  size of RTEMS while speeding up the enabling of dispatching.
- *  [NOTE: In general, the _Thread_Dispatch_disable_level will
- *  only be 0 or 1 unless you are in an interrupt handler and that
- *  interrupt handler invokes the executive.]  When not inlined
- *  something calls _Thread_Enable_dispatch which in turns calls
- *  _Thread_Dispatch.  If the enable dispatch is inlined, then
- *  one subroutine call is avoided entirely.]
- */
-
-#define CPU_INLINE_ENABLE_DISPATCH       FALSE
-
-/*
  *  Does RTEMS manage a dedicated interrupt stack in software?
  *
  *  If TRUE, then a stack is allocated in _Interrupt_Manager_initialization.
@@ -155,7 +136,7 @@ extern "C" {
  *
  */
 
-#define CPU_ISR_PASSES_FRAME_POINTER 1
+#define CPU_ISR_PASSES_FRAME_POINTER TRUE
 
 
 
@@ -245,6 +226,8 @@ extern "C" {
 
 #define CPU_USE_DEFERRED_FP_SWITCH       TRUE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 /*
  *  Does this port provide a CPU dependent IDLE task implementation?
  *
@@ -286,22 +269,6 @@ extern "C" {
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
 
 /*
- *  Define what is required to specify how the network to host conversion
- *  routines are handled.
- */
-
-/* __MIPSEB__ or __MIPSEL__ is defined by GCC based on -EB or -EL command line options */
-#if defined(__MIPSEB__)
-#define CPU_BIG_ENDIAN                           TRUE
-#define CPU_LITTLE_ENDIAN                        FALSE
-#elif defined(__MIPSEL__)
-#define CPU_BIG_ENDIAN                           FALSE
-#define CPU_LITTLE_ENDIAN                        TRUE
-#else
-#error "Unknown endianness"
-#endif
-
-/*
  *  The following defines the number of bits actually used in the
  *  interrupt field of the task mode.  How those bits map to the
  *  CPU interrupt levels is defined by the routine _CPU_ISR_Set_level().
@@ -310,8 +277,6 @@ extern "C" {
 #define CPU_MODES_INTERRUPT_MASK   0x000000ff
 
 #define CPU_SIZEOF_POINTER 4
-
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 #define CPU_MAXIMUM_PROCESSORS 32
 
@@ -360,10 +325,6 @@ extern "C" {
  */
 
 #ifndef ASM
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 /* WARNING: If this structure is modified, the constants in cpu.h must be updated. */
 #if (__mips == 1) || (__mips == 32)
@@ -724,6 +685,11 @@ uint32_t mips_interrupt_mask( void );
     _xlevel = _scratch2; \
   } while(0)
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & SR_INTERRUPT_ENABLE_BITS ) != 0;
+}
+
 /*
  *  Map interrupt level in task mode onto the hardware that the CPU
  *  actually provides.  Currently, interrupt levels which do not
@@ -824,23 +790,6 @@ void _CPU_Context_Initialize(
 
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
-
-/*
- *  The purpose of this macro is to allow the initial pointer into
- *  A floating point context area (used to save the floating point
- *  context) to be at an arbitrary place in the floating point
- *  context area.
- *
- *  This is necessary because some FP units are designed to have
- *  their context saved as a stack which grows into lower addresses.
- *  Other FP units can be saved by simply moving registers into offsets
- *  from the base of the context area.  Finally some FP units provide
- *  a "dump context" instruction which could fill in from high to low
- *  or low to high based on the whim of the CPU designers.
- */
-
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
 /*
  *  This routine initializes the FP context area passed to it to.

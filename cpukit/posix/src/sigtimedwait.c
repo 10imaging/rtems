@@ -24,6 +24,8 @@
 #include <rtems/posix/psignalimpl.h>
 #include <rtems/posix/posixapi.h>
 #include <rtems/score/threadqimpl.h>
+#include <rtems/score/todimpl.h>
+#include <rtems/score/watchdogimpl.h>
 #include <rtems/score/isr.h>
 
 static int _POSIX_signals_Get_lowest(
@@ -71,10 +73,10 @@ int sigtimedwait(
 {
   Thread_Control       *executing;
   POSIX_API_Control    *api;
-  Watchdog_Interval     interval;
   siginfo_t             signal_information;
   siginfo_t            *the_info;
   int                   signo;
+  struct timespec       uptime;
   Thread_queue_Context  queue_context;
   int                   error;
 
@@ -84,20 +86,23 @@ int sigtimedwait(
   if ( !set )
     rtems_set_errno_and_return_minus_one( EINVAL );
 
+  _Thread_queue_Context_initialize( &queue_context );
+
   /*  NOTE: This is very specifically a RELATIVE not ABSOLUTE time
    *        in the Open Group specification.
    */
 
-  interval = 0;
-  if ( timeout ) {
+  if ( timeout != NULL ) {
+    const struct timespec *end;
 
-    if ( !_Timespec_Is_valid( timeout ) )
-      rtems_set_errno_and_return_minus_one( EINVAL );
-
-    interval = _Timespec_To_ticks( timeout );
-
-    if ( !interval )
-      rtems_set_errno_and_return_minus_one( EINVAL );
+    _TOD_Get_zero_based_uptime_as_timespec( &uptime );
+    end = _Watchdog_Future_timespec( &uptime, timeout );
+    _Thread_queue_Context_set_enqueue_timeout_monotonic_timespec(
+      &queue_context,
+      end
+    );
+  } else {
+    _Thread_queue_Context_set_enqueue_do_nothing_extra( &queue_context );
   }
 
   /*
@@ -115,7 +120,6 @@ int sigtimedwait(
 
   /* API signals pending? */
 
-  _Thread_queue_Context_initialize( &queue_context );
   _POSIX_signals_Acquire( &queue_context );
   if ( *set & api->signals_pending ) {
     /* XXX real info later */
@@ -152,13 +156,14 @@ int sigtimedwait(
 
   executing->Wait.option          = *set;
   executing->Wait.return_argument = the_info;
-  _Thread_queue_Context_set_expected_level( &queue_context, 1 );
-  _Thread_queue_Context_set_relative_timeout( &queue_context, interval );
-  _Thread_queue_Enqueue_critical(
+  _Thread_queue_Context_set_thread_state(
+    &queue_context,
+    STATES_WAITING_FOR_SIGNAL | STATES_INTERRUPTIBLE_BY_SIGNAL
+  );
+  _Thread_queue_Enqueue(
     &_POSIX_signals_Wait_queue.Queue,
     POSIX_SIGNALS_TQ_OPERATIONS,
     executing,
-    STATES_WAITING_FOR_SIGNAL | STATES_INTERRUPTIBLE_BY_SIGNAL,
     &queue_context
   );
 

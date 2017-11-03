@@ -32,8 +32,6 @@ extern "C" {
 
 /* conditional compilation parameters */
 
-#define CPU_INLINE_ENABLE_DISPATCH       TRUE
-
 /*
  *  Does the CPU follow the simple vectored interrupt model?
  *
@@ -62,7 +60,7 @@ extern "C" {
  *  number (0)?
  */
 
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 /*
  *  Some family members have no FP, some have an FPU such as the i387
@@ -94,6 +92,8 @@ extern "C" {
 #endif
 #endif /* __SSE__ */
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 #define CPU_STACK_GROWS_UP               FALSE
 
 /* FIXME: The Pentium 4 used 128 bytes, it this processor still relevant? */
@@ -114,16 +114,6 @@ extern "C" {
 
 #define CPU_PROVIDES_IDLE_THREAD_BODY    FALSE
 
-/*
- *  Define what is required to specify how the network to host conversion
- *  routines are handled.
- */
-
-#define CPU_BIG_ENDIAN                           FALSE
-#define CPU_LITTLE_ENDIAN                        TRUE
-
-#define CPU_PER_CPU_CONTROL_SIZE 0
-
 #define CPU_MAXIMUM_PROCESSORS 32
 
 #define I386_CONTEXT_CONTROL_EFLAGS_OFFSET 0
@@ -132,30 +122,29 @@ extern "C" {
 #define I386_CONTEXT_CONTROL_EBX_OFFSET 12
 #define I386_CONTEXT_CONTROL_ESI_OFFSET 16
 #define I386_CONTEXT_CONTROL_EDI_OFFSET 20
+#define I386_CONTEXT_CONTROL_GS_0_OFFSET 24
+#define I386_CONTEXT_CONTROL_GS_1_OFFSET 28
 
 #ifdef RTEMS_SMP
-  #define I386_CONTEXT_CONTROL_IS_EXECUTING_OFFSET 24
+  #define I386_CONTEXT_CONTROL_IS_EXECUTING_OFFSET 32
 #endif
 
 /* structures */
 
 #ifndef ASM
 
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
-
 /*
  *  Basic integer context for the i386 family.
  */
 
 typedef struct {
-  uint32_t    eflags;   /* extended flags register                   */
-  void       *esp;      /* extended stack pointer register           */
-  void       *ebp;      /* extended base pointer register            */
-  uint32_t    ebx;      /* extended bx register                      */
-  uint32_t    esi;      /* extended source index register            */
-  uint32_t    edi;      /* extended destination index flags register */
+  uint32_t    eflags;     /* extended flags register                   */
+  void       *esp;        /* extended stack pointer register           */
+  void       *ebp;        /* extended base pointer register            */
+  uint32_t    ebx;        /* extended bx register                      */
+  uint32_t    esi;        /* extended source index register            */
+  uint32_t    edi;        /* extended destination index flags register */
+  segment_descriptors gs; /* gs segment descriptor                     */
 #ifdef RTEMS_SMP
   volatile bool is_executing;
 #endif
@@ -411,6 +400,11 @@ extern Context_Control_fp _CPU_Null_fp_context;
 #define _CPU_ISR_Set_level( _new_level ) i386_set_interrupt_level(_new_level)
 #endif
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & EFLAGS_INTR_ENABLE ) != 0;
+}
+
 uint32_t   _CPU_ISR_Get_level( void );
 
 /*  Make sure interrupt stack has space for ISR
@@ -442,52 +436,15 @@ uint32_t   _CPU_ISR_Get_level( void );
 
 #ifndef ASM
 
-/*
- * Stack alignment note:
- *
- * We want the stack to look to the '_entry_point' routine
- * like an ordinary stack frame as if '_entry_point' was
- * called from C-code.
- * Note that '_entry_point' is jumped-to by the 'ret'
- * instruction returning from _CPU_Context_switch() or
- * _CPU_Context_restore() thus popping the _entry_point
- * from the stack.
- * However, _entry_point expects a frame to look like this:
- *
- *      args        [_Thread_Handler expects no args, however]
- *      ------      (alignment boundary)
- * SP-> return_addr return here when _entry_point returns which (never happens)
- *
- *
- * Hence we must initialize the stack as follows
- *
- *         [arg1          ]:  n/a
- *         [arg0 (aligned)]:  n/a
- *         [ret. addr     ]:  NULL
- * SP->    [jump-target   ]:  _entry_point
- *
- * When Context_switch returns it pops the _entry_point from
- * the stack which then finds a standard layout.
- */
-
-
-
-#define _CPU_Context_Initialize( _the_context, _stack_base, _size, \
-                                   _isr, _entry_point, _is_fp, _tls_area ) \
-  do { \
-    uint32_t   _stack; \
-    \
-    (void) _is_fp; /* avoid warning for being unused */ \
-    if ( (_isr) ) (_the_context)->eflags = CPU_EFLAGS_INTERRUPTS_OFF; \
-    else          (_the_context)->eflags = CPU_EFLAGS_INTERRUPTS_ON; \
-    \
-    _stack  = ((uint32_t)(_stack_base)) + (_size); \
-	_stack &= ~ (CPU_STACK_ALIGNMENT - 1); \
-    _stack -= 2*sizeof(proc_ptr*); /* see above for why we need to do this */ \
-    *((proc_ptr *)(_stack)) = (_entry_point); \
-    (_the_context)->ebp     = (void *) 0; \
-    (_the_context)->esp     = (void *) _stack; \
-  } while (0)
+void _CPU_Context_Initialize(
+  Context_Control *the_context,
+  void *stack_area_begin,
+  size_t stack_area_size,
+  uint32_t new_level,
+  void (*entry_point)( void ),
+  bool is_fp,
+  void *tls_area
+);
 
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
@@ -516,9 +473,6 @@ uint32_t   _CPU_ISR_Get_level( void );
     __asm__ volatile ( "" : : : "memory" );
   }
 #endif
-
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
 #define _CPU_Context_Initialize_fp( _fp_area ) \
   { \

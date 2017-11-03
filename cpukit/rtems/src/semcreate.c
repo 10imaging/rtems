@@ -148,16 +148,13 @@ rtems_status_code rtems_semaphore_create(
           &the_semaphore->Core_control.Mutex.Recursive.Mutex,
           executing
         );
-
-        if ( variant == SEMAPHORE_VARIANT_MUTEX_INHERIT_PRIORITY ) {
-          ++executing->resource_count;
-        }
+        _Thread_Resource_count_increment( executing );
       }
 
       status = STATUS_SUCCESSFUL;
       break;
     case SEMAPHORE_VARIANT_MUTEX_PRIORITY_CEILING:
-      scheduler = _Scheduler_Get_own( executing );
+      scheduler = _Thread_Scheduler_get_home( executing );
       priority = _RTEMS_Priority_To_core( scheduler, priority_ceiling, &valid );
 
       if ( valid ) {
@@ -171,6 +168,7 @@ rtems_status_code rtems_semaphore_create(
           Thread_queue_Context queue_context;
 
           _Thread_queue_Context_initialize( &queue_context );
+          _Thread_queue_Context_clear_priority_updates( &queue_context );
           _ISR_lock_ISR_disable( &queue_context.Lock_context.Lock_context );
           _CORE_mutex_Acquire_critical(
             &the_semaphore->Core_control.Mutex.Recursive.Mutex,
@@ -195,7 +193,7 @@ rtems_status_code rtems_semaphore_create(
       break;
 #if defined(RTEMS_SMP)
     case SEMAPHORE_VARIANT_MRSP:
-      scheduler = _Scheduler_Get_own( executing );
+      scheduler = _Thread_Scheduler_get_home( executing );
       priority = _RTEMS_Priority_To_core( scheduler, priority_ceiling, &valid );
 
       if ( valid ) {

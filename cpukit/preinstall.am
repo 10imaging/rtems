@@ -18,6 +18,10 @@ $(PROJECT_INCLUDE)/$(dirstamp):
 	@: > $(PROJECT_INCLUDE)/$(dirstamp)
 PREINSTALL_DIRS += $(PROJECT_INCLUDE)/$(dirstamp)
 
+$(PROJECT_INCLUDE)/endian.h: include/endian.h $(PROJECT_INCLUDE)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/endian.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/endian.h
+
 $(PROJECT_INCLUDE)/rtems/$(dirstamp):
 	@$(MKDIR_P) $(PROJECT_INCLUDE)/rtems
 	@: > $(PROJECT_INCLUDE)/rtems/$(dirstamp)
@@ -59,25 +63,13 @@ $(PROJECT_INCLUDE)/memory.h: include/memory.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/memory.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/memory.h
 
-$(PROJECT_INCLUDE)/sys/mman.h: posix/include/sys/mman.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/mman.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/mman.h
-
-$(PROJECT_INCLUDE)/sys/ioccom.h: libcsupport/include/sys/ioccom.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ioccom.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ioccom.h
+$(PROJECT_INCLUDE)/xz.h: libmisc/xz/xz.h $(PROJECT_INCLUDE)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/xz.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/xz.h
 
 $(PROJECT_INCLUDE)/sys/event.h: libcsupport/include/sys/event.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/event.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/event.h
-
-$(PROJECT_INCLUDE)/sys/filio.h: libcsupport/include/sys/filio.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/filio.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/filio.h
-
-$(PROJECT_INCLUDE)/sys/ioctl.h: libcsupport/include/sys/ioctl.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ioctl.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ioctl.h
 
 $(PROJECT_INCLUDE)/sys/poll.h: libcsupport/include/sys/poll.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/poll.h
@@ -87,18 +79,6 @@ $(PROJECT_INCLUDE)/sys/statvfs.h: libcsupport/include/sys/statvfs.h $(PROJECT_IN
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/statvfs.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/statvfs.h
 
-$(PROJECT_INCLUDE)/sys/sockio.h: libcsupport/include/sys/sockio.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/sockio.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/sockio.h
-
-$(PROJECT_INCLUDE)/sys/ttycom.h: libcsupport/include/sys/ttycom.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ttycom.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ttycom.h
-
-$(PROJECT_INCLUDE)/sys/termios.h: libcsupport/include/sys/termios.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/termios.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/termios.h
-
 $(PROJECT_INCLUDE)/sys/utsname.h: libcsupport/include/sys/utsname.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/utsname.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/utsname.h
@@ -107,18 +87,51 @@ $(PROJECT_INCLUDE)/sys/endian.h: include/sys/endian.h $(PROJECT_INCLUDE)/sys/$(d
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/endian.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/endian.h
 
-$(PROJECT_INCLUDE)/sys/uio.h: include/sys/uio.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/uio.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/uio.h
-
-$(PROJECT_INCLUDE)/sys/_iovec.h: include/sys/_iovec.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/_iovec.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/_iovec.h
-
 $(PROJECT_INCLUDE)/sys/priority.h: include/sys/priority.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/priority.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/priority.h
 
+if !HAS_NEWLIB_20170522_HEADER
+$(PROJECT_INCLUDE)/sys/_iovec.h: include/sys/_iovec.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/_iovec.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/_iovec.h
+
+$(PROJECT_INCLUDE)/sys/uio.h: include/sys/uio.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/uio.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/uio.h
+
+$(PROJECT_INCLUDE)/sys/filio.h: libcsupport/include/sys/filio.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/filio.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/filio.h
+
+$(PROJECT_INCLUDE)/sys/ioccom.h: libcsupport/include/sys/ioccom.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ioccom.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ioccom.h
+
+$(PROJECT_INCLUDE)/sys/ioctl.h: libcsupport/include/sys/ioctl.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ioctl.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ioctl.h
+
+$(PROJECT_INCLUDE)/sys/sockio.h: libcsupport/include/sys/sockio.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/sockio.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/sockio.h
+
+$(PROJECT_INCLUDE)/sys/_termios.h: libcsupport/include/sys/_termios.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/_termios.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/_termios.h
+
+$(PROJECT_INCLUDE)/sys/termios.h: libcsupport/include/sys/termios.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/termios.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/termios.h
+
+$(PROJECT_INCLUDE)/sys/ttycom.h: libcsupport/include/sys/ttycom.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ttycom.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ttycom.h
+
+$(PROJECT_INCLUDE)/sys/ttydefaults.h: libcsupport/include/sys/ttydefaults.h $(PROJECT_INCLUDE)/sys/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/sys/ttydefaults.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/sys/ttydefaults.h
+endif
 if LIBNETWORKING
 $(PROJECT_INCLUDE)/rtems/bsdnet/$(dirstamp):
 	@$(MKDIR_P) $(PROJECT_INCLUDE)/rtems/bsdnet
@@ -224,9 +237,31 @@ $(PROJECT_INCLUDE)/rtems/rtl/rap-shell.h: libdl/rap-shell.h $(PROJECT_INCLUDE)/r
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/rtl/rap-shell.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/rtl/rap-shell.h
 endif
+if LIBDEBUGGER
+$(PROJECT_INCLUDE)/rtems/rtems-debugger.h: libdebugger/rtems-debugger.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/rtems-debugger.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/rtems-debugger.h
+
+$(PROJECT_INCLUDE)/rtems/debugger/$(dirstamp):
+	@$(MKDIR_P) $(PROJECT_INCLUDE)/rtems/debugger
+	@: > $(PROJECT_INCLUDE)/rtems/debugger/$(dirstamp)
+PREINSTALL_DIRS += $(PROJECT_INCLUDE)/rtems/debugger/$(dirstamp)
+
+$(PROJECT_INCLUDE)/rtems/debugger/rtems-debugger-server.h: libdebugger/rtems-debugger-server.h $(PROJECT_INCLUDE)/rtems/debugger/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/debugger/rtems-debugger-server.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/debugger/rtems-debugger-server.h
+
+$(PROJECT_INCLUDE)/rtems/debugger/rtems-debugger-remote.h: libdebugger/rtems-debugger-remote.h $(PROJECT_INCLUDE)/rtems/debugger/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/debugger/rtems-debugger-remote.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/debugger/rtems-debugger-remote.h
+endif
 $(PROJECT_INCLUDE)/rtems/bspIo.h: include/rtems/bspIo.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/bspIo.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/bspIo.h
+
+$(PROJECT_INCLUDE)/rtems/inttypes.h: include/rtems/inttypes.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/inttypes.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/inttypes.h
 
 $(PROJECT_INCLUDE)/rtems/print.h: include/rtems/print.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/print.h
@@ -480,6 +515,14 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/devzero.h
 $(PROJECT_INCLUDE)/rtems/dumpbuf.h: libmisc/dumpbuf/dumpbuf.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/dumpbuf.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/dumpbuf.h
+
+$(PROJECT_INCLUDE)/rtems/rtems-fdt.h: libmisc/rtems-fdt/rtems-fdt.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/rtems-fdt.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/rtems-fdt.h
+
+$(PROJECT_INCLUDE)/rtems/rtems-fdt-shell.h: libmisc/rtems-fdt/rtems-fdt-shell.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/rtems-fdt-shell.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/rtems/rtems-fdt-shell.h
 
 $(PROJECT_INCLUDE)/rtems/monitor.h: libmisc/monitor/monitor.h $(PROJECT_INCLUDE)/rtems/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/rtems/monitor.h

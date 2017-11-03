@@ -18,6 +18,17 @@
 
 #include <rtems/score/cpu.h>
 #include <bsp/irq.h>
+#include <bsp/tblsizes.h>
+
+/*
+ * This locking is not enough if IDT is changed at runtime
+ * and entry can be changed for vector which is enabled
+ * at change time. But such use is broken anyway.
+ * Protect code only against concurrent changes.
+ * Even that is probably unnecessary if different
+ * entries are changed concurrently.
+ */
+RTEMS_INTERRUPT_LOCK_DEFINE( static, rtems_idt_access_lock, "rtems_idt_access_lock" );
 
 static rtems_raw_irq_connect_data* 	raw_irq_table;
 static rtems_raw_irq_connect_data  	default_raw_irq_entry;
@@ -60,7 +71,7 @@ int i386_set_idt_entry  (const rtems_raw_irq_connect_data* irq)
 {
     interrupt_gate_descriptor* 	idt_entry_tbl;
     unsigned			limit;
-    rtems_interrupt_level       level;
+    rtems_interrupt_lock_context lock_context;
 
     i386_get_info_from_IDTR (&idt_entry_tbl, &limit);
 
@@ -81,14 +92,14 @@ int i386_set_idt_entry  (const rtems_raw_irq_connect_data* irq)
       return 0;
     }
 
-    rtems_interrupt_disable(level);
+    rtems_interrupt_lock_acquire(&rtems_idt_access_lock, &lock_context);
 
     raw_irq_table [irq->idtIndex] = *irq;
     create_interrupt_gate_descriptor (&idt_entry_tbl[irq->idtIndex], irq->hdl);
     if (irq->on)
       irq->on(irq);
 
-    rtems_interrupt_enable(level);
+    rtems_interrupt_lock_release(&rtems_idt_access_lock, &lock_context);
     return 1;
 }
 
@@ -99,7 +110,7 @@ void _CPU_ISR_install_vector (uint32_t vector,
     interrupt_gate_descriptor* 	idt_entry_tbl;
     unsigned			limit;
     interrupt_gate_descriptor	new;
-    rtems_interrupt_level       level;
+    rtems_interrupt_lock_context lock_context;
 
     i386_get_info_from_IDTR (&idt_entry_tbl, &limit);
 
@@ -109,14 +120,14 @@ void _CPU_ISR_install_vector (uint32_t vector,
     if (vector >= limit) {
       return;
     }
-    rtems_interrupt_disable(level);
+    rtems_interrupt_lock_acquire(&rtems_idt_access_lock, &lock_context);
     * ((unsigned int *) oldHdl) = idt_entry_tbl[vector].low_offsets_bits |
 	(idt_entry_tbl[vector].high_offsets_bits << 16);
 
     create_interrupt_gate_descriptor(&new,  hdl);
     idt_entry_tbl[vector] = new;
 
-    rtems_interrupt_enable(level);
+    rtems_interrupt_lock_release(&rtems_idt_access_lock, &lock_context);
 }
 
 int i386_get_current_idt_entry (rtems_raw_irq_connect_data* irq)
@@ -143,7 +154,7 @@ int i386_delete_idt_entry (const rtems_raw_irq_connect_data* irq)
 {
     interrupt_gate_descriptor* 	idt_entry_tbl;
     unsigned			limit;
-    rtems_interrupt_level       level;
+    rtems_interrupt_lock_context lock_context;
 
     i386_get_info_from_IDTR (&idt_entry_tbl, &limit);
 
@@ -163,7 +174,7 @@ int i386_delete_idt_entry (const rtems_raw_irq_connect_data* irq)
     if (get_hdl_from_vector(irq->idtIndex) != irq->hdl){
       return 0;
     }
-    rtems_interrupt_disable(level);
+    rtems_interrupt_lock_acquire(&rtems_idt_access_lock, &lock_context);
 
     idt_entry_tbl[irq->idtIndex] = default_idt_entry;
 
@@ -173,7 +184,7 @@ int i386_delete_idt_entry (const rtems_raw_irq_connect_data* irq)
     raw_irq_table[irq->idtIndex] = default_raw_irq_entry;
     raw_irq_table[irq->idtIndex].idtIndex = irq->idtIndex;
 
-    rtems_interrupt_enable(level);
+    rtems_interrupt_lock_release(&rtems_idt_access_lock, &lock_context);
 
     return 1;
 }
@@ -185,7 +196,7 @@ int i386_init_idt (rtems_raw_irq_global_settings* config)
 {
     unsigned			limit;
     unsigned 			i;
-    rtems_interrupt_level       level;
+    rtems_interrupt_lock_context lock_context;
     interrupt_gate_descriptor*	idt_entry_tbl;
 
     i386_get_info_from_IDTR (&idt_entry_tbl, &limit);
@@ -203,7 +214,7 @@ int i386_init_idt (rtems_raw_irq_global_settings* config)
     local_settings 		= config;
     default_raw_irq_entry 	= config->defaultRawEntry;
 
-    rtems_interrupt_disable(level);
+    rtems_interrupt_lock_acquire(&rtems_idt_access_lock, &lock_context);
 
     create_interrupt_gate_descriptor (&default_idt_entry, default_raw_irq_entry.hdl);
 
@@ -218,7 +229,7 @@ int i386_init_idt (rtems_raw_irq_global_settings* config)
 	raw_irq_table[i].off(&raw_irq_table[i]);
       }
     }
-    rtems_interrupt_enable(level);
+    rtems_interrupt_lock_release(&rtems_idt_access_lock, &lock_context);
 
     return 1;
 }
@@ -321,7 +332,7 @@ uint16_t i386_next_empty_gdt_entry ()
     uint16_t                gdt_limit;
     segment_descriptors*    gdt_entry_tbl;
     /* initial amount of filled descriptors */
-    static uint16_t         segment_selector_index = 2;
+    static uint16_t         segment_selector_index = NUM_SYSTEM_GDT_DESCRIPTORS - 1;
 
     segment_selector_index += 1;
     i386_get_info_from_GDTR (&gdt_entry_tbl, &gdt_limit);

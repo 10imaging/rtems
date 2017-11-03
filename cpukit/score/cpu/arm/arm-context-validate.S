@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2013, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -44,9 +44,10 @@
   #define FRAME_SIZE (FRAME_OFFSET_LR + 4)
 #endif
 
+	.syntax	unified
 	.section	.text
 
-#ifdef __thumb__
+#ifdef __thumb2__
 FUNCTION_THUMB_ENTRY(_CPU_Context_validate)
 #else
 FUNCTION_ENTRY(_CPU_Context_validate)
@@ -103,11 +104,7 @@ FUNCTION_ENTRY(_CPU_Context_validate)
 #ifdef ARM_MULTILIB_VFP
 	/* R3 contains the FPSCR */
 	vmrs	r3, FPSCR
-#ifdef ARM_MULTILIB_ARCH_V7M
 	ldr	r4, =0xf000001f
-#else
-	ldr	r4, =0xf800001f
-#endif
 	bic	r3, r3, r4
 	and	r4, r4, r0
 	orr	r3, r3, r4
@@ -178,10 +175,33 @@ check:
 	bne	restore
 .endm
 
-	cmp	r2, sp
+	/* A compare involving the stack pointer is deprecated */
+	mov	r1, sp
+	cmp	r2, r1
 	bne	restore
 
 	mov	r1, r0
+
+#ifdef __thumb2__
+	cmp	r1, r1
+	itttt	eq
+	addeq	r1, #1
+	addeq	r1, #2
+	addeq	r1, #4
+	addeq	r1, #8
+	subs	r1, #15
+	cmp	r1, r0
+	bne	restore
+	cmp	r1, r1
+	iteee	eq
+	addeq	r1, #1
+	addne	r1, #2
+	addne	r1, #4
+	addne	r1, #8
+	subs	r1, #1
+	cmp	r1, r0
+	bne	restore
+#endif
 
 #ifndef ARM_MULTILIB_VFP
 	check_register	r3

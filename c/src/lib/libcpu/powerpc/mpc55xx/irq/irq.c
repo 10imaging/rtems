@@ -113,9 +113,9 @@ rtems_status_code mpc55xx_interrupt_handler_install(
 	}
 }
 
-static void mpc55xx_interrupt_dispatch(void)
+void bsp_interrupt_dispatch(uintptr_t exception_number)
 {
-	/* Acknowlege interrupt request */
+	/* Acknowledge interrupt request */
 	rtems_vector_number vector = INTC.IACKR.B.INTVEC;
 
 	/* Save machine state and enable external exceptions */
@@ -131,37 +131,9 @@ static void mpc55xx_interrupt_dispatch(void)
 	INTC.EOIR.R = 1;
 }
 
-#ifndef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-
-/**
- * @brief External exception handler.
- */
-static int mpc55xx_external_exception_handler( BSP_Exception_frame *frame, unsigned exception_number)
-{
-	mpc55xx_interrupt_dispatch();
-
-	return 0;
-}
-
-#else /* PPC_EXC_CONFIG_USE_FIXED_HANDLER */
-
-void bsp_interrupt_dispatch(void)
-{
-	mpc55xx_interrupt_dispatch();
-}
-
-#endif /* PPC_EXC_CONFIG_USE_FIXED_HANDLER */
-
 rtems_status_code bsp_interrupt_facility_initialize(void)
 {
 	rtems_vector_number vector;
-
-#ifndef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	/* Install exception handler */
-	if (ppc_exc_set_handler( ASM_EXT_VECTOR, mpc55xx_external_exception_handler)) {
-		return RTEMS_IO_ERROR;
-	}
-#endif
 
 	/* Initialize interrupt controller */
 
@@ -180,20 +152,14 @@ rtems_status_code bsp_interrupt_facility_initialize(void)
 	return RTEMS_SUCCESSFUL;
 }
 
-rtems_status_code bsp_interrupt_vector_enable( rtems_vector_number vector)
+void bsp_interrupt_vector_enable( rtems_vector_number vector)
 {
-	if (MPC55XX_IRQ_IS_VALID( vector)) {
-		return mpc55xx_intc_set_priority( vector, MPC55XX_INTC_DEFAULT_PRIORITY);
-	} else {
-		return RTEMS_SUCCESSFUL;
-	}
+	bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
+	mpc55xx_intc_set_priority( vector, MPC55XX_INTC_DEFAULT_PRIORITY);
 }
 
-rtems_status_code bsp_interrupt_vector_disable( rtems_vector_number vector)
+void bsp_interrupt_vector_disable( rtems_vector_number vector)
 {
-	if (MPC55XX_IRQ_IS_VALID( vector)) {
-		return mpc55xx_intc_set_priority( vector, MPC55XX_INTC_DISABLED_PRIORITY);
-	} else {
-		return RTEMS_SUCCESSFUL;
-	}
+	bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
+	mpc55xx_intc_set_priority( vector, MPC55XX_INTC_DISABLED_PRIORITY);
 }

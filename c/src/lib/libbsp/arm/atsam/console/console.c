@@ -21,6 +21,8 @@
 
 #include <chip.h>
 
+#include <unistd.h>
+
 typedef struct {
   rtems_termios_device_context base;
   Usart *regs;
@@ -86,7 +88,7 @@ static bool atsam_usart_set_attributes(
   rtems_termios_baud_t baud;
   uint32_t mr;
 
-  baud = rtems_termios_baud_to_number(term->c_cflag);
+  baud = rtems_termios_baud_to_number(term->c_ospeed);
   regs->US_BRGR = (BOARD_MCK / baud) / 16;
 
   if ((term->c_cflag & CREAD) != 0) {
@@ -325,7 +327,7 @@ static bool atsam_uart_set_attributes(
   rtems_termios_baud_t baud;
   uint32_t mr;
 
-  baud = rtems_termios_baud_to_number(term->c_cflag);
+  baud = rtems_termios_baud_to_number(term->c_ospeed);
   regs->UART_BRGR = (BOARD_MCK / baud) / 16;
 
   if ((term->c_cflag & CREAD) != 0) {
@@ -488,8 +490,6 @@ rtems_status_code console_initialize(
     usart[sizeof(usart) - 2] = (char) ('0' + i);
     rtems_termios_device_install(
       &usart[0],
-      major,
-      minor,
       &atsam_usart_handler,
       NULL,
       &atsam_usart_instances[i].base
@@ -498,11 +498,9 @@ rtems_status_code console_initialize(
 #if ATSAM_CONSOLE_DEVICE_TYPE == 0
     if (i == ATSAM_CONSOLE_DEVICE_INDEX) {
       atsam_usart_instances[i].console = true;
-      rtems_io_register_name(CONSOLE_DEVICE_NAME, major, minor);
+      link(&usart[0], CONSOLE_DEVICE_NAME);
     }
 #endif
-
-    ++minor;
   }
 
   for (i = 0; i < RTEMS_ARRAY_SIZE(atsam_uart_instances); ++i) {
@@ -511,8 +509,6 @@ rtems_status_code console_initialize(
     uart[sizeof(uart) - 2] = (char) ('0' + i);
     rtems_termios_device_install(
       &uart[0],
-      major,
-      minor,
       &atsam_uart_handler,
       NULL,
       &atsam_uart_instances[i].base
@@ -521,11 +517,9 @@ rtems_status_code console_initialize(
 #if ATSAM_CONSOLE_DEVICE_TYPE == 1
     if (i == ATSAM_CONSOLE_DEVICE_INDEX) {
       atsam_uart_instances[i].console = true;
-      rtems_io_register_name(CONSOLE_DEVICE_NAME, major, minor);
+      link(&uart[0], CONSOLE_DEVICE_NAME);
     }
 #endif
-
-    ++minor;
   }
 
   return RTEMS_SUCCESSFUL;

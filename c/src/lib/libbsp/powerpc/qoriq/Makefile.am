@@ -3,6 +3,8 @@ ACLOCAL_AMFLAGS = -I ../../../../aclocal
 include $(top_srcdir)/../../../../automake/compile.am
 
 include_bspdir = $(includedir)/bsp
+include_asmdir = $(includedir)/asm
+include_uapi_asmdir = $(includedir)/uapi/asm
 
 dist_project_lib_DATA = bsp_specs
 
@@ -22,7 +24,6 @@ include_bsp_HEADERS = include/irq.h \
 	../../shared/include/irq-generic.h \
 	../../shared/include/irq-info.h \
 	../../shared/include/bootcard.h \
-	../../shared/include/fdt.h \
 	../../shared/include/utility.h \
 	../shared/include/start.h \
 	../shared/include/tictac.h \
@@ -33,6 +34,13 @@ include_bsp_HEADERS = include/irq.h \
 	include/uart-bridge.h \
 	include/qoriq.h
 
+include_asm_HEADERS =
+include_asm_HEADERS += include/asm/epapr_hcalls.h
+include_asm_HEADERS += include/asm/fsl_hcalls.h
+
+include_uapi_asm_HEADERS =
+include_uapi_asm_HEADERS += include/uapi/asm/epapr_hcalls.h
+
 noinst_LIBRARIES = libbspstart.a
 libbspstart_a_SOURCES = start/start.S
 project_lib_DATA = start.$(OBJEXT)
@@ -40,13 +48,16 @@ project_lib_DATA = start.$(OBJEXT)
 libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
+libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crtn.S
+project_lib_DATA += rtems_crtn.$(OBJEXT)
+
 dist_project_lib_DATA += startup/linkcmds \
 	../shared/startup/linkcmds.base \
 	startup/linkcmds.qoriq_core_0 \
 	startup/linkcmds.qoriq_core_1 \
-	startup/linkcmds.qoriq_p1020rdb \
-	startup/linkcmds.qoriq_t2080rdb \
-	startup/linkcmds.qoriq_t4240rdb
+	startup/linkcmds.qoriq_e500 \
+	startup/linkcmds.qoriq_e6500_32 \
+	startup/linkcmds.qoriq_e6500_64
 
 noinst_LIBRARIES += libbsp.a
 libbsp_a_SOURCES =
@@ -57,12 +68,12 @@ libbsp_a_SOURCES += \
 	../../shared/sbrk.c \
 	../../shared/gnatinstallhandler.c \
 	../../shared/bspclean.c \
-	../../shared/bspgetworkarea.c \
 	../../shared/src/bsp-fdt.c \
 	../shared/src/ppc-exc-handler-table.c \
 	../shared/src/tictac.c \
 	../shared/src/bsp-start-zero.S \
 	../shared/startup/bspidle.c \
+	startup/epapr_hcalls.S \
 	startup/l1cache.S \
 	startup/l2cache.S \
 	startup/mmu.c \

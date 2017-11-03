@@ -16,44 +16,40 @@ include_rtems_posixdir = $(includedir)/rtems/posix
 include_rtems_posix_HEADERS = include/rtems/posix/sigset.h
 
 ## Some POSIX threads features are needed all the time
+include_rtems_posix_HEADERS += include/rtems/posix/barrierimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/condimpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/key.h
 include_rtems_posix_HEADERS += include/rtems/posix/keyimpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/config.h
+include_rtems_posix_HEADERS += include/rtems/posix/muteximpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/posixapi.h
 include_rtems_posix_HEADERS += include/rtems/posix/priorityimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/pthreadattrimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/rwlockimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/semaphore.h
+include_rtems_posix_HEADERS += include/rtems/posix/semaphoreimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/spinlockimpl.h
 
 if HAS_PTHREADS
 # include
 include_HEADERS = include/aio.h
 include_HEADERS += include/mqueue.h
-if !HAVE_SEMAPHORE_H
-include_HEADERS += include/semaphore.h
-endif
 
 # include/rtems/posix
 include_rtems_posix_HEADERS += include/rtems/posix/aio_misc.h
-include_rtems_posix_HEADERS += include/rtems/posix/cond.h
-include_rtems_posix_HEADERS += include/rtems/posix/condimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/mmanimpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/mqueue.h
 include_rtems_posix_HEADERS += include/rtems/posix/mqueueimpl.h
-include_rtems_posix_HEADERS += include/rtems/posix/mutex.h
-include_rtems_posix_HEADERS += include/rtems/posix/muteximpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/psignal.h
 include_rtems_posix_HEADERS += include/rtems/posix/psignalimpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/pthread.h
 include_rtems_posix_HEADERS += include/rtems/posix/pthreadimpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/ptimer.h
-include_rtems_posix_HEADERS += include/rtems/posix/semaphore.h
-include_rtems_posix_HEADERS += include/rtems/posix/semaphoreimpl.h
+include_rtems_posix_HEADERS += include/rtems/posix/shm.h
+include_rtems_posix_HEADERS += include/rtems/posix/shmimpl.h
 include_rtems_posix_HEADERS += include/rtems/posix/threadsup.h
 include_rtems_posix_HEADERS += include/rtems/posix/timer.h
 include_rtems_posix_HEADERS += include/rtems/posix/timerimpl.h
-include_rtems_posix_HEADERS += include/rtems/posix/barrier.h
-include_rtems_posix_HEADERS += include/rtems/posix/barrierimpl.h
-include_rtems_posix_HEADERS += include/rtems/posix/rwlock.h
-include_rtems_posix_HEADERS += include/rtems/posix/rwlockimpl.h
-include_rtems_posix_HEADERS += include/rtems/posix/spinlock.h
-include_rtems_posix_HEADERS += include/rtems/posix/spinlockimpl.h
 
 ## src
 libposix_a_SOURCES += src/aio_cancel.c src/aio_error.c src/aio_fsync.c \
@@ -66,34 +62,76 @@ endif
 libposix_a_SOURCES += src/fork.c src/vfork.c
 
 libposix_a_SOURCES += src/wait.c src/waitpid.c
-
-if HAS_PTHREADS
-libposix_a_SOURCES +=  src/pthreadatfork.c
+libposix_a_SOURCES += src/pthreadgetnamenp.c
+libposix_a_SOURCES += src/pthreadsetnamenp.c
 
 ## BARRIER_C_FILES
 libposix_a_SOURCES += src/barrierattrdestroy.c src/barrierattrgetpshared.c \
-    src/barrierattrinit.c src/barrierattrsetpshared.c src/pbarrier.c \
+    src/barrierattrinit.c src/barrierattrsetpshared.c \
     src/pbarrierdestroy.c src/pbarrierinit.c \
     src/pbarrierwait.c
 
-## CANCEL_C_FILES
-libposix_a_SOURCES += src/cancel.c \
-    src/cleanuppush.c src/setcancelstate.c \
-    src/setcanceltype.c src/testcancel.c
-
 ## CONDITION_VARIABLE_C_FILES
-libposix_a_SOURCES += src/cond.c src/condattrdestroy.c \
+libposix_a_SOURCES += src/condattrdestroy.c \
     src/condattrinit.c  \
     src/condattrgetpshared.c src/condattrsetpshared.c \
     src/condattrgetclock.c src/condattrsetclock.c \
     src/condbroadcast.c src/conddefaultattributes.c src/conddestroy.c \
     src/condinit.c src/condsignal.c src/condsignalsupp.c \
-    src/condtimedwait.c src/condwait.c src/condwaitsupp.c src/condget.c
+    src/condtimedwait.c src/condwait.c src/condwaitsupp.c
+
+## MUTEX_C_FILES
+libposix_a_SOURCES += src/mutexattrdestroy.c src/mutexattrgetprioceiling.c \
+    src/mutexattrgetprotocol.c src/mutexattrgetpshared.c \
+    src/mutexattrgettype.c src/mutexattrinit.c src/mutexattrsetprioceiling.c \
+    src/mutexattrsetprotocol.c src/mutexattrsetpshared.c \
+    src/mutexattrsettype.c src/mutexdestroy.c \
+    src/mutexgetprioceiling.c src/mutexinit.c src/mutexlock.c \
+    src/mutexlocksupp.c src/mutexsetprioceiling.c src/mutextimedlock.c \
+    src/mutextrylock.c src/mutexunlock.c
+
+## PTHREAD_C_FILES
+libposix_a_SOURCES += src/psxpriorityisvalid.c
+
+## PTHREAD_ATTR_C_FILES
+libposix_a_SOURCES += src/pthreadattrdefault.c src/pthreadattrdestroy.c \
+   src/pthreadattrgetdetachstate.c src/pthreadattrgetguardsize.c \
+   src/pthreadattrgetinheritsched.c src/pthreadattrgetschedparam.c \
+   src/pthreadattrgetschedpolicy.c src/pthreadattrgetscope.c \
+   src/pthreadattrgetstackaddr.c src/pthreadattrgetstack.c \
+   src/pthreadattrgetstacksize.c src/pthreadattrinit.c \
+   src/pthreadattrsetdetachstate.c src/pthreadattrsetguardsize.c \
+   src/pthreadattrsetinheritsched.c src/pthreadattrsetschedparam.c \
+   src/pthreadattrsetschedpolicy.c src/pthreadattrsetscope.c \
+   src/pthreadattrsetstackaddr.c src/pthreadattrsetstack.c \
+   src/pthreadattrsetstacksize.c
+
+## PTHREAD_AFFINITY_C_FILES
+libposix_a_SOURCES += src/pthreadattrsetaffinitynp.c \
+    src/pthreadattrgetaffinitynp.c  src/pthreadgetaffinitynp.c   \
+    src/pthreadsetaffinitynp.c
+
+if HAS_PTHREADS
+## CANCEL_C_FILES
+libposix_a_SOURCES += src/cancel.c \
+    src/cleanuppush.c src/setcancelstate.c \
+    src/setcanceltype.c src/testcancel.c
 
 ## MEMORY_C_FILES
+libposix_a_SOURCES += src/mlockall.c
+libposix_a_SOURCES += src/mlock.c
 libposix_a_SOURCES += src/mmap.c
 libposix_a_SOURCES += src/mprotect.c
+libposix_a_SOURCES += src/msync.c
+libposix_a_SOURCES += src/munlockall.c
+libposix_a_SOURCES += src/munlock.c
 libposix_a_SOURCES += src/munmap.c
+libposix_a_SOURCES += src/posix_madvise.c
+libposix_a_SOURCES += src/shm.c
+libposix_a_SOURCES += src/shmheap.c
+libposix_a_SOURCES += src/shmopen.c
+libposix_a_SOURCES += src/shmunlink.c
+libposix_a_SOURCES += src/shmwkspace.c
 
 ## MESSAGE_QUEUE_C_FILES
 libposix_a_SOURCES += src/mqueue.c src/mqueueclose.c \
@@ -104,29 +142,10 @@ libposix_a_SOURCES += src/mqueue.c src/mqueueclose.c \
     src/mqueuetimedsend.c \
     src/mqueueunlink.c
 
-## MUTEX_C_FILES
-libposix_a_SOURCES += src/mutexattrdestroy.c src/mutexattrgetprioceiling.c \
-    src/mutexattrgetprotocol.c src/mutexattrgetpshared.c \
-    src/mutexattrgettype.c src/mutexattrinit.c src/mutexattrsetprioceiling.c \
-    src/mutexattrsetprotocol.c src/mutexattrsetpshared.c \
-    src/mutexattrsettype.c src/mutex.c src/mutexdestroy.c src/mutexget.c \
-    src/mutexgetprioceiling.c src/mutexinit.c src/mutexlock.c \
-    src/mutexlocksupp.c src/mutexsetprioceiling.c src/mutextimedlock.c \
-    src/mutextrylock.c src/mutexunlock.c
-
 ## PTHREAD_C_FILES
-libposix_a_SOURCES += src/pthreadatfork.c src/pthreadattrdestroy.c \
-    src/pthreadattrgetdetachstate.c src/pthreadattrgetinheritsched.c \
-    src/pthreadattrgetschedparam.c src/pthreadattrgetschedpolicy.c \
-    src/pthreadattrgetscope.c src/pthreadattrgetstackaddr.c \
-    src/pthreadattrgetstack.c src/pthreadattrgetstacksize.c \
-    src/pthreadattrinit.c src/pthreadattrsetdetachstate.c \
-    src/pthreadattrsetguardsize.c src/pthreadattrsetinheritsched.c \
-    src/pthreadattrsetschedparam.c src/pthreadattrsetschedpolicy.c \
-    src/pthreadattrsetscope.c src/pthreadattrsetstackaddr.c \
-    src/pthreadattrsetstack.c src/pthreadattrsetstacksize.c \
+libposix_a_SOURCES += src/pthreadatfork.c \
     src/pthreadgetattrnp.c \
-    src/pthreadattrgetguardsize.c src/pthread.c \
+    src/pthread.c \
     src/pthreadconcurrency.c \
     src/pthreadcreate.c src/pthreaddetach.c src/pthreadequal.c \
     src/pthreadexit.c src/pthreadgetcpuclockid.c \
@@ -134,18 +153,8 @@ libposix_a_SOURCES += src/pthreadatfork.c src/pthreadattrdestroy.c \
     src/pthreadinitthreads.c src/pthreadjoin.c src/pthreadkill.c \
     src/pthreadself.c \
     src/pthreadsetschedparam.c src/pthreadsigmask.c \
-    src/psxpriorityisvalid.c src/psxtransschedparam.c
+    src/psxtransschedparam.c
 libposix_a_SOURCES += src/pthreadsetschedprio.c
-
-## RTEMS specific support methods
-libposix_a_SOURCES += src/pthreadattrcompare.c
-
-if HAS_SMP
-## PTHREAD_AFFINITY_C_FILES
-libposix_a_SOURCES += src/pthreadattrsetaffinitynp.c \
-    src/pthreadattrgetaffinitynp.c  src/pthreadgetaffinitynp.c   \
-    src/pthreadsetaffinitynp.c
-endif
 
 ## PSIGNAL_C_FILES
 libposix_a_SOURCES += src/psignal.c src/alarm.c src/kill.c src/killinfo.c \
@@ -168,30 +177,39 @@ libposix_a_SOURCES += src/sigaddset.c src/sigdelset.c src/sigfillset.c \
 
 libposix_a_SOURCES += src/sigprocmask.c
 
-if HAS_PTHREADS
-libposix_a_SOURCES += src/sigpending.c \
-    src/sigqueue.c src/sigsuspend.c src/sigtimedwait.c \
-    src/sigwait.c src/sigwaitinfo.c src/signal_2.c src/ualarm.c
+## SPINLOCK_C_FILES
+libposix_a_SOURCES += src/pspindestroy.c
+libposix_a_SOURCES += src/pspininit.c
+libposix_a_SOURCES += src/pspinlock.c
+libposix_a_SOURCES += src/pspinunlock.c
+
+## SEMAPHORE_C_FILES
+libposix_a_SOURCES += src/semdestroy.c
+libposix_a_SOURCES += src/semgetvalue.c
+libposix_a_SOURCES += src/seminit.c
+libposix_a_SOURCES += src/sempost.c
+libposix_a_SOURCES += src/semtimedwait.c
+libposix_a_SOURCES += src/semtrywait.c
+libposix_a_SOURCES += src/semwait.c
 
 ## RWLOCK_C_FILES
-libposix_a_SOURCES += src/prwlock.c src/prwlockdestroy.c src/prwlockinit.c \
+libposix_a_SOURCES += src/prwlockdestroy.c src/prwlockinit.c \
     src/prwlockrdlock.c src/prwlocktimedrdlock.c src/prwlocktimedwrlock.c \
     src/prwlocktryrdlock.c src/prwlocktrywrlock.c src/prwlockunlock.c \
     src/prwlockwrlock.c src/rwlockattrdestroy.c src/rwlockattrgetpshared.c \
     src/rwlockattrinit.c src/rwlockattrsetpshared.c
 
-## SEMAPHORE_C_FILES
-libposix_a_SOURCES += src/semaphore.c src/semaphorecreatesupp.c \
-    src/semaphoredeletesupp.c \
-    src/semaphorewaitsupp.c \
-    src/semclose.c src/semdestroy.c src/semgetvalue.c src/seminit.c \
-    src/semopen.c src/sempost.c src/semtimedwait.c src/semtrywait.c \
-    src/semunlink.c src/semwait.c
+if HAS_PTHREADS
+libposix_a_SOURCES += src/sigpending.c \
+    src/sigqueue.c src/sigsuspend.c src/sigtimedwait.c \
+    src/sigwait.c src/sigwaitinfo.c src/signal_2.c src/ualarm.c
 
-## SPINLOCK_C_FILES
-libposix_a_SOURCES += src/pspin.c src/pspindestroy.c src/pspininit.c \
-    src/pspinlock.c src/pspintrylock.c \
-    src/pspinunlock.c
+## SEMAPHORE_C_FILES
+libposix_a_SOURCES += src/semaphore.c
+libposix_a_SOURCES += src/semaphoredeletesupp.c
+libposix_a_SOURCES += src/semclose.c
+libposix_a_SOURCES += src/semopen.c
+libposix_a_SOURCES += src/semunlink.c
 
 ## TIME_C_FILES
 libposix_a_SOURCES += src/adjtime.c src/clockgetcpuclockid.c

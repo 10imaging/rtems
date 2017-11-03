@@ -21,40 +21,41 @@
 
 #include <rtems/score/schedulerpriorityimpl.h>
 
-Scheduler_Void_or_thread _Scheduler_priority_Update_priority(
+void _Scheduler_priority_Update_priority(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 )
 {
   Scheduler_priority_Context *context;
-  Scheduler_priority_Node    *node;
+  Scheduler_priority_Node    *the_node;
   unsigned int                priority;
   bool                        prepend_it;
 
   if ( !_Thread_Is_ready( the_thread ) ) {
     /* Nothing to do */
-    SCHEDULER_RETURN_VOID_OR_NULL;
+    return;
   }
 
-  node = _Scheduler_priority_Thread_get_node( the_thread );
+  the_node = _Scheduler_priority_Node_downcast( node );
   priority = (unsigned int )
-    _Scheduler_Node_get_priority( &node->Base, &prepend_it );
+    _Scheduler_Node_get_priority( &the_node->Base, &prepend_it );
 
-  if ( priority == node->Ready_queue.current_priority ) {
+  if ( priority == the_node->Ready_queue.current_priority ) {
     /* Nothing to do */
-    SCHEDULER_RETURN_VOID_OR_NULL;
+    return;
   }
 
   context = _Scheduler_priority_Get_context( scheduler );
 
   _Scheduler_priority_Ready_queue_extract(
     &the_thread->Object.Node,
-    &node->Ready_queue,
+    &the_node->Ready_queue,
     &context->Bit_map
   );
 
   _Scheduler_priority_Ready_queue_update(
-    &node->Ready_queue,
+    &the_node->Ready_queue,
     priority,
     &context->Bit_map,
     &context->Ready[ 0 ]
@@ -63,18 +64,16 @@ Scheduler_Void_or_thread _Scheduler_priority_Update_priority(
   if ( prepend_it ) {
     _Scheduler_priority_Ready_queue_enqueue_first(
       &the_thread->Object.Node,
-      &node->Ready_queue,
+      &the_node->Ready_queue,
       &context->Bit_map
     );
   } else {
     _Scheduler_priority_Ready_queue_enqueue(
       &the_thread->Object.Node,
-      &node->Ready_queue,
+      &the_node->Ready_queue,
       &context->Bit_map
     );
   }
 
   _Scheduler_priority_Schedule_body( scheduler, the_thread, false );
-
-  SCHEDULER_RETURN_VOID_OR_NULL;
 }

@@ -29,29 +29,6 @@ extern "C" {
 /* conditional compilation parameters */
 
 /**
- * Should the calls to @ref _Thread_Enable_dispatch be inlined?
- *
- * If TRUE, then they are inlined.
- * If FALSE, then a subroutine call is made.
- *
- * This conditional is an example of the classic trade-off of size
- * versus speed.  Inlining the call (TRUE) typically increases the
- * size of RTEMS while speeding up the enabling of dispatching.
- *
- * NOTE: In general, the @ref _Thread_Dispatch_disable_level will
- * only be 0 or 1 unless you are in an interrupt handler and that
- * interrupt handler invokes the executive.]  When not inlined
- * something calls @ref _Thread_Enable_dispatch which in turns calls
- * @ref _Thread_Dispatch.  If the enable dispatch is inlined, then
- * one subroutine call is avoided entirely.
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define CPU_INLINE_ENABLE_DISPATCH       FALSE
-
-/**
  * Does RTEMS manage a dedicated interrupt stack in software?
  *
  * If TRUE, then a stack is allocated in @ref _ISR_Handler_initialization.
@@ -136,7 +113,7 @@ extern "C" {
  *
  * XXX document implementation including references if appropriate
  */
-#define CPU_ISR_PASSES_FRAME_POINTER 1
+#define CPU_ISR_PASSES_FRAME_POINTER TRUE
 
 /**
  * @def CPU_HARDWARE_FP
@@ -250,6 +227,8 @@ extern "C" {
  */
 #define CPU_USE_DEFERRED_FP_SWITCH       TRUE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 /**
  * Does this port provide a CPU dependent IDLE task implementation?
  *
@@ -295,46 +274,6 @@ extern "C" {
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
 
 /**
- * @defgroup CPUEndian Processor Dependent Endianness Support
- *
- * This group assists in issues related to processor endianness.
- *
- */
-/**@{**/
-
-/**
- * Define what is required to specify how the network to host conversion
- * routines are handled.
- *
- * NOTE: @a CPU_BIG_ENDIAN and @a CPU_LITTLE_ENDIAN should NOT have the
- * same values.
- *
- * @see CPU_LITTLE_ENDIAN
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define CPU_BIG_ENDIAN                           TRUE
-
-/**
- * Define what is required to specify how the network to host conversion
- * routines are handled.
- *
- * NOTE: @ref CPU_BIG_ENDIAN and @ref CPU_LITTLE_ENDIAN should NOT have the
- * same values.
- *
- * @see CPU_BIG_ENDIAN
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define CPU_LITTLE_ENDIAN                        FALSE
-
-/** @} */
-
-/**
  * @ingroup CPUInterrupt
  * The following defines the number of bits actually used in the
  * interrupt field of the task mode.  How those bits map to the
@@ -345,8 +284,6 @@ extern "C" {
  * XXX document implementation including references if appropriate
  */
 #define CPU_MODES_INTERRUPT_MASK   0x00000001
-
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 #define CPU_MAXIMUM_PROCESSORS 32
 
@@ -359,10 +296,6 @@ extern "C" {
  */
 
 /* may need to put some structures here.  */
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 /**
  * @defgroup CPUContext Processor Dependent Context Management
@@ -708,6 +641,11 @@ extern Context_Control_fp _CPU_Null_fp_context;
 #define _CPU_ISR_Flash( _isr_cookie ) \
   lm32_flash_interrupts( _isr_cookie );
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & 0x0001 ) != 0;
+}
+
 /**
  * This routine and @ref _CPU_ISR_Get_level
  * Map the interrupt level in task mode onto the hardware that the CPU
@@ -809,33 +747,6 @@ extern char _gp[];
  */
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
-
-/**
- * @ingroup CPUContext
- * The purpose of this macro is to allow the initial pointer into
- * a floating point context area (used to save the floating point
- * context) to be at an arbitrary place in the floating point
- * context area.
- *
- * This is necessary because some FP units are designed to have
- * their context saved as a stack which grows into lower addresses.
- * Other FP units can be saved by simply moving registers into offsets
- * from the base of the context area.  Finally some FP units provide
- * a "dump context" instruction which could fill in from high to low
- * or low to high based on the whim of the CPU designers.
- *
- * @param[in] _base is the lowest physical address of the floating point
- *        context area
- * @param[in] _offset is the offset into the floating point area
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define _CPU_Context_Fp_start( _base, _offset )
-#if 0
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
-#endif
 
 /**
  * This routine initializes the FP context area passed to it to.

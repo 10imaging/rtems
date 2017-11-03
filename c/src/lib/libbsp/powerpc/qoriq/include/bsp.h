@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (c) 2010-2015 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2010, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -25,6 +25,12 @@
 
 #include <bspopts.h>
 
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+#define QORIQ_THREAD_COUNT 1
+#else
+#define QORIQ_THREAD_COUNT QORIQ_PHYSICAL_THREAD_COUNT
+#endif
+
 #ifndef ASM
 
 #include <rtems.h>
@@ -37,6 +43,8 @@ extern "C" {
 
 #define BSP_FEATURE_IRQ_EXTENSION
 
+#define BSP_FDT_IS_SUPPORTED
+
 #define QORIQ_CHIP(alpha, num) ((alpha) * 10000 + (num))
 
 #define QORIQ_CHIP_P1020 QORIQ_CHIP('P', 1020)
@@ -44,6 +52,8 @@ extern "C" {
 #define QORIQ_CHIP_T2080 QORIQ_CHIP('T', 2080)
 
 #define QORIQ_CHIP_T4240 QORIQ_CHIP('T', 4240)
+
+#define QORIQ_CHIP_VARIANT QORIQ_CHIP(QORIQ_CHIP_SERIES, QORIQ_CHIP_NUMBER)
 
 #define QORIQ_CHIP_IS_T_VARIANT(variant) ((variant) / 10000 == 'T')
 
@@ -84,14 +94,11 @@ void *bsp_idle_thread( uintptr_t ignored );
 /* Internal data and functions */
 
 typedef struct {
-  uint32_t addr_upper;
-  uint32_t addr_lower;
-  uint32_t r3_upper;
-  uint32_t r3_lower;
+  uint64_t addr;
+  uint64_t r3;
   uint32_t reserved_0;
   uint32_t pir;
-  uint32_t r6_upper;
-  uint32_t r6_lower;
+  uint64_t r6;
   uint32_t reserved_1[8];
 } qoriq_start_spin_table;
 
@@ -103,6 +110,14 @@ void qoriq_start_thread(void);
 void qoriq_restart_secondary_processor(
   const qoriq_start_spin_table *spin_table
 ) RTEMS_NO_RETURN;
+
+void qoriq_initialize_exceptions(void *interrupt_stack_begin);
+
+void qoriq_decrementer_dispatch(void);
+
+extern uint32_t bsp_time_base_frequency;
+
+extern uint32_t qoriq_clock_frequency;
 
 #ifdef __cplusplus
 }

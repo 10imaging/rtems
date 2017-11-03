@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (c) 2008-2014 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2008, 2016 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
- *  Obere Lagerstr. 30
+ *  Dornierstr. 4
  *  82178 Puchheim
  *  Germany
  *  <rtems@embedded-brains.de>
@@ -20,7 +20,7 @@
 
 #include <rtems/asm.h>
 #include <rtems/system.h>	
-#include <rtems/score/cpu.h>
+#include <rtems/score/percpu.h>
 	
 #include <bspopts.h>
 #include <bsp/irq.h>
@@ -65,6 +65,7 @@
 	.globl	bsp_start_vector_table_end
 	.globl	bsp_start_vector_table_size
 	.globl	bsp_vector_table_size
+	.globl	bsp_start_hook_0_done
 
 	.section	".bsp_start_text", "ax"
 
@@ -183,13 +184,33 @@ _start:
 #endif
 
 #ifdef RTEMS_SMP
-	/* Read MPIDR */
-	mrc	p15, 0, r0, c0, c0, 5
+	/* Read MPIDR and get current processor index */
+	mrc	p15, 0, r7, c0, c0, 5
+	and	r7, #0xff
+#endif
+
+#ifdef BSP_START_COPY_FDT_FROM_U_BOOT
+#ifdef RTEMS_SMP
+	cmp	r7, #0
+	bne	1f
+#endif
+	mov	r0, r6
+	bl	bsp_fdt_copy
+1:
+#endif
+
+#ifdef RTEMS_SMP
+        /*
+         * Get current per-CPU control and store it in PL1 only Thread ID
+         * Register (TPIDRPRW).
+         */
+	ldr	r1, =_Per_CPU_Information
+	add	r1, r1, r7, asl #PER_CPU_CONTROL_SIZE_LOG2
+	mcr	p15, 0, r1, c13, c0, 4
 
 	/* Calculate stack offset */
-	and	r0, #0xff
 	ldr	r1, =bsp_stack_all_size
-	mul	r1, r0
+	mul	r1, r7
 #endif
 
 	mrs	r4, cpsr	/* save original procesor status value  */
@@ -265,6 +286,7 @@ bsp_start_skip_hyp_svc_switch:
 	/* Stay in SVC mode */
 
 #ifdef ARM_MULTILIB_VFP
+#ifdef ARM_MULTILIB_HAS_CPACR
 	/* Read CPACR */
 	mrc p15, 0, r0, c1, c0, 2
 
@@ -280,6 +302,7 @@ bsp_start_skip_hyp_svc_switch:
 	/* Write CPACR */
 	mcr p15, 0, r0, c1, c0, 2
 	isb
+#endif
 
 	/* Enable FPU */
 	mov r0, #(1 << 30)
@@ -399,6 +422,7 @@ _start:
 #endif
 
 #ifdef ARM_MULTILIB_VFP
+#ifdef ARM_MULTILIB_HAS_CPACR
 	/*
 	 * Enable CP10 and CP11 coprocessors for privileged and user mode in
 	 * CPACR (bits 20-23).  Ensure that write to register completes.
@@ -409,6 +433,7 @@ _start:
 	str	r1, [r0]
 	dsb
 	isb
+#endif
 
 #ifdef BSP_START_NEEDS_REGISTER_INITIALIZATION
 	bl bsp_start_init_registers_vfp

@@ -40,16 +40,19 @@ extern "C" {
  * each thread in a system with POSIX configured.
  */
 typedef struct {
-  /** Back pointer to thread of this POSIX API control. */
-  Thread_Control         *thread;
+  /** Created with explicit or inherited scheduler. */
+  bool created_with_explicit_scheduler;
 
-  /** This is the POSIX threads attribute set. */
-  pthread_attr_t          Attributes;
+  /** The scheduler policy. */
+  int schedpolicy;
 
   /**
    * @brief Control block for the sporadic server scheduling policy.
    */
   struct {
+    /** The thread of this sporadic control block */
+    Thread_Control *thread;
+
     /**
      * @brief This is the timer which controls when the thread executes at high
      * and low priority when using the sporadic server scheduling policy.
@@ -60,13 +63,24 @@ typedef struct {
      * @brief The low priority when using the sporadic server scheduling
      * policy.
      */
-    Priority_Control low_priority;
+    Priority_Node Low_priority;
 
     /**
-     * @brief The high priority when using the sporadic server scheduling
-     * policy.
+     * @brief Replenishment period for sporadic server.
      */
-    Priority_Control high_priority;
+    struct timespec sched_ss_repl_period;
+
+    /**
+     * @brief Initial budget for sporadic server.
+     */
+    struct timespec sched_ss_init_budget;
+
+    /**
+     * @brief Maximum pending replenishments.
+     *
+     * Only used by pthread_getschedparam() and pthread_getattr_np().
+    */
+    int sched_ss_max_repl;
   } Sporadic;
 
   /** This is the set of signals which are currently unblocked. */

@@ -211,12 +211,8 @@ static void smc_read_spare( uint32_t page, uint8_t* buf, uint8_t length)
 
 static void smc_make_l2p(void)
 {
-  uint32_t pblock, i, j, lblock, zone, count, cnt1, cnt2, cnt3;
+  uint32_t pblock, i, j, lblock, zone, count;
   uint8_t data[512];
-
-  cnt1 = 0;
-  cnt2 = 0;
-  cnt3 = 0;
 
   for (i=0;i<0x2000;i++) {
     smc_l2p[i] = LBA_RESERVED;
@@ -232,7 +228,6 @@ static void smc_make_l2p(void)
       lblock = ((((data[6]<<8)|(data[7]<<0)) >> 1) & 0x03FF) + (zone * 1000);
       smc_l2p[lblock] = pblock;
       smc_p2l[pblock] = lblock;
-      cnt1++;
     } else {
       count = 0;
       for (j=0;j<16;j++) {
@@ -240,10 +235,8 @@ static void smc_make_l2p(void)
       }
       if (count == 16) {
         smc_p2l[pblock] = BLOCK_UNUSED;
-        cnt2++;
       } else {
         smc_p2l[pblock] = BLOCK_RESERVED;
-        cnt3++;
       }
     }
   }
@@ -300,7 +293,7 @@ static void smc_init( void)
   smc_read_id (buf, 4);
   smc_detect (buf[0], buf[1], buf[2]);
   printk ("SMC: [%02X-%02X-%02X-%02X]\n", buf[0], buf[1], buf[2], buf[3]);
-  printk ("SMC size: %dMB detected\n",smc_info.mb);
+  printk ("SMC size: %" PRIu32 "MB detected\n",smc_info.mb);
   smc_make_l2p();
 }
 

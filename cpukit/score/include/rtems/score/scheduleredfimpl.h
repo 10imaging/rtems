@@ -50,7 +50,7 @@ RTEMS_INLINE_ROUTINE Scheduler_EDF_Node *_Scheduler_EDF_Thread_get_node(
   Thread_Control *the_thread
 )
 {
-  return (Scheduler_EDF_Node *) _Scheduler_Thread_get_node( the_thread );
+  return (Scheduler_EDF_Node *) _Thread_Scheduler_get_home_node( the_thread );
 }
 
 RTEMS_INLINE_ROUTINE Scheduler_EDF_Node * _Scheduler_EDF_Node_downcast(
@@ -74,7 +74,7 @@ RTEMS_INLINE_ROUTINE bool _Scheduler_EDF_Less(
   the_right = RTEMS_CONTAINER_OF( right, Scheduler_EDF_Node, Node );
 
   prio_left = *the_left;
-  prio_right = the_right->current_priority;
+  prio_right = the_right->priority;
 
   return prio_left < prio_right;
 }
@@ -93,7 +93,7 @@ RTEMS_INLINE_ROUTINE bool _Scheduler_EDF_Less_or_equal(
   the_right = RTEMS_CONTAINER_OF( right, Scheduler_EDF_Node, Node );
 
   prio_left = *the_left;
-  prio_right = the_right->current_priority;
+  prio_right = the_right->priority;
 
   return prio_left <= prio_right;
 }
@@ -101,13 +101,13 @@ RTEMS_INLINE_ROUTINE bool _Scheduler_EDF_Less_or_equal(
 RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Enqueue(
   Scheduler_EDF_Context *context,
   Scheduler_EDF_Node    *node,
-  Priority_Control       current_priority
+  Priority_Control       priority
 )
 {
   _RBTree_Insert_inline(
     &context->Ready,
     &node->Node,
-    &current_priority,
+    &priority,
     _Scheduler_EDF_Less
   );
 }
@@ -115,13 +115,13 @@ RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Enqueue(
 RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Enqueue_first(
   Scheduler_EDF_Context *context,
   Scheduler_EDF_Node    *node,
-  Priority_Control       current_priority
+  Priority_Control       priority
 )
 {
   _RBTree_Insert_inline(
     &context->Ready,
     &node->Node,
-    &current_priority,
+    &priority,
     _Scheduler_EDF_Less_or_equal
   );
 }
@@ -136,16 +136,17 @@ RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Extract(
 
 RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Extract_body(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 )
 {
   Scheduler_EDF_Context *context;
-  Scheduler_EDF_Node    *node;
+  Scheduler_EDF_Node    *the_node;
 
   context = _Scheduler_EDF_Get_context( scheduler );
-  node = _Scheduler_EDF_Thread_get_node( the_thread );
+  the_node = _Scheduler_EDF_Node_downcast( node );
 
-  _Scheduler_EDF_Extract( context, node );
+  _Scheduler_EDF_Extract( context, the_node );
 }
 
 RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Schedule_body(
@@ -164,7 +165,7 @@ RTEMS_INLINE_ROUTINE void _Scheduler_EDF_Schedule_body(
   first = _RBTree_Minimum( &context->Ready );
   node = RTEMS_CONTAINER_OF( first, Scheduler_EDF_Node, Node );
 
-  _Scheduler_Update_heir( node->thread, force_dispatch );
+  _Scheduler_Update_heir( node->Base.owner, force_dispatch );
 }
 
 /**@}*/

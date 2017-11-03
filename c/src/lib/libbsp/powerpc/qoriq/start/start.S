@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (c) 2010, 2016 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2010, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -22,7 +22,7 @@
 
 #include <rtems/score/percpu.h>
 
-#include <bspopts.h>
+#include <bsp.h>
 
 #include <libcpu/powerpc-utility.h>
 
@@ -37,6 +37,7 @@
 #define INITIAL_MSR r14
 #define START_STACK r15
 #define SAVED_LINK_REGISTER r16
+#define FDT_REGISTER r17
 
 	.globl _start
 #ifdef RTEMS_SMP
@@ -50,67 +51,58 @@
 	.section ".bsp_start_text", "ax"
 
 _start:
+	mr	FDT_REGISTER, r3
 	bl	.Linitearly
-	bl	bsp_fdt_copy
-
-#ifdef QORIQ_HAS_WRITE_BACK_L1_CACHE
-	LWI	r3, bsp_section_start_begin
-	LWI	r4, bsp_section_data_load_end
-	sub	r4, r4, r3
-	bl	rtems_cache_flush_multiple_data_lines
-#else
-	bl	qoriq_l1cache_invalidate
-#endif
-
-#ifdef QORIQ_CLUSTER_1_L2CSR0
-	LWI	r3, QORIQ_CLUSTER_1_L2CSR0
-	bl	qoriq_l2cache_flush_invalidate
-#endif
-
-#ifdef QORIQ_CLUSTER_2_L2CSR0
-	LWI	r3, QORIQ_CLUSTER_2_L2CSR0
-	bl	qoriq_l2cache_flush_invalidate
-#endif
-
-#ifdef QORIQ_CLUSTER_3_L2CSR0
-	LWI	r3, QORIQ_CLUSTER_3_L2CSR0
-	bl	qoriq_l2cache_flush_invalidate
-#endif
 
 	/* Get start stack */
-	LWI	START_STACK, start_stack_end
+	LA	START_STACK, start_stack_end
 
 	bl	.Linitmore
 
 	/* Copy fast text */
-	LWI	r3, bsp_section_fast_text_begin
-	LWI	r4, bsp_section_fast_text_load_begin
-	LWI	r5, bsp_section_fast_text_size
+	LA	r3, bsp_section_fast_text_begin
+	LA	r4, bsp_section_fast_text_load_begin
+	LA	r5, bsp_section_fast_text_size
 	bl	.Lcopy
+	LA	r3, bsp_section_fast_text_begin
+	LA	r4, bsp_section_fast_text_size
+	bl	rtems_cache_flush_multiple_data_lines
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 	/* Copy read-only data */
-	LWI	r3, bsp_section_rodata_begin
-	LWI	r4, bsp_section_rodata_load_begin
-	LWI	r5, bsp_section_rodata_size
+	LA	r3, bsp_section_rodata_begin
+	LA	r4, bsp_section_rodata_load_begin
+	LA	r5, bsp_section_rodata_size
 	bl	.Lcopy
 
+	/* Copy FDT into read-only data */
+	mr	r3, FDT_REGISTER
+	bl	bsp_fdt_copy
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+
+	/* Flush read-only data */
+	LA	r3, bsp_section_rodata_begin
+	LA	r4, bsp_section_rodata_size
+	bl	rtems_cache_flush_multiple_data_lines
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+
 	/* Copy fast data */
-	LWI	r3, bsp_section_fast_data_begin
-	LWI	r4, bsp_section_fast_data_load_begin
-	LWI	r5, bsp_section_fast_data_size
+	LA	r3, bsp_section_fast_data_begin
+	LA	r4, bsp_section_fast_data_load_begin
+	LA	r5, bsp_section_fast_data_size
 	bl	.Lcopy
 
 	/* Copy data */
-	LWI	r3, bsp_section_data_begin
-	LWI	r4, bsp_section_data_load_begin
-	LWI	r5, bsp_section_data_size
+	LA	r3, bsp_section_data_begin
+	LA	r4, bsp_section_data_load_begin
+	LA	r5, bsp_section_data_size
 	bl	.Lcopy
 
 	/* NULL pointer access protection (only core 0 has to do this) */
 	mfspr	r3, BOOKE_PIR
 	cmpwi	r3, 0
 	bne	.Lnull_area_setup_done
-	LWI	r3, bsp_section_start_begin
+	LA	r3, bsp_section_start_begin
 	srawi	r3, r3, 2
 	mtctr	r3
 	li	r3, -4
@@ -120,36 +112,51 @@ _start:
 	bdnz	.Lnull_area_setup_loop
 .Lnull_area_setup_done:
 
+	li	r3, 1
 	bl	.Linitmmu
 
 	/* Clear SBSS */
-	LWI	r3, bsp_section_sbss_begin
-	LWI	r4, bsp_section_sbss_size
+	LA	r3, bsp_section_sbss_begin
+	LA	r4, bsp_section_sbss_size
 	bl	bsp_start_zero
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 	/* Clear BSS */
-	LWI	r3, bsp_section_bss_begin
-	LWI	r4, bsp_section_bss_size
+	LA	r3, bsp_section_bss_begin
+	LA	r4, bsp_section_bss_size
 	bl	bsp_start_zero
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
+#ifndef __powerpc64__
 	/* Set up EABI and SYSV environment */
 	bl	__eabi
+#endif
 
 	/* Clear command line */
 	li	r3, 0
 
 	bl	boot_card
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 .Lcopy:
-	cmpw	r3, r4
+	PPC_REG_CMP	r3, r4
 	beqlr
 	b	memcpy
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 .Linitearly:
-	/*
-	 * Do not use r3 here, since it holds the FDT base pointer provided by
-	 * the boot loader.
-	 */
+#ifdef __powerpc64__
+	/* Enable 64-bit computation mode for exceptions */
+	mfspr	r0, BOOKE_EPCR
+	oris	r0, r0, BOOKE_EPCR_ICM >> 16
+	mtspr	BOOKE_EPCR, r0
+
+	/* Enable 64-bit computation mode */
+	mfmsr	r0
+	oris	r0, r0, MSR_CM >> 16
+	mtmsr	r0
+	isync
+#endif
 
 	/* Disable decrementer */
 	mfspr	r0, BOOKE_TCR
@@ -170,17 +177,23 @@ _start:
 	isync
 #endif
 
-#ifdef QORIQ_INITIAL_HID0
+#if defined(QORIQ_INITIAL_HID0) && !defined(QORIQ_IS_HYPERVISOR_GUEST)
 	/* HID0 initialization */
 	LWI	r0, QORIQ_INITIAL_HID0
 	mtspr	HID0, r0
 #endif
 
+#ifdef __powerpc64__
+	LA32	r2, .TOC.
+#else
 	/* Invalidate TLS anchor */
 	li	r2, 0
 
 	/* Set small-data anchor */
 	LA	r13, _SDA_BASE_
+#endif
+
+	SET_SELF_CPU_CONTROL	r4, r5
 
 	blr
 
@@ -190,20 +203,25 @@ _start:
 	/* Invalidate all TS1 MMU entries */
 	li	r3, 1
 	bl	qoriq_tlb1_invalidate_all_by_ts
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 	/* Add TS1 entry for the first 4GiB of RAM */
 	li	r3, SCRATCH_TLB
 	li	r4, FSL_EIS_MAS1_TS
-	li	r5, FSL_EIS_MAS2_I
+	li	r5, FSL_EIS_MAS2_M
 	li	r6, FSL_EIS_MAS3_SR | FSL_EIS_MAS3_SW | FSL_EIS_MAS3_SX
 	li	r7, 0
 	li	r8, 0
 	li	r9, 11
 	bl	qoriq_tlb1_write
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 	/* MSR initialization and use TS1 for address translation */
 	LWI	INITIAL_MSR, QORIQ_INITIAL_MSR
 	ori	r0, INITIAL_MSR, MSR_IS | MSR_DS
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+	oris	r0, r0, MSR_GS >> 16
+#endif
 	mtmsr	r0
 	isync
 
@@ -215,7 +233,7 @@ _start:
 	subi	r1, START_STACK, 2 * PPC_DEFAULT_CACHE_LINE_SIZE
 	clrrwi	r1, r1, PPC_DEFAULT_CACHE_LINE_POWER
 	li	r0, 0
-	stw	r0, 0(r1)
+	PPC_REG_STORE	r0, 0(r1)
 
 #ifdef INITIALIZE_FPU
 	bl	.Linitfpu
@@ -228,13 +246,15 @@ _start:
 	mflr	SAVED_LINK_REGISTER
 
 	/* Configure MMU */
-	li	r3, FIRST_TLB
-	li	r4, SCRATCH_TLB
+	li	r4, FIRST_TLB
+	li	r5, SCRATCH_TLB
 	bl	qoriq_mmu_config
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 	mtmsr	INITIAL_MSR
 	isync
 	li	r3, SCRATCH_TLB
 	bl	qoriq_tlb1_invalidate
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 
 	mtlr	SAVED_LINK_REGISTER
 	blr
@@ -297,17 +317,18 @@ _start_thread:
 
 	/* Initialize start stack */
 	GET_SELF_CPU_CONTROL	r3
-	lwz	r3, PER_CPU_INTERRUPT_STACK_HIGH(r3)
+	PPC_REG_LOAD	r3, PER_CPU_INTERRUPT_STACK_HIGH(r3)
 	subi	r1, r3, PPC_MINIMUM_STACK_FRAME_SIZE
 	clrrwi	r1, r1, PPC_STACK_ALIGN_POWER
 	li	r0, 0
-	stw	r0, 0(r1)
+	PPC_REG_STORE	r0, 0(r1)
 
 #ifdef INITIALIZE_FPU
 	bl	.Linitfpu
 #endif
 
 	b	qoriq_start_thread
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 #endif
 _start_secondary_processor:
 	bl	.Linitearly
@@ -316,113 +337,208 @@ _start_secondary_processor:
 	mr	START_STACK, r3
 
 	bl	.Linitmore
+	li	r3, 0
 	bl	.Linitmmu
 	b	bsp_start_on_secondary_processor
+	PPC64_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 #endif /* RTEMS_SMP */
+
+#ifdef __powerpc64__
+#define START_NOP_FOR_LINKER_TOC_POINTER_RESTORE nop; nop; nop; nop
+#else
+#define START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+#endif
 
 	/* Exception vector prologues area */
 	.section ".bsp_start_text", "ax"
 	.align 4
 bsp_exc_vector_base:
-	stw	r1, ppc_exc_lock_crit@sdarel(r13)
-	stw	r4, ppc_exc_vector_register_crit@sdarel(r13)
-	li	r4, -32767
-	b	ppc_exc_wrap_bookE_crit
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 2
-	b	ppc_exc_wrap_nopush_e500_mchk
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 3
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 4
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -PPC_EXC_MINIMAL_FRAME_SIZE(r1)
-#ifndef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	stw	r4, PPC_EXC_VECTOR_PROLOGUE_OFFSET(r1)
-	li	r4, -32763
+	/* Critical input */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 0
+	b	ppc_exc_fatal_critical
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Machine check */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 1
+	b	ppc_exc_fatal_machine_check
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Data storage */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 2
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Instruction storage */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 3
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* External input */
+	PPC_REG_STORE_UPDATE	r1, -PPC_EXC_INTERRUPT_FRAME_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 4
+	b	ppc_exc_interrupt
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Alignment */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 5
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Program */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 6
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+#ifdef __PPC_CPU_E6500__
+	/* Floating-point unavailable */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 7
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 #endif
-	b	ppc_exc_wrap_async_normal
-#ifdef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	nop
-	nop
+	/* System call */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 8
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+#ifdef __PPC_CPU_E6500__
+	/* APU unavailable */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 9
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 #endif
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 6
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 7
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 8
-	b	ppc_exc_wrap_nopush_std
-system_call:
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 12
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 24
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -PPC_EXC_MINIMAL_FRAME_SIZE(r1)
-#ifndef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	stw	r4, PPC_EXC_VECTOR_PROLOGUE_OFFSET(r1)
-	li	r4, -32752
+	/* Decrementer */
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+	PPC_REG_STORE_UPDATE	r1, -PPC_EXC_INTERRUPT_FRAME_SIZE(r1)
+#else
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
 #endif
-	b	ppc_exc_wrap_async_normal
-#ifdef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	nop
-	nop
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 10
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+	b	ppc_exc_interrupt
+#else
+	b	ppc_exc_fatal_normal
 #endif
-	stwu	r1, -PPC_EXC_MINIMAL_FRAME_SIZE(r1)
-#ifndef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	stw	r4, PPC_EXC_VECTOR_PROLOGUE_OFFSET(r1)
-	li	r4, -32749
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Fixed-interval timer interrupt */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 11
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Watchdog timer interrupt */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 12
+	b	ppc_exc_fatal_critical
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Data TLB error */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 13
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Instruction TLB error */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 14
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Debug */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 15
+	b	ppc_exc_fatal_debug
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* SPE APU unavailable or AltiVec unavailable */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 32
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* SPE floating-point data exception or AltiVec assist */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 33
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+#ifndef __PPC_CPU_E6500__
+	/* SPE floating-point round exception */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 34
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
 #endif
-	b	ppc_exc_wrap_async_normal
-#ifdef PPC_EXC_CONFIG_USE_FIXED_HANDLER
-	nop
-	nop
+	/* Performance monitor */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 35
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+#ifdef __PPC_CPU_E6500__
+	/* Processor doorbell interrupt */
+#if defined(QORIQ_IS_HYPERVISOR_GUEST) && defined(RTEMS_SMP)
+	PPC_REG_STORE_UPDATE	r1, -PPC_EXC_INTERRUPT_FRAME_SIZE(r1)
+#else
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
 #endif
-	stw	r1, ppc_exc_lock_crit@sdarel(r13)
-	stw	r4, ppc_exc_vector_register_crit@sdarel(r13)
-	li	r4, -32748
-	b	ppc_exc_wrap_bookE_crit
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 18
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 17
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 13
-	b	ppc_exc_wrap_nopush_bookE_crit
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 10
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 25
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 26
-	b	ppc_exc_wrap_nopush_std
-	stwu	r1, -EXC_GENERIC_SIZE(r1)
-	stw	r4, GPR4_OFFSET(r1)
-	li	r4, 15
-	b	ppc_exc_wrap_nopush_std
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 36
+#if defined(QORIQ_IS_HYPERVISOR_GUEST) && defined(RTEMS_SMP)
+	b	ppc_exc_interrupt
+#else
+	b	ppc_exc_fatal_normal
+#endif
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Processor doorbell critical interrupt */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 37
+	b	ppc_exc_fatal_critical
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Guest processor doorbell */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 38
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Guest processor doorbell critical and machine check */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 39
+	b	ppc_exc_fatal_critical
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Hypervisor system call */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 40
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* Hypervisor privilege */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 41
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+	/* LRAT error */
+	PPC_REG_STORE_UPDATE	r1, -EXC_GENERIC_SIZE(r1)
+	PPC_REG_STORE	r3, GPR3_OFFSET(r1)
+	li	r3, 42
+	b	ppc_exc_fatal_normal
+	START_NOP_FOR_LINKER_TOC_POINTER_RESTORE
+#endif
 
 /* Symbol provided for debugging and tracing */
 bsp_exc_vector_end:

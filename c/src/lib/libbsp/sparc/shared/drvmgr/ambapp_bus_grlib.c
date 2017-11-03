@@ -22,56 +22,66 @@
 #include <bsp/genirq.h>
 
 #include <bsp.h>
+#include <bsp/irq.h>
 
 #define DBG(args...)
 /*#define DBG(args...) printk(args)*/
 
-int ambapp_grlib_int_register(
+static int ambapp_grlib_int_register(
 	struct drvmgr_dev *dev,
 	int irq,
 	const char *info,
 	drvmgr_isr isr,
 	void *arg);
-int ambapp_grlib_int_unregister(
+static int ambapp_grlib_int_unregister(
 	struct drvmgr_dev *dev,
 	int irq,
 	drvmgr_isr isr,
 	void *arg);
-int ambapp_grlib_int_clear(
+static int ambapp_grlib_int_clear(
 	struct drvmgr_dev *dev,
 	int irq);
-int ambapp_grlib_int_mask(
+static int ambapp_grlib_int_mask(
 	struct drvmgr_dev *dev,
 	int irq);
-int ambapp_grlib_int_unmask(
+static int ambapp_grlib_int_unmask(
 	struct drvmgr_dev *dev,
 	int irq);
-int ambapp_grlib_get_params(
+#ifdef RTEMS_SMP
+static int ambapp_grlib_int_set_affinity(
+	struct drvmgr_dev *dev,
+	int irq,
+	const Processor_mask *cpus);
+#endif
+static int ambapp_grlib_get_params(
 	struct drvmgr_dev *dev,
 	struct drvmgr_bus_params *params);
 
-int ambapp_grlib_init1(struct drvmgr_dev *dev);
-int ambapp_grlib_init2(struct drvmgr_dev *dev);
-int ambapp_grlib_remove(struct drvmgr_dev *dev);
+static int ambapp_grlib_init1(struct drvmgr_dev *dev);
+static int ambapp_grlib_init2(struct drvmgr_dev *dev);
+static int ambapp_grlib_remove(struct drvmgr_dev *dev);
 
 /* READ/WRITE access to SpaceWire target over RMAP */
-void *ambapp_grlib_rw_arg(struct drvmgr_dev *dev);
+static void *ambapp_grlib_rw_arg(struct drvmgr_dev *dev);
 
-struct ambapp_ops ambapp_grlib_ops = {
+static struct ambapp_ops ambapp_grlib_ops = {
 	.int_register = ambapp_grlib_int_register,
 	.int_unregister = ambapp_grlib_int_unregister,
 	.int_clear = ambapp_grlib_int_clear,
 	.int_mask = ambapp_grlib_int_mask,
 	.int_unmask = ambapp_grlib_int_unmask,
+#ifdef RTEMS_SMP
+	.int_set_affinity = ambapp_grlib_int_set_affinity,
+#endif
 	.get_params = ambapp_grlib_get_params
 };
 
-void *ambapp_grlib_rw_arg(struct drvmgr_dev *dev)
+static void *ambapp_grlib_rw_arg(struct drvmgr_dev *dev)
 {
 	return dev; /* No argument really needed, but for debug? */
 }
 
-struct drvmgr_func ambapp_grlib_funcs[] =
+static struct drvmgr_func ambapp_grlib_funcs[] =
 {
 	DRVMGR_FUNC(AMBAPP_RW_ARG, ambapp_grlib_rw_arg),
 
@@ -91,14 +101,14 @@ struct drvmgr_func ambapp_grlib_funcs[] =
 	DRVMGR_FUNC_END,
 };
 
-struct drvmgr_drv_ops ambapp_grlib_drv_ops = 
+static struct drvmgr_drv_ops ambapp_grlib_drv_ops = 
 {
 	.init = {ambapp_grlib_init1, ambapp_grlib_init2, NULL, NULL},
 	.remove = ambapp_grlib_remove,
 	.info = NULL,
 };
 
-struct drvmgr_drv ambapp_bus_drv_grlib = 
+static struct drvmgr_drv ambapp_bus_drv_grlib = 
 {
 	DRVMGR_OBJ_DRV,			/* Driver */
 	NULL,				/* Next driver */
@@ -132,7 +142,7 @@ int ambapp_grlib_root_register(struct grlib_config *config)
 }
 
 /* Function called from Driver Manager Initialization Stage 1 */
-int ambapp_grlib_init1(struct drvmgr_dev *dev)
+static int ambapp_grlib_init1(struct drvmgr_dev *dev)
 {
 	struct ambapp_config *config;
 
@@ -157,17 +167,17 @@ int ambapp_grlib_init1(struct drvmgr_dev *dev)
 	return ambapp_bus_register(dev, config);
 }
 
-int ambapp_grlib_init2(struct drvmgr_dev *dev)
+static int ambapp_grlib_init2(struct drvmgr_dev *dev)
 {
 	return 0;
 }
 
-int ambapp_grlib_remove(struct drvmgr_dev *dev)
+static int ambapp_grlib_remove(struct drvmgr_dev *dev)
 {
 	return 0;
 }
 
-int ambapp_grlib_int_register
+static int ambapp_grlib_int_register
 	(
 	struct drvmgr_dev *dev,
 	int irq,
@@ -179,7 +189,7 @@ int ambapp_grlib_int_register
 	return BSP_shared_interrupt_register(irq, info, isr, arg);
 }
 
-int ambapp_grlib_int_unregister
+static int ambapp_grlib_int_unregister
 	(
 	struct drvmgr_dev *dev,
 	int irq,
@@ -190,7 +200,7 @@ int ambapp_grlib_int_unregister
 	return BSP_shared_interrupt_unregister(irq, isr, arg);
 }
 
-int ambapp_grlib_int_clear
+static int ambapp_grlib_int_clear
 	(
 	struct drvmgr_dev *dev,
 	int irq)
@@ -199,7 +209,7 @@ int ambapp_grlib_int_clear
 	return DRVMGR_OK;
 }
 
-int ambapp_grlib_int_mask
+static int ambapp_grlib_int_mask
 	(
 	struct drvmgr_dev *dev,
 	int irq
@@ -209,7 +219,7 @@ int ambapp_grlib_int_mask
 	return DRVMGR_OK;
 }
 
-int ambapp_grlib_int_unmask
+static int ambapp_grlib_int_unmask
 	(
 	struct drvmgr_dev *dev,
 	int irq
@@ -219,7 +229,20 @@ int ambapp_grlib_int_unmask
 	return DRVMGR_OK;
 }
 
-int ambapp_grlib_get_params(struct drvmgr_dev *dev, struct drvmgr_bus_params *params)
+#ifdef RTEMS_SMP
+static int ambapp_grlib_int_set_affinity
+	(
+	struct drvmgr_dev *dev,
+	int irq,
+	const Processor_mask *cpus
+	)
+{
+	bsp_interrupt_set_affinity(irq, cpus);
+	return DRVMGR_OK;
+}
+#endif
+
+static int ambapp_grlib_get_params(struct drvmgr_dev *dev, struct drvmgr_bus_params *params)
 {
 	/* Leave params->freq_hz untouched for default */
 	params->dev_prefix = "";

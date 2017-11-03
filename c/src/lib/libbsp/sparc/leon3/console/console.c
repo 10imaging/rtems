@@ -30,6 +30,7 @@
 #include <bsp/fatal.h>
 #include <bsp/apbuart_termios.h>
 #include <rtems/console.h>
+#include <string.h>
 
 /* The LEON3 BSP UART driver can rely on the Driver Manager if the
  * DrvMgr is initialized during startup. Otherwise the classic driver
@@ -131,11 +132,8 @@ rtems_device_driver console_initialize(
    * On a MP system one should not open UARTs that other OS instances use.
    */
   if (syscon_uart_index < uarts) {
-    minor = 0;
     status = rtems_termios_device_install(
       CONSOLE_DEVICE_NAME,
-      major,
-      minor,
       handler,
       NULL,
       leon3_console_get_context(syscon_uart_index)
@@ -148,11 +146,8 @@ rtems_device_driver console_initialize(
     if (i == syscon_uart_index)
       continue; /* skip UART that is registered as /dev/console */
     console_name[13] = 'a' + i;
-    minor = i + 1;
     rtems_termios_device_install(
       console_name,
-      major,
-      minor,
       handler,
       NULL,
       leon3_console_get_context(i)

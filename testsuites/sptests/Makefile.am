@@ -10,7 +10,7 @@ _SUBDIRS = \
     sp40 sp41 sp42 sp43 sp44 sp45 sp46 sp47 sp48 sp49 \
     sp50 sp51 sp52 sp53 sp54 sp55 sp56 sp57 sp58 sp59 \
     sp60      sp62 sp63 sp64 sp65 sp66 sp67 sp68 sp69 \
-    sp70 sp71 sp72 sp73 sp74 sp75 sp76 sp77 sp2038 \
+    sp70 sp71 sp72 sp73 sp74 sp75 sp76 sp77 sprmsched02 sp2038 \
     spassoc01 spchain spcoverage spobjgetnext \
     spprintk spprivenv01 sprbtree01 spsize spstkalloc \
     spstkalloc02 spthreadq01 spwatchdog spwkspace \
@@ -33,35 +33,34 @@ _SUBDIRS = \
     spsignal_err01 spport_err01 spmsgq_err01 spmsgq_err02 spsem_err01 \
     spsem_err02 sptask_err01 spevent_err03 sptask_err03 sptask_err02 \
     sptask_err04 spclock_err01
+_SUBDIRS += spintrcritical24
+_SUBDIRS += spfatal29
+_SUBDIRS += spfatal30
+_SUBDIRS += spfatal31
 _SUBDIRS += spmutex01
 _SUBDIRS += spextensions01
 _SUBDIRS += spsysinit01
+_SUBDIRS += sprmsched01 spedfsched04
 if HAS_SMP
 else
 _SUBDIRS += sp29
 endif
-if HAS__THREAD_QUEUE_QUEUE
 _SUBDIRS += spsyslock01
-endif
-if HAS_THREADS_H
 _SUBDIRS += spstdthreads01
-endif
 _SUBDIRS += splinkersets01
 _SUBDIRS += sptasknopreempt01
 _SUBDIRS += spintrcritical23
 _SUBDIRS += sptimecounter01
 _SUBDIRS += sptimecounter02
 _SUBDIRS += sptimecounter03
+_SUBDIRS += sptimecounter04
 _SUBDIRS += spatomic01
 _SUBDIRS += spintrcritical22
 _SUBDIRS += spsem03
-_SUBDIRS += spresource01
 _SUBDIRS += spmrsp01
 _SUBDIRS += spscheduler01
-_SUBDIRS += spprofiling01
 _SUBDIRS += spfatal28
 _SUBDIRS += spthreadlife01
-_SUBDIRS += spprofiling01
 _SUBDIRS += spcache01
 _SUBDIRS += sptls03
 _SUBDIRS += spcpucounter01
@@ -81,10 +80,7 @@ _SUBDIRS += spinternalerror02
 _SUBDIRS += sptimer_err01 sptimer_err02
 _SUBDIRS += sptimerserver01
 _SUBDIRS += spclock_err02
-
-if HAS_CPUSET
 _SUBDIRS += spcpuset01
-endif
 
-include $(top_srcdir)/../automake/test-subdirs.am
+include $(top_srcdir)/../automake/subdirs.am
 include $(top_srcdir)/../automake/local.am

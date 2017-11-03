@@ -20,6 +20,7 @@
 #include <rtems/libio.h>
 #include <rtems/console.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <termios.h>
 
@@ -244,17 +245,17 @@ rtems_device_driver console_open(
        * If this is not the console we do not want ECHO and so forth
        */
       IoctlArgs.iop     = args->iop;
-      IoctlArgs.command = RTEMS_IO_GET_ATTRIBUTES;
+      IoctlArgs.command = TIOCGETA;
       IoctlArgs.buffer  = &Termios;
       rtems_termios_ioctl( &IoctlArgs );
 
       Termios.c_lflag   = ICANON;
-      IoctlArgs.command = RTEMS_IO_SET_ATTRIBUTES;
+      IoctlArgs.command = TIOCSETA;
       rtems_termios_ioctl( &IoctlArgs );
     }
   }
 
-  if ( (args->iop->flags&LIBIO_FLAGS_READ) &&
+  if (rtems_libio_iop_is_readable(args->iop) &&
       cptr->pDeviceFlow &&
       cptr->pDeviceFlow->deviceStartRemoteTx) {
     cptr->pDeviceFlow->deviceStartRemoteTx(minor);
@@ -287,7 +288,7 @@ rtems_device_driver console_close(
    * Stop only if it's the last one opened.
    */
   if ( (current_tty->refcount == 1) ) {
-    if ( (args->iop->flags&LIBIO_FLAGS_READ) &&
+    if (rtems_libio_iop_is_readable(args->iop) &&
           cptr->pDeviceFlow &&
           cptr->pDeviceFlow->deviceStopRemoteTx) {
       cptr->pDeviceFlow->deviceStopRemoteTx(minor);

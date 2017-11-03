@@ -23,27 +23,27 @@
 #include <rtems/score/watchdogimpl.h>
 
 void _TOD_Set(
-  const Timestamp_Control *tod_as_timestamp,
-  ISR_lock_Context        *lock_context
+  const struct timespec *tod,
+  ISR_lock_Context      *lock_context
 )
 {
-  struct timespec tod_as_timespec;
+  struct bintime  tod_as_bintime;
   uint64_t        tod_as_ticks;
   uint32_t        cpu_count;
   uint32_t        cpu_index;
 
   _Assert( _API_Mutex_Is_owner( _Once_Mutex ) );
 
-  _Timecounter_Set_clock( tod_as_timestamp, lock_context );
+  timespec2bintime( tod, &tod_as_bintime );
+  _Timecounter_Set_clock( &tod_as_bintime, lock_context );
 
-  _Timestamp_To_timespec( tod_as_timestamp, &tod_as_timespec );
-  tod_as_ticks = _Watchdog_Ticks_from_timespec( &tod_as_timespec );
+  tod_as_ticks = _Watchdog_Realtime_from_timespec( tod );
   cpu_count = _SMP_Get_processor_count();
 
   for ( cpu_index = 0 ; cpu_index < cpu_count ; ++cpu_index ) {
     Per_CPU_Control *cpu = _Per_CPU_Get_by_index( cpu_index );
 
-    _Watchdog_Per_CPU_tickle_absolute( cpu, tod_as_ticks );
+    _Watchdog_Per_CPU_tickle_realtime( cpu, tod_as_ticks );
   }
 
   _TOD.is_set = true;

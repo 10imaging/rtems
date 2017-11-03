@@ -57,6 +57,7 @@ TMP_LIBS += ../libmisc/libfsmount.a
 TMP_LIBS += ../libmisc/libmouse.a
 TMP_LIBS += ../libmisc/libmw-fb.a
 TMP_LIBS += ../libmisc/libredirector.a
+TMP_LIBS += ../libmisc/librtemsfdt.a
 TMP_LIBS += ../libmisc/libstringto.a
 TMP_LIBS += ../libmisc/libtestsupport.a
 
@@ -65,6 +66,7 @@ TMP_LIBS += ../libmisc/libutf8proc.a
 endif
 
 TMP_LIBS += ../libmisc/libuuid.a
+TMP_LIBS += ../libmisc/libxz.a
 TMP_LIBS += ../libi2c/libi2c.a
 
 if LIBPCI
@@ -92,6 +94,10 @@ endif
 
 if LIBDL
 TMP_LIBS += ../libdl/libdl.a
+endif
+
+if LIBDEBUGGER
+TMP_LIBS += ../libdebugger/libdebugger.a
 endif
 
 librtemscpu.a: $(TMP_LIBS)

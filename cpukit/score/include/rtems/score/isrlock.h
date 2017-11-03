@@ -151,6 +151,24 @@ typedef struct {
 #endif
 
 /**
+ * @brief Sets the ISR level in the ISR lock context.
+ *
+ * @param[in] context The ISR lock context.
+ * @param[in] level The ISR level.
+ */
+RTEMS_INLINE_ROUTINE void _ISR_lock_Context_set_level(
+  ISR_lock_Context *context,
+  ISR_Level         level
+)
+{
+#if defined( RTEMS_SMP )
+  context->Lock_context.isr_level = level;
+#else
+  context->isr_level = level;
+#endif
+}
+
+/**
  * @brief Initializes an ISR lock.
  *
  * Concurrent initialization leads to unpredictable results.
@@ -278,6 +296,38 @@ typedef struct {
     )
 #else
   #define _ISR_lock_Release( _lock, _context ) \
+    (void) _context;
+#endif
+
+/**
+ * @brief Acquires an ISR lock inside an ISR disabled section (inline).
+ *
+ * @see _ISR_lock_Acquire().
+ */
+#if defined( RTEMS_SMP )
+  #define _ISR_lock_Acquire_inline( _lock, _context ) \
+    _SMP_lock_Acquire_inline( \
+      &( _lock )->Lock, \
+      &( _context )->Lock_context \
+    )
+#else
+  #define _ISR_lock_Acquire_inline( _lock, _context ) \
+    (void) _context;
+#endif
+
+/**
+ * @brief Releases an ISR lock inside an ISR disabled section (inline).
+ *
+ * @see _ISR_lock_Release().
+ */
+#if defined( RTEMS_SMP )
+  #define _ISR_lock_Release_inline( _lock, _context ) \
+    _SMP_lock_Release_inline( \
+      &( _lock )->Lock, \
+      &( _context )->Lock_context \
+    )
+#else
+  #define _ISR_lock_Release_inline( _lock, _context ) \
     (void) _context;
 #endif
 

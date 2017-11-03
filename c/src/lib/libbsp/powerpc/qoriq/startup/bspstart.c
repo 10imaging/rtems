@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (c) 2010-2015 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2010, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -25,8 +25,6 @@
 #include <rtems.h>
 #include <rtems/config.h>
 #include <rtems/counter.h>
-
-#include <libchip/ns16550.h>
 
 #include <libcpu/powerpc-utility.h>
 
@@ -50,7 +48,9 @@ qoriq_start_spin_table_addr[QORIQ_CPU_COUNT / QORIQ_THREAD_COUNT];
 unsigned int BSP_bus_frequency;
 
 /* Configuration parameter for clock driver, ... */
-uint32_t bsp_clicks_per_usec;
+uint32_t bsp_time_base_frequency;
+
+uint32_t qoriq_clock_frequency;
 
 void BSP_panic(char *s)
 {
@@ -99,21 +99,85 @@ static void initialize_frequency_parameters(void)
   if (val_fdt == NULL || len != 4) {
     bsp_fatal(QORIQ_FATAL_FDT_NO_BUS_FREQUENCY);
   }
-  bsp_clicks_per_usec = fdt32_to_cpu(*val_fdt) / 1000000;
+  bsp_time_base_frequency = fdt32_to_cpu(*val_fdt);
 
   #ifdef __PPC_CPU_E6500__
     val_fdt = (fdt32_t *) fdt_getprop(fdt, node, "clock-frequency", &len);
     if (val_fdt == NULL || len != 4) {
       bsp_fatal(QORIQ_FATAL_FDT_NO_CLOCK_FREQUENCY);
     }
+    qoriq_clock_frequency = fdt32_to_cpu(*val_fdt);
   #endif
   rtems_counter_initialize_converter(fdt32_to_cpu(*val_fdt));
 }
 
+#define MTIVPR(base) \
+  __asm__ volatile ("mtivpr %0" : : "r" (base))
+
+#ifdef __powerpc64__
+#define VECTOR_TABLE_ENTRY_SIZE 32
+#else
+#define VECTOR_TABLE_ENTRY_SIZE 16
+#endif
+
+#define MTIVOR(vec, offset) \
+  do { \
+    __asm__ volatile ("mtspr " RTEMS_XSTRING(vec) ", %0" : : "r" (offset)); \
+    offset += VECTOR_TABLE_ENTRY_SIZE; \
+  } while (0)
+
+void qoriq_initialize_exceptions(void *interrupt_stack_begin)
+{
+  uintptr_t addr;
+
+  ppc_exc_initialize_interrupt_stack(
+    (uintptr_t) interrupt_stack_begin,
+    rtems_configuration_get_interrupt_stack_size()
+  );
+
+  addr = (uintptr_t) bsp_exc_vector_base;
+  MTIVPR(addr);
+  MTIVOR(BOOKE_IVOR0,  addr);
+  MTIVOR(BOOKE_IVOR1,  addr);
+  MTIVOR(BOOKE_IVOR2,  addr);
+  MTIVOR(BOOKE_IVOR3,  addr);
+  MTIVOR(BOOKE_IVOR4,  addr);
+  MTIVOR(BOOKE_IVOR5,  addr);
+  MTIVOR(BOOKE_IVOR6,  addr);
+#ifdef __PPC_CPU_E6500__
+  MTIVOR(BOOKE_IVOR7,  addr);
+#endif
+  MTIVOR(BOOKE_IVOR8,  addr);
+#ifdef __PPC_CPU_E6500__
+  MTIVOR(BOOKE_IVOR9,  addr);
+#endif
+  MTIVOR(BOOKE_IVOR10, addr);
+  MTIVOR(BOOKE_IVOR11, addr);
+  MTIVOR(BOOKE_IVOR12, addr);
+  MTIVOR(BOOKE_IVOR13, addr);
+  MTIVOR(BOOKE_IVOR14, addr);
+  MTIVOR(BOOKE_IVOR15, addr);
+  MTIVOR(BOOKE_IVOR32, addr);
+  MTIVOR(BOOKE_IVOR33, addr);
+#ifndef __PPC_CPU_E6500__
+  MTIVOR(BOOKE_IVOR34, addr);
+#endif
+  MTIVOR(BOOKE_IVOR35, addr);
+#ifdef __PPC_CPU_E6500__
+  MTIVOR(BOOKE_IVOR36, addr);
+  MTIVOR(BOOKE_IVOR37, addr);
+#ifndef QORIQ_IS_HYPERVISOR_GUEST
+  MTIVOR(BOOKE_IVOR38, addr);
+  MTIVOR(BOOKE_IVOR39, addr);
+  MTIVOR(BOOKE_IVOR40, addr);
+  MTIVOR(BOOKE_IVOR41, addr);
+  MTIVOR(BOOKE_IVOR42, addr);
+#endif
+#endif
+}
+
 void bsp_start(void)
 {
-  unsigned long i = 0;
-
   /*
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
    * store the result in global variables so that it can be used latter...
@@ -123,39 +187,7 @@ void bsp_start(void)
 
   initialize_frequency_parameters();
 
-  /* Initialize some console parameters */
-  for (i = 0; i < console_device_count; ++i) {
-    const console_device *dev = &console_device_table[i];
-    const rtems_termios_device_handler *ns16550 =
-      #ifdef BSP_USE_UART_INTERRUPTS
-        &ns16550_handler_interrupt;
-      #else
-        &ns16550_handler_polled;
-      #endif
-
-    if (dev->handler == ns16550) {
-      ns16550_context *ctx = (ns16550_context *) dev->context;
-
-      ctx->clock = BSP_bus_frequency;
-      ctx->initial_baud = 115200;
-    }
-  }
-
-  /* Initialize exception handler */
-  ppc_exc_initialize_with_vector_base(
-    (uintptr_t) bsp_section_work_begin,
-    rtems_configuration_get_interrupt_stack_size(),
-    bsp_exc_vector_base
-  );
-
-  /* Now it is possible to make the code execute only */
-  qoriq_mmu_change_perm(
-    FSL_EIS_MAS3_SR | FSL_EIS_MAS3_SX,
-    FSL_EIS_MAS3_SX,
-    FSL_EIS_MAS3_SR
-  );
-
-  /* Initalize interrupt support */
+  qoriq_initialize_exceptions(bsp_section_work_begin);
   bsp_interrupt_initialize();
 
   rtems_cache_coherent_add_area(
@@ -163,10 +195,17 @@ void bsp_start(void)
     (uintptr_t) bsp_section_nocacheheap_size
   );
 
+#ifndef QORIQ_IS_HYPERVISOR_GUEST
   /* Disable boot page translation */
 #if QORIQ_CHIP_IS_T_VARIANT(QORIQ_CHIP_VARIANT)
   qoriq.lcc.bstar &= ~LCC_BSTAR_EN;
 #else
   qoriq.lcc.bptr &= ~BPTR_EN;
 #endif
+#endif
+}
+
+uint32_t bsp_fdt_map_intr(const uint32_t *intr, size_t icells)
+{
+  return intr[0] - 16;
 }

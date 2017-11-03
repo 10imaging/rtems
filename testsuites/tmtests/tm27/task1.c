@@ -46,6 +46,11 @@ rtems_isr Isr_handler(
   rtems_vector_number vector
 );
 
+static void set_thread_executing( Thread_Control *thread )
+{
+  _Per_CPU_Get_snapshot()->executing = thread;
+}
+
 rtems_task Init(
   rtems_task_argument argument
 )
@@ -107,7 +112,7 @@ rtems_task Task_1(
 )
 {
   Scheduler_priority_Context *scheduler_context =
-    _Scheduler_priority_Get_context( _Scheduler_Get( _Thread_Get_executing() ) );
+    _Scheduler_priority_Get_context( _Thread_Scheduler_get_home( _Thread_Get_executing() ) );
 #if defined(RTEMS_SMP)
   rtems_interrupt_level level;
 #endif
@@ -191,8 +196,9 @@ rtems_task Task_1(
   _ISR_Local_disable(level);
 #endif
 
-  _Thread_Executing =
-        (Thread_Control *) _Chain_First(&scheduler_context->Ready[LOW_PRIORITY]);
+  set_thread_executing(
+    (Thread_Control *) _Chain_First(&scheduler_context->Ready[LOW_PRIORITY])
+  );
 
   _Thread_Dispatch_necessary = 1;
 
@@ -231,7 +237,7 @@ rtems_task Task_2(
   ISR_lock_Context scheduler_lock_context;
 
   _Thread_State_acquire( executing, &state_lock_context );
-  scheduler = _Scheduler_Get( executing );
+  scheduler = _Thread_Scheduler_get_home( executing );
   scheduler_context = _Scheduler_priority_Get_context( scheduler );
   _Thread_State_release( executing, &state_lock_context );
 
@@ -265,8 +271,9 @@ rtems_task Task_2(
   _Thread_State_acquire( executing, &state_lock_context );
   _Scheduler_Acquire_critical( scheduler, &scheduler_lock_context );
 
-  _Thread_Executing =
-        (Thread_Control *) _Chain_First(&scheduler_context->Ready[LOW_PRIORITY]);
+  set_thread_executing(
+    (Thread_Control *) _Chain_First(&scheduler_context->Ready[LOW_PRIORITY])
+  );
 
   _Thread_Dispatch_necessary = 1;
 

@@ -4,29 +4,30 @@ include $(top_srcdir)/automake/compile.am
 include $(top_srcdir)/automake/multilib.am
 
 # librtemscpu
-SUBDIRS = . score rtems sapi posix
-SUBDIRS += dev
-SUBDIRS += dtc/libfdt
-SUBDIRS += libcrypt
-SUBDIRS += libcsupport libblock libfs
-SUBDIRS += libdrvmgr
-SUBDIRS += libnetworking librpc
-SUBDIRS += libpci
-SUBDIRS += libi2c
-SUBDIRS += libmisc
-SUBDIRS += libmd
-SUBDIRS += libgnat
-SUBDIRS += libdl
-SUBDIRS += libstdthreads
-SUBDIRS += wrapup
+_SUBDIRS = . score rtems sapi posix
+_SUBDIRS += dev
+_SUBDIRS += dtc/libfdt
+_SUBDIRS += libcrypt
+_SUBDIRS += libcsupport libblock libfs
+_SUBDIRS += libdrvmgr
+_SUBDIRS += libnetworking librpc
+_SUBDIRS += libpci
+_SUBDIRS += libi2c
+_SUBDIRS += libmisc
+_SUBDIRS += libmd
+_SUBDIRS += libgnat
+_SUBDIRS += libdl
+_SUBDIRS += libstdthreads
+_SUBDIRS += libdebugger
+_SUBDIRS += wrapup
 
-SUBDIRS += zlib
+_SUBDIRS += zlib
 
 # applications
-SUBDIRS += ftpd
-SUBDIRS += telnetd
-SUBDIRS += pppd
-SUBDIRS += mghttpd
+_SUBDIRS += ftpd
+_SUBDIRS += telnetd
+_SUBDIRS += pppd
+_SUBDIRS += mghttpd
 
 noinst_DATA = preinstall-stamp
 preinstall-stamp:
@@ -35,6 +36,7 @@ preinstall-stamp:
 CLEANFILES = preinstall-stamp
 
 include_HEADERS =
+include_HEADERS += include/endian.h
 
 include_rtemsdir = $(includedir)/rtems
 include_rtems_HEADERS =
@@ -54,22 +56,28 @@ include_sys_HEADERS =
 include_HEADERS += include/crypt.h
 include_HEADERS += include/memory.h
 
-include_sys_HEADERS += posix/include/sys/mman.h
-include_sys_HEADERS += libcsupport/include/sys/ioccom.h
+include_HEADERS += libmisc/xz/xz.h
+
 include_sys_HEADERS += libcsupport/include/sys/event.h
-include_sys_HEADERS += libcsupport/include/sys/filio.h
-include_sys_HEADERS += libcsupport/include/sys/ioctl.h
 include_sys_HEADERS += libcsupport/include/sys/poll.h
 include_sys_HEADERS += libcsupport/include/sys/statvfs.h
-include_sys_HEADERS += libcsupport/include/sys/sockio.h
-include_sys_HEADERS += libcsupport/include/sys/ttycom.h
-include_sys_HEADERS += libcsupport/include/sys/termios.h
 include_sys_HEADERS += libcsupport/include/sys/utsname.h
 
 include_sys_HEADERS += include/sys/endian.h
-include_sys_HEADERS += include/sys/uio.h
-include_sys_HEADERS += include/sys/_iovec.h
 include_sys_HEADERS += include/sys/priority.h
+
+if !HAS_NEWLIB_20170522_HEADER
+include_sys_HEADERS += include/sys/_iovec.h
+include_sys_HEADERS += include/sys/uio.h
+include_sys_HEADERS += libcsupport/include/sys/filio.h
+include_sys_HEADERS += libcsupport/include/sys/ioccom.h
+include_sys_HEADERS += libcsupport/include/sys/ioctl.h
+include_sys_HEADERS += libcsupport/include/sys/sockio.h
+include_sys_HEADERS += libcsupport/include/sys/_termios.h
+include_sys_HEADERS += libcsupport/include/sys/termios.h
+include_sys_HEADERS += libcsupport/include/sys/ttycom.h
+include_sys_HEADERS += libcsupport/include/sys/ttydefaults.h
+endif
 
 if LIBNETWORKING
 include_rtems_bsdnetdir = $(includedir)/rtems/bsdnet
@@ -96,7 +104,16 @@ include_rtems_rtl_HEADERS += libdl/rtl-indirect-ptr.h libdl/rtl-sym.h libdl/rtl-
 include_rtems_rtl_HEADERS += libdl/rap.h libdl/rap-shell.h
 endif
 
+if LIBDEBUGGER
+include_rtems_HEADERS += libdebugger/rtems-debugger.h
+include_rtems_debuggerdir = $(includedir)/rtems/debugger
+include_rtems_debugger_HEADERS  =
+include_rtems_debugger_HEADERS += libdebugger/rtems-debugger-server.h
+include_rtems_debugger_HEADERS +=  libdebugger/rtems-debugger-remote.h
+endif
+
 include_rtems_HEADERS += include/rtems/bspIo.h
+include_rtems_HEADERS += include/rtems/inttypes.h
 include_rtems_HEADERS += include/rtems/print.h
 include_rtems_HEADERS += include/rtems/printer.h
 include_rtems_HEADERS += include/rtems/userenv.h
@@ -200,6 +217,10 @@ include_rtems_HEADERS += libmisc/devnull/devzero.h
 
 ## dumpbuf
 include_rtems_HEADERS += libmisc/dumpbuf/dumpbuf.h
+
+## rtemsfdt
+include_rtems_HEADERS += libmisc/rtems-fdt/rtems-fdt.h
+include_rtems_HEADERS += libmisc/rtems-fdt/rtems-fdt-shell.h
 
 ## monitor
 include_rtems_HEADERS += libmisc/monitor/monitor.h

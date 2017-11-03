@@ -69,11 +69,8 @@ rtems_irq_connect_data clock_isr_data = {
 };
 
 
-#define Clock_driver_support_install_isr( _new, _old ) \
-  do {                                                 \
-      (_old) = NULL;                                   \
-      BSP_install_rtems_irq_handler(&clock_isr_data);  \
-  } while(0)
+#define Clock_driver_support_install_isr( _new ) \
+  BSP_install_rtems_irq_handler(&clock_isr_data)
 
 static void Clock_driver_support_initialize_hardware(void)
 {
@@ -106,10 +103,10 @@ static void Clock_driver_support_initialize_hardware(void)
     (void) st_str; /* avoid set but not used warning */ \
   } while (0)
 
-static void Clock_driver_support_shutdown_hardware( void )
-{
-  BSP_remove_rtems_irq_handler(&clock_isr_data);
-}
+#define Clock_driver_support_shutdown_hardware() \
+  do { \
+    BSP_remove_rtems_irq_handler(&clock_isr_data); \
+  } while (0)
 
 #define CLOCK_DRIVER_USE_DUMMY_TIMECOUNTER
 

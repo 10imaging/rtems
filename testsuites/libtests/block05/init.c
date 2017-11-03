@@ -24,12 +24,12 @@
 #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 #include <stdarg.h>
 #include <errno.h>
 
 #include <rtems.h>
+#include <rtems/bspIo.h>
 #include <rtems/bdbuf.h>
 #include <rtems/diskdevs.h>
 

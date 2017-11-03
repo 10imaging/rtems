@@ -34,15 +34,6 @@ extern "C" {
 /* conditional compilation parameters */
 
 /*
- *  Should the calls to _Thread_Enable_dispatch be inlined?
- *
- *  If TRUE, then they are inlined.
- *  If FALSE, then a subroutine call is made.
- */
-
-#define CPU_INLINE_ENABLE_DISPATCH       TRUE
-
-/*
  *  Does the executive manage a dedicated interrupt stack in software?
  *
  *  If TRUE, then a stack is allocated in _ISR_Handler_initialization.
@@ -93,7 +84,7 @@ extern "C" {
  *  number (0)?
  */
 
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 /*
  *  Does the CPU have hardware floating point?
@@ -145,6 +136,8 @@ extern "C" {
 
 #define CPU_USE_DEFERRED_FP_SWITCH       TRUE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 /*
  *  Does this port provide a CPU dependent IDLE task implementation?
  *
@@ -190,14 +183,6 @@ extern "C" {
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( 16 )
 
 /*
- *  Define what is required to specify how the network to host conversion
- *  routines are handled.
- */
-
-#define CPU_BIG_ENDIAN                           TRUE
-#define CPU_LITTLE_ENDIAN                        FALSE
-
-/*
  *  The following defines the number of bits actually used in the
  *  interrupt field of the task mode.  How those bits map to the
  *  CPU interrupt levels is defined by the routine _CPU_ISR_Set_level().
@@ -206,8 +191,6 @@ extern "C" {
  */
 
 #define CPU_MODES_INTERRUPT_MASK   0x0000000F
-
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 #define CPU_MAXIMUM_PROCESSORS 32
 
@@ -219,10 +202,6 @@ extern "C" {
  */
 
 #ifndef ASM
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 typedef struct {
   uint64_t    l0;
@@ -253,7 +232,7 @@ typedef struct {
   uint64_t    saved_arg4;
   uint64_t    saved_arg5;
   uint64_t    pad0;
-}  CPU_Minimum_stack_frame;
+} SPARC64_Minimum_stack_frame;
 
 #endif /* !ASM */
 
@@ -282,7 +261,7 @@ typedef struct {
 #define CPU_STACK_FRAME_SAVED_ARG5_OFFSET     0xB0
 #define CPU_STACK_FRAME_PAD0_OFFSET           0xB8
 
-#define CPU_MINIMUM_STACK_FRAME_SIZE          0xC0
+#define SPARC64_MINIMUM_STACK_FRAME_SIZE          0xC0
 
 /*
  * Contexts
@@ -489,7 +468,7 @@ typedef struct {
  */
 
 typedef struct {
-  CPU_Minimum_stack_frame  Stack_frame;
+  SPARC64_Minimum_stack_frame Stack_frame;
   uint64_t                 tstate;
   uint64_t                 tpc;
   uint64_t                 tnpc;
@@ -519,29 +498,29 @@ typedef struct {
  *  Offsets of fields with CPU_Interrupt_frame for assembly routines.
  */
 
-#define ISF_TSTATE_OFFSET      CPU_MINIMUM_STACK_FRAME_SIZE + 0x00
-#define ISF_TPC_OFFSET         CPU_MINIMUM_STACK_FRAME_SIZE + 0x08
-#define ISF_TNPC_OFFSET        CPU_MINIMUM_STACK_FRAME_SIZE + 0x10
-#define ISF_PIL_OFFSET         CPU_MINIMUM_STACK_FRAME_SIZE + 0x18
-#define ISF_Y_OFFSET           CPU_MINIMUM_STACK_FRAME_SIZE + 0x20
-#define ISF_G1_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x28
-#define ISF_G2_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x30
-#define ISF_G3_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x38
-#define ISF_G4_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x40
-#define ISF_G5_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x48
-#define ISF_G6_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x50
-#define ISF_G7_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x58
-#define ISF_O0_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x60
-#define ISF_O1_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x68
-#define ISF_O2_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x70
-#define ISF_O3_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x78
-#define ISF_O4_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x80
-#define ISF_O5_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x88
-#define ISF_O6_SP_OFFSET       CPU_MINIMUM_STACK_FRAME_SIZE + 0x90
-#define ISF_O7_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x98
-#define ISF_TVEC_OFFSET        CPU_MINIMUM_STACK_FRAME_SIZE + 0xA0
+#define ISF_TSTATE_OFFSET      SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x00
+#define ISF_TPC_OFFSET         SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x08
+#define ISF_TNPC_OFFSET        SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x10
+#define ISF_PIL_OFFSET         SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x18
+#define ISF_Y_OFFSET           SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x20
+#define ISF_G1_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x28
+#define ISF_G2_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x30
+#define ISF_G3_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x38
+#define ISF_G4_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x40
+#define ISF_G5_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x48
+#define ISF_G6_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x50
+#define ISF_G7_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x58
+#define ISF_O0_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x60
+#define ISF_O1_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x68
+#define ISF_O2_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x70
+#define ISF_O3_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x78
+#define ISF_O4_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x80
+#define ISF_O5_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x88
+#define ISF_O6_SP_OFFSET       SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x90
+#define ISF_O7_OFFSET          SPARC64_MINIMUM_STACK_FRAME_SIZE + 0x98
+#define ISF_TVEC_OFFSET        SPARC64_MINIMUM_STACK_FRAME_SIZE + 0xA0
 
-#define CONTEXT_CONTROL_INTERRUPT_FRAME_SIZE CPU_MINIMUM_STACK_FRAME_SIZE + 0xA8
+#define CONTEXT_CONTROL_INTERRUPT_FRAME_SIZE SPARC64_MINIMUM_STACK_FRAME_SIZE + 0xA8
 #ifndef ASM
 /*
  *  This variable is contains the initialize context for the FP unit.
@@ -769,6 +748,11 @@ extern const CPU_Trap_table_entry _CPU_Trap_slot_template;
 #define _CPU_ISR_Flash( _level ) \
    sparc_flash_interrupts( _level )
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & SPARC_PSTATE_IE_MASK ) != 0;
+}
+
 /*
  *  Map interrupt level in task mode onto the hardware that the CPU
  *  actually provides.  Currently, interrupt levels which do not
@@ -838,14 +822,6 @@ void _CPU_Context_Initialize(
 
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
-
-/*
- *  The FP context area for the SPARC is a simple structure and nothing
- *  special is required to find the "starting load point"
- */
-
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
 /*
  *  This routine initializes the FP context area passed to it to.

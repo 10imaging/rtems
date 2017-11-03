@@ -50,26 +50,6 @@ extern "C" {
 /* conditional compilation parameters */
 
 /*
- *  Should the calls to _Thread_Enable_dispatch be inlined?
- *
- *  If TRUE, then they are inlined.
- *  If FALSE, then a subroutine call is made.
- *
- *  Basically this is an example of the classic trade-off of size
- *  versus speed.  Inlining the call (TRUE) typically increases the
- *  size of RTEMS while speeding up the enabling of dispatching.
- *  [NOTE: In general, the _Thread_Dispatch_disable_level will
- *  only be 0 or 1 unless you are in an interrupt handler and that
- *  interrupt handler invokes the executive.]  When not inlined
- *  something calls _Thread_Enable_dispatch which in turns calls
- *  _Thread_Dispatch.  If the enable dispatch is inlined, then
- *  one subroutine call is avoided entirely.]
- *
- */
-
-#define CPU_INLINE_ENABLE_DISPATCH       FALSE
-
-/*
  *  Does RTEMS manage a dedicated interrupt stack in software?
  *
  *  If TRUE, then a stack is allocated in _ISR_Handler_initialization.
@@ -137,7 +117,7 @@ extern "C" {
  *
  */
 
-#define CPU_ISR_PASSES_FRAME_POINTER 1
+#define CPU_ISR_PASSES_FRAME_POINTER TRUE
 
 /*
  *  Does the CPU have hardware floating point?
@@ -225,6 +205,8 @@ extern "C" {
 
 #define CPU_USE_DEFERRED_FP_SWITCH       FALSE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 /*
  *  Does this port provide a CPU dependent IDLE task implementation?
  *
@@ -279,8 +261,6 @@ extern "C" {
  */
 
 #define CPU_HAS_OWN_HOST_TO_NETWORK_ROUTINES     FALSE
-#define CPU_BIG_ENDIAN                           FALSE
-#define CPU_LITTLE_ENDIAN                        TRUE
 
 /*
  *  The following defines the number of bits actually used in the
@@ -545,6 +525,11 @@ static inline void epiphany_interrupt_enable(uint32_t level)
       epiphany_interrupt_disable(); \
     } while(0)
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & 0x2 ) != 0;
+}
+
 /*
  *  Map interrupt level in task mode onto the hardware that the CPU
  *  actually provides.  Currently, interrupt levels which do not
@@ -639,24 +624,6 @@ void _CPU_Context_Initialize(
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) )
 
-/*
- *  The purpose of this macro is to allow the initial pointer into
- *  a floating point context area (used to save the floating point
- *  context) to be at an arbitrary place in the floating point
- *  context area.
- *
- *  This is necessary because some FP units are designed to have
- *  their context saved as a stack which grows into lower addresses.
- *  Other FP units can be saved by simply moving registers into offsets
- *  from the base of the context area.  Finally some FP units provide
- *  a "dump context" instruction which could fill in from high to low
- *  or low to high based on the whim of the CPU designers.
- *
- */
-
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
-
 #define _CPU_Context_Initialize_fp( _destination ) \
   memset( *( _destination ), 0, CPU_CONTEXT_FP_SIZE );
 
@@ -671,8 +638,10 @@ void _CPU_Context_Initialize(
  *
  */
 
+#include <inttypes.h>
+
 #define _CPU_Fatal_halt(_source, _error ) \
-          printk("Fatal Error %d.%d Halted\n",_source, _error); \
+          printk("Fatal Error %d.%" PRIu32 " Halted\n",_source, _error); \
           asm("trap 3" :: "r" (_error)); \
           for(;;)
 
@@ -680,9 +649,6 @@ void _CPU_Context_Initialize(
 
 #define CPU_USE_GENERIC_BITFIELD_CODE TRUE
 
-typedef struct {
-/* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 #endif /* ASM */
 
 /**
@@ -694,7 +660,6 @@ typedef struct {
  */
 #define CPU_SIZEOF_POINTER 4
 #define CPU_EXCEPTION_FRAME_SIZE 260
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 #define CPU_MAXIMUM_PROCESSORS 32
 

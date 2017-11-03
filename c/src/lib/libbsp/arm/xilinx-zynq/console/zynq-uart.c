@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2013, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -14,18 +14,9 @@
 
 #include <bsp/zynq-uart.h>
 #include <bsp/zynq-uart-regs.h>
+#include <bsp/irq.h>
 
 #include <bspopts.h>
-
-#include <libchip/sersupp.h>
-
-static volatile zynq_uart *zynq_uart_get_regs(int minor)
-{
-  const console_tbl *ct = Console_Port_Tbl != NULL ?
-    Console_Port_Tbl[minor] : &Console_Configuration_Ports[minor];
-
-  return (volatile zynq_uart *) ct->ulCtrlPort1;
-}
 
 /*
  * Make weak and let the user override.
@@ -112,13 +103,14 @@ static int zynq_cal_baud_rate(uint32_t  baudrate,
   return 0;
 }
 
-static void zynq_uart_initialize(int minor)
+void zynq_uart_initialize(rtems_termios_device_context *base)
 {
-  volatile zynq_uart *regs = zynq_uart_get_regs(minor);
+  zynq_uart_context *ctx = (zynq_uart_context *) base;
+  volatile zynq_uart *regs = ctx->regs;
   uint32_t brgr = 0x3e;
   uint32_t bauddiv = 0x6;
 
-  zynq_cal_baud_rate(115200, &brgr, &bauddiv, regs->mode);
+  zynq_cal_baud_rate(ZYNQ_UART_DEFAULT_BAUD, &brgr, &bauddiv, regs->mode);
 
   regs->control &= ~(ZYNQ_UART_CONTROL_RXEN | ZYNQ_UART_CONTROL_TXEN);
   regs->control = ZYNQ_UART_CONTROL_RXDIS
@@ -137,27 +129,88 @@ static void zynq_uart_initialize(int minor)
     | ZYNQ_UART_CONTROL_RSTTO;
 }
 
-static int zynq_uart_first_open(int major, int minor, void *arg)
+#ifdef ZYNQ_CONSOLE_USE_INTERRUPTS
+static void zynq_uart_interrupt(void *arg)
 {
-  rtems_libio_open_close_args_t *oc = (rtems_libio_open_close_args_t *) arg;
-  struct rtems_termios_tty *tty = (struct rtems_termios_tty *) oc->iop->data1;
-  console_data *cd = &Console_Port_Data[minor];
-  const console_tbl *ct = Console_Port_Tbl[minor];
+  rtems_termios_tty *tty = arg;
+  zynq_uart_context *ctx = rtems_termios_get_device_context(tty);
+  volatile zynq_uart *regs = ctx->regs;
+  uint32_t channel_sts;
 
-  cd->termios_data = tty;
-  rtems_termios_set_initial_baud(tty, (rtems_termios_baud_t) ct->pDeviceParams);
+  if ((regs->irq_sts & (ZYNQ_UART_TIMEOUT | ZYNQ_UART_RTRIG)) != 0) {
+    regs->irq_sts = ZYNQ_UART_TIMEOUT | ZYNQ_UART_RTRIG;
 
-  return 0;
+    do {
+      char c = (char) ZYNQ_UART_TX_RX_FIFO_FIFO_GET(regs->tx_rx_fifo);
+
+      rtems_termios_enqueue_raw_characters(tty, &c, 1);
+
+      channel_sts = regs->channel_sts;
+    } while ((channel_sts & ZYNQ_UART_CHANNEL_STS_REMPTY) == 0);
+  } else {
+    channel_sts = regs->channel_sts;
+  }
+
+  if (ctx->transmitting && (channel_sts & ZYNQ_UART_CHANNEL_STS_TEMPTY) != 0) {
+    rtems_termios_dequeue_characters(tty, 1);
+  }
+}
+#endif
+
+static bool zynq_uart_first_open(
+  rtems_termios_tty *tty,
+  rtems_termios_device_context *base,
+  struct termios *term,
+  rtems_libio_open_close_args_t *args
+)
+{
+#ifdef ZYNQ_CONSOLE_USE_INTERRUPTS
+  zynq_uart_context *ctx = (zynq_uart_context *) base;
+  volatile zynq_uart *regs = ctx->regs;
+  rtems_status_code sc;
+#endif
+
+  rtems_termios_set_initial_baud(tty, ZYNQ_UART_DEFAULT_BAUD);
+  zynq_uart_initialize(base);
+
+#ifdef ZYNQ_CONSOLE_USE_INTERRUPTS
+  regs->rx_timeout = 32;
+  regs->rx_fifo_trg_lvl = ZYNQ_UART_FIFO_DEPTH / 2;
+  regs->irq_dis = 0xffffffff;
+  regs->irq_sts = 0xffffffff;
+  regs->irq_en = ZYNQ_UART_RTRIG | ZYNQ_UART_TIMEOUT;
+  sc = rtems_interrupt_handler_install(
+    ctx->irq,
+    "UART",
+    RTEMS_INTERRUPT_SHARED,
+    zynq_uart_interrupt,
+    tty
+  );
+  if (sc != RTEMS_SUCCESSFUL) {
+    return false;
+  }
+#endif
+
+  return true;
 }
 
-static int zynq_uart_last_close(int major, int minor, void *arg)
+#ifdef ZYNQ_CONSOLE_USE_INTERRUPTS
+static void zynq_uart_last_close(
+  rtems_termios_tty *tty,
+  rtems_termios_device_context *base,
+  rtems_libio_open_close_args_t *args
+)
 {
-  return 0;
-}
+  zynq_uart_context *ctx = (zynq_uart_context *) base;
 
-static int zynq_uart_read_polled(int minor)
+  rtems_interrupt_handler_remove(ctx->irq, zynq_uart_interrupt, tty);
+}
+#endif
+
+int zynq_uart_read_polled(rtems_termios_device_context *base)
 {
-  volatile zynq_uart *regs = zynq_uart_get_regs(minor);
+  zynq_uart_context *ctx = (zynq_uart_context *) base;
+  volatile zynq_uart *regs = ctx->regs;
 
   if ((regs->channel_sts & ZYNQ_UART_CHANNEL_STS_REMPTY) != 0) {
     return -1;
@@ -166,9 +219,13 @@ static int zynq_uart_read_polled(int minor)
   }
 }
 
-static void zynq_uart_write_polled(int minor, char c)
+void zynq_uart_write_polled(
+  rtems_termios_device_context *base,
+  char c
+)
 {
-  volatile zynq_uart *regs = zynq_uart_get_regs(minor);
+  zynq_uart_context *ctx = (zynq_uart_context *) base;
+  volatile zynq_uart *regs = ctx->regs;
 
   while ((regs->channel_sts & ZYNQ_UART_CHANNEL_STS_TFUL) != 0) {
     /* Wait */
@@ -177,22 +234,38 @@ static void zynq_uart_write_polled(int minor, char c)
   regs->tx_rx_fifo = ZYNQ_UART_TX_RX_FIFO_FIFO(c);
 }
 
-static ssize_t zynq_uart_write_support_polled(
-  int minor,
-  const char *s,
-  size_t n
+static void zynq_uart_write_support(
+  rtems_termios_device_context *base,
+  const char *buf,
+  size_t len
 )
 {
-  ssize_t i = 0;
+#ifdef ZYNQ_CONSOLE_USE_INTERRUPTS
+  zynq_uart_context *ctx = (zynq_uart_context *) base;
+  volatile zynq_uart *regs = ctx->regs;
 
-  for (i = 0; i < n; ++i) {
-    zynq_uart_write_polled(minor, s[i]);
+  if (len > 0) {
+    ctx->transmitting = true;
+    regs->irq_sts = ZYNQ_UART_TEMPTY;
+    regs->irq_en = ZYNQ_UART_TEMPTY;
+    regs->tx_rx_fifo = ZYNQ_UART_TX_RX_FIFO_FIFO(buf[0]);
+  } else {
+    ctx->transmitting = false;
+    regs->irq_dis = ZYNQ_UART_TEMPTY;
   }
+#else
+  ssize_t i;
 
-  return n;
+  for (i = 0; i < len; ++i) {
+    zynq_uart_write_polled(base, buf[i]);
+  }
+#endif
 }
 
-static int zynq_uart_set_attribues(int minor, const struct termios *term)
+static bool zynq_uart_set_attributes(
+  rtems_termios_device_context *context,
+  const struct termios *term
+)
 {
 #if 0
   volatile zynq_uart *regs = zynq_uart_get_regs(minor);
@@ -209,20 +282,34 @@ static int zynq_uart_set_attribues(int minor, const struct termios *term)
   regs->baud_rate_div = ZYNQ_UART_BAUD_RATE_DIV_BDIV(bauddiv);
   regs->control |= ZYNQ_UART_CONTROL_RXEN | ZYNQ_UART_CONTROL_TXEN;
 
-  return 0;
+  return true;
 #else
-  return -1;
+  return false;
 #endif
 }
 
-const console_fns zynq_uart_fns = {
-  .deviceProbe = libchip_serial_default_probe,
-  .deviceFirstOpen = zynq_uart_first_open,
-  .deviceLastClose = zynq_uart_last_close,
-  .deviceRead = zynq_uart_read_polled,
-  .deviceWrite = zynq_uart_write_support_polled,
-  .deviceInitialize = zynq_uart_initialize,
-  .deviceWritePolled = zynq_uart_write_polled,
-  .deviceSetAttributes = zynq_uart_set_attribues,
-  .deviceOutputUsesInterrupts = false
+const rtems_termios_device_handler zynq_uart_handler = {
+  .first_open = zynq_uart_first_open,
+  .set_attributes = zynq_uart_set_attributes,
+  .write = zynq_uart_write_support,
+#ifdef ZYNQ_CONSOLE_USE_INTERRUPTS
+  .last_close = zynq_uart_last_close,
+  .mode = TERMIOS_IRQ_DRIVEN
+#else
+  .poll_read = zynq_uart_read_polled,
+  .mode = TERMIOS_POLLED
+#endif
 };
+
+void zynq_uart_reset_tx_flush(zynq_uart_context *ctx)
+{
+  volatile zynq_uart *regs = ctx->regs;
+  int                 c = 4;
+
+  while (c-- > 0)
+    zynq_uart_write_polled(&ctx->base, '\r');
+
+  while ((regs->channel_sts & ZYNQ_UART_CHANNEL_STS_TEMPTY) == 0) {
+    /* Wait */
+  }
+}

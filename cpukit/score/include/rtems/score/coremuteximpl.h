@@ -43,7 +43,7 @@ RTEMS_INLINE_ROUTINE void _CORE_mutex_Initialize(
   CORE_mutex_Control *the_mutex
 )
 {
-  _Thread_queue_Initialize( &the_mutex->Wait_queue );
+  _Thread_queue_Object_initialize( &the_mutex->Wait_queue );
 }
 
 RTEMS_INLINE_ROUTINE void _CORE_mutex_Destroy( CORE_mutex_Control *the_mutex )
@@ -93,14 +93,6 @@ RTEMS_INLINE_ROUTINE bool _CORE_mutex_Is_locked(
 }
 
 Status_Control _CORE_mutex_Seize_slow(
-  CORE_mutex_Control   *the_mutex,
-  Thread_Control       *executing,
-  Thread_Control       *owner,
-  bool                  wait,
-  Thread_queue_Context *queue_context
-);
-
-Status_Control _CORE_mutex_Seize_no_protocol_slow(
   CORE_mutex_Control            *the_mutex,
   const Thread_queue_Operations *operations,
   Thread_Control                *executing,
@@ -124,32 +116,6 @@ RTEMS_INLINE_ROUTINE bool _CORE_mutex_Is_owner(
   return _CORE_mutex_Get_owner( the_mutex ) == the_thread;
 }
 
-RTEMS_INLINE_ROUTINE void _CORE_mutex_Restore_priority(
-  Thread_Control *executing
-)
-{
-  /*
-   *  Whether or not someone is waiting for the mutex, an
-   *  inherited priority must be lowered if this is the last
-   *  mutex (i.e. resource) this task has.
-   */
-  if ( !_Thread_Owns_resources( executing ) ) {
-    /*
-     * Ensure that the executing resource count is visible to all other
-     * processors and that we read the latest priority restore hint.
-     */
-    _Atomic_Fence( ATOMIC_ORDER_ACQ_REL );
-
-    if ( executing->priority_restore_hint ) {
-      Per_CPU_Control *cpu_self;
-
-      cpu_self = _Thread_Dispatch_disable();
-      _Thread_Restore_priority( executing );
-      _Thread_Dispatch_enable( cpu_self );
-    }
-  }
-}
-
 RTEMS_INLINE_ROUTINE void _CORE_recursive_mutex_Initialize(
   CORE_recursive_mutex_Control *the_mutex
 )
@@ -168,6 +134,7 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Seize_nested(
 
 RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Seize(
   CORE_recursive_mutex_Control  *the_mutex,
+  const Thread_queue_Operations *operations,
   Thread_Control                *executing,
   bool                           wait,
   Status_Control              ( *nested )( CORE_recursive_mutex_Control * ),
@@ -182,7 +149,7 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Seize(
 
   if ( owner == NULL ) {
     _CORE_mutex_Set_owner( &the_mutex->Mutex, executing );
-    ++executing->resource_count;
+    _Thread_Resource_count_increment( executing );
     _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
     return STATUS_SUCCESSFUL;
   }
@@ -197,22 +164,22 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Seize(
 
   return _CORE_mutex_Seize_slow(
     &the_mutex->Mutex,
+    operations,
     executing,
-    owner,
     wait,
     queue_context
   );
 }
 
 RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Surrender(
-  CORE_recursive_mutex_Control *the_mutex,
-  Thread_Control               *executing,
-  Thread_queue_Context         *queue_context
+  CORE_recursive_mutex_Control  *the_mutex,
+  const Thread_queue_Operations *operations,
+  Thread_Control                *executing,
+  Thread_queue_Context          *queue_context
 )
 {
   unsigned int        nest_level;
   Thread_queue_Heads *heads;
-  bool                keep_priority;
 
   _CORE_mutex_Acquire_critical( &the_mutex->Mutex, queue_context );
 
@@ -229,115 +196,22 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Surrender(
     return STATUS_SUCCESSFUL;
   }
 
-  --executing->resource_count;
+  _Thread_Resource_count_decrement( executing );
   _CORE_mutex_Set_owner( &the_mutex->Mutex, NULL );
 
-  /*
-   * Ensure that the owner resource count is visible to all other
-   * processors and that we read the latest priority restore
-   * hint.
-   */
-  _Atomic_Fence( ATOMIC_ORDER_ACQ_REL );
-
   heads = the_mutex->Mutex.Wait_queue.Queue.heads;
-  keep_priority = _Thread_Owns_resources( executing )
-    || !executing->priority_restore_hint;
 
-  if ( heads == NULL && keep_priority ) {
+  if ( heads == NULL ) {
     _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
     return STATUS_SUCCESSFUL;
   }
 
   _Thread_queue_Surrender(
     &the_mutex->Mutex.Wait_queue.Queue,
-    CORE_MUTEX_TQ_PRIORITY_INHERIT_OPERATIONS,
     heads,
     executing,
-    keep_priority,
-    queue_context
-  );
-  return STATUS_SUCCESSFUL;
-}
-
-RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Seize_no_protocol(
-  CORE_recursive_mutex_Control  *the_mutex,
-  const Thread_queue_Operations *operations,
-  Thread_Control                *executing,
-  bool                           wait,
-  Status_Control              ( *nested )( CORE_recursive_mutex_Control * ),
-  Thread_queue_Context          *queue_context
-)
-{
-  Thread_Control *owner;
-
-  _CORE_mutex_Acquire_critical( &the_mutex->Mutex, queue_context );
-
-  owner = _CORE_mutex_Get_owner( &the_mutex->Mutex );
-
-  if ( owner == NULL ) {
-    _CORE_mutex_Set_owner( &the_mutex->Mutex, executing );
-    _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
-    return STATUS_SUCCESSFUL;
-  }
-
-  if ( owner == executing ) {
-    Status_Control status;
-
-    status = ( *nested )( the_mutex );
-    _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
-    return status;
-  }
-
-  return _CORE_mutex_Seize_no_protocol_slow(
-    &the_mutex->Mutex,
-    operations,
-    executing,
-    wait,
-    queue_context
-  );
-}
-
-RTEMS_INLINE_ROUTINE Status_Control _CORE_recursive_mutex_Surrender_no_protocol(
-  CORE_recursive_mutex_Control  *the_mutex,
-  const Thread_queue_Operations *operations,
-  Thread_Control                *executing,
-  Thread_queue_Context          *queue_context
-)
-{
-  unsigned int    nest_level;
-  Thread_Control *new_owner;
-
-  _CORE_mutex_Acquire_critical( &the_mutex->Mutex, queue_context );
-
-  if ( !_CORE_mutex_Is_owner( &the_mutex->Mutex, executing ) ) {
-    _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
-    return STATUS_NOT_OWNER;
-  }
-
-  nest_level = the_mutex->nest_level;
-
-  if ( nest_level > 0 ) {
-    the_mutex->nest_level = nest_level - 1;
-    _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
-    return STATUS_SUCCESSFUL;
-  }
-
-  new_owner = _Thread_queue_First_locked(
-    &the_mutex->Mutex.Wait_queue,
+    queue_context,
     operations
-  );
-  _CORE_mutex_Set_owner( &the_mutex->Mutex, new_owner );
-
-  if ( new_owner == NULL ) {
-    _CORE_mutex_Release( &the_mutex->Mutex, queue_context );
-    return STATUS_SUCCESSFUL;
-  }
-
-  _Thread_queue_Extract_critical(
-    &the_mutex->Mutex.Wait_queue.Queue,
-    operations,
-    new_owner,
-    queue_context
   );
   return STATUS_SUCCESSFUL;
 }
@@ -349,7 +223,7 @@ RTEMS_INLINE_ROUTINE void _CORE_ceiling_mutex_Initialize(
 )
 {
   _CORE_recursive_mutex_Initialize( &the_mutex->Recursive );
-  the_mutex->priority_ceiling = priority_ceiling;
+  _Priority_Node_initialize( &the_mutex->Priority_ceiling, priority_ceiling );
 #if defined(RTEMS_SMP)
   the_mutex->scheduler = scheduler;
 #endif
@@ -363,23 +237,40 @@ _CORE_ceiling_mutex_Get_scheduler(
 #if defined(RTEMS_SMP)
   return the_mutex->scheduler;
 #else
-  return _Scheduler_Get_by_CPU_index( 0 );
+  return &_Scheduler_Table[ 0 ];
 #endif
 }
 
 RTEMS_INLINE_ROUTINE void _CORE_ceiling_mutex_Set_priority(
   CORE_ceiling_mutex_Control *the_mutex,
-  Priority_Control            priority_ceiling
+  Priority_Control            priority_ceiling,
+  Thread_queue_Context       *queue_context
 )
 {
-  the_mutex->priority_ceiling = priority_ceiling;
+  Thread_Control *owner;
+
+  owner = _CORE_mutex_Get_owner( &the_mutex->Recursive.Mutex );
+
+  if ( owner != NULL ) {
+    _Thread_Wait_acquire( owner, queue_context );
+    _Thread_Priority_change(
+      owner,
+      &the_mutex->Priority_ceiling,
+      priority_ceiling,
+      false,
+      queue_context
+    );
+    _Thread_Wait_release( owner, queue_context );
+  } else {
+    the_mutex->Priority_ceiling.priority = priority_ceiling;
+  }
 }
 
 RTEMS_INLINE_ROUTINE Priority_Control _CORE_ceiling_mutex_Get_priority(
   const CORE_ceiling_mutex_Control *the_mutex
 )
 {
-  return the_mutex->priority_ceiling;
+  return the_mutex->Priority_ceiling.priority;
 }
 
 RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Set_owner(
@@ -388,31 +279,35 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Set_owner(
   Thread_queue_Context       *queue_context
 )
 {
-  Priority_Control  priority_ceiling;
-  Priority_Control  current_priority;
+  ISR_lock_Context  lock_context;
+  Scheduler_Node   *scheduler_node;
   Per_CPU_Control  *cpu_self;
 
-  priority_ceiling = the_mutex->priority_ceiling;
-  current_priority = _Thread_Get_priority( owner );
+  _Thread_Wait_acquire_default_critical( owner, &lock_context );
 
-  if ( current_priority < priority_ceiling ) {
+  scheduler_node = _Thread_Scheduler_get_home_node( owner );
+
+  if (
+    _Priority_Get_priority( &scheduler_node->Wait.Priority )
+      < the_mutex->Priority_ceiling.priority
+  ) {
+    _Thread_Wait_release_default_critical( owner, &lock_context );
     _CORE_mutex_Release( &the_mutex->Recursive.Mutex, queue_context );
     return STATUS_MUTEX_CEILING_VIOLATED;
   }
 
   _CORE_mutex_Set_owner( &the_mutex->Recursive.Mutex, owner );
-  ++owner->resource_count;
-
-  if ( current_priority == priority_ceiling ) {
-    _CORE_mutex_Release( &the_mutex->Recursive.Mutex, queue_context );
-    return STATUS_SUCCESSFUL;
-  }
-
-  cpu_self = _Thread_Dispatch_disable_critical(
-    &queue_context->Lock_context.Lock_context
+  _Thread_Resource_count_increment( owner );
+  _Thread_Priority_add(
+    owner,
+    &the_mutex->Priority_ceiling,
+    queue_context
   );
+  _Thread_Wait_release_default_critical( owner, &lock_context );
+
+  cpu_self = _Thread_queue_Dispatch_disable( queue_context );
   _CORE_mutex_Release( &the_mutex->Recursive.Mutex, queue_context );
-  _Thread_Raise_priority( owner, priority_ceiling );
+  _Thread_Priority_update( queue_context );
   _Thread_Dispatch_enable( cpu_self );
   return STATUS_SUCCESSFUL;
 }
@@ -434,7 +329,7 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Seize(
   if ( owner == NULL ) {
 #if defined(RTEMS_SMP)
     if (
-      _Scheduler_Get_own( executing )
+      _Thread_Scheduler_get_home( executing )
         != _CORE_ceiling_mutex_Get_scheduler( the_mutex )
     ) {
       _CORE_mutex_Release( &the_mutex->Recursive.Mutex, queue_context );
@@ -442,6 +337,7 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Seize(
     }
 #endif
 
+    _Thread_queue_Context_clear_priority_updates( queue_context );
     return _CORE_ceiling_mutex_Set_owner(
       the_mutex,
       executing,
@@ -457,7 +353,7 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Seize(
     return status;
   }
 
-  return _CORE_mutex_Seize_no_protocol_slow(
+  return _CORE_mutex_Seize_slow(
     &the_mutex->Recursive.Mutex,
     CORE_MUTEX_TQ_OPERATIONS,
     executing,
@@ -472,8 +368,10 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Surrender(
   Thread_queue_Context       *queue_context
 )
 {
-  unsigned int    nest_level;
-  Thread_Control *new_owner;
+  unsigned int      nest_level;
+  ISR_lock_Context  lock_context;
+  Per_CPU_Control  *cpu_self;
+  Thread_Control   *new_owner;
 
   _CORE_mutex_Acquire_critical( &the_mutex->Recursive.Mutex, queue_context );
 
@@ -490,7 +388,16 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Surrender(
     return STATUS_SUCCESSFUL;
   }
 
-  --executing->resource_count;
+  _Thread_Resource_count_decrement( executing );
+
+  _Thread_queue_Context_clear_priority_updates( queue_context );
+  _Thread_Wait_acquire_default_critical( executing, &lock_context );
+  _Thread_Priority_remove(
+    executing,
+    &the_mutex->Priority_ceiling,
+    queue_context
+  );
+  _Thread_Wait_release_default_critical( executing, &lock_context );
 
   new_owner = _Thread_queue_First_locked(
     &the_mutex->Recursive.Mutex.Wait_queue,
@@ -498,41 +405,35 @@ RTEMS_INLINE_ROUTINE Status_Control _CORE_ceiling_mutex_Surrender(
   );
   _CORE_mutex_Set_owner( &the_mutex->Recursive.Mutex, new_owner );
 
-  if ( new_owner != NULL ) {
-    bool unblock;
+  cpu_self = _Thread_Dispatch_disable_critical(
+    &queue_context->Lock_context.Lock_context
+  );
 
-    /*
-     * We must extract the thread now since this will restore its default
-     * thread lock.  This is necessary to avoid a deadlock in the
-     * _Thread_Change_priority() below due to a recursive thread queue lock
-     * acquire.
-     */
-    unblock = _Thread_queue_Extract_locked(
+  if ( new_owner != NULL ) {
+#if defined(RTEMS_MULTIPROCESSING)
+    if ( _Objects_Is_local_id( new_owner->Object.id ) )
+#endif
+    {
+      _Thread_Resource_count_increment( new_owner );
+      _Thread_Priority_add(
+        new_owner,
+        &the_mutex->Priority_ceiling,
+        queue_context
+      );
+    }
+
+    _Thread_queue_Extract_critical(
       &the_mutex->Recursive.Mutex.Wait_queue.Queue,
       CORE_MUTEX_TQ_OPERATIONS,
       new_owner,
       queue_context
     );
-
-#if defined(RTEMS_MULTIPROCESSING)
-    if ( _Objects_Is_local_id( new_owner->Object.id ) )
-#endif
-    {
-      ++new_owner->resource_count;
-      _Thread_Raise_priority( new_owner, the_mutex->priority_ceiling );
-    }
-
-    _Thread_queue_Unblock_critical(
-      unblock,
-      &the_mutex->Recursive.Mutex.Wait_queue.Queue,
-      new_owner,
-      &queue_context->Lock_context.Lock_context
-    );
   } else {
     _CORE_mutex_Release( &the_mutex->Recursive.Mutex, queue_context );
   }
 
-  _CORE_mutex_Restore_priority( executing );
+  _Thread_Priority_update( queue_context );
+  _Thread_Dispatch_enable( cpu_self );
   return STATUS_SUCCESSFUL;
 }
 

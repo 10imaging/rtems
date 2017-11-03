@@ -29,7 +29,6 @@
 #include <rtems/score/isrlock.h>
 #include <rtems/score/object.h>
 #include <rtems/score/priority.h>
-#include <rtems/score/resource.h>
 #include <rtems/score/schedulernode.h>
 #include <rtems/score/stack.h>
 #include <rtems/score/states.h>
@@ -38,14 +37,14 @@
 #include <rtems/score/watchdog.h>
 
 #if defined(RTEMS_SMP)
-  #include <rtems/score/cpuset.h>
+#include <rtems/score/processormask.h>
 #endif
 
 struct _pthread_cleanup_context;
 
 struct Per_CPU_Control;
 
-struct Scheduler_Control;
+struct _Scheduler_Control;
 
 struct User_extensions_Iterator;
 
@@ -82,6 +81,10 @@ extern "C" {
 
 #if defined(RTEMS_POSIX_API)
   #define RTEMS_SCORE_THREAD_ENABLE_USER_PROVIDED_STACK_VIA_API
+#endif
+
+#if defined(RTEMS_DEBUG)
+#define RTEMS_SCORE_THREAD_ENABLE_RESOURCE_COUNT
 #endif
 
 /*
@@ -246,50 +249,81 @@ typedef enum {
 typedef struct {
 #if defined(RTEMS_SMP)
   /**
+   * @brief Lock to protect the scheduler node change requests.
+   */
+  ISR_lock_Control Lock;
+
+  /**
    * @brief The current scheduler state of this thread.
    */
   Thread_Scheduler_state state;
 
   /**
-   * @brief The own scheduler control of this thread.
-   *
-   * This field is constant after initialization.
+   * @brief The home scheduler control of this thread.
    */
-  const struct Scheduler_Control *own_control;
+  const struct _Scheduler_Control *home;
 
-  /**
-   * @brief The scheduler control of this thread.
-   *
-   * The scheduler helping protocol may change this field.
-   */
-  const struct Scheduler_Control *control;
-
-  /**
-   * @brief The own scheduler node of this thread.
-   *
-   * This field is constant after initialization.  It is used by change
-   * priority and ask for help operations.
-   */
-  Scheduler_Node *own_node;
-#endif
-
-  /**
-   * @brief The scheduler node of this thread.
-   *
-   * On uni-processor configurations this field is constant after
-   * initialization.
-   *
-   * On SMP configurations the scheduler helping protocol may change this
-   * field.
-   */
-  Scheduler_Node *node;
-
-#if defined(RTEMS_SMP)
   /**
    * @brief The processor assigned by the current scheduler.
    */
   struct Per_CPU_Control *cpu;
+
+  /**
+   * @brief Scheduler nodes immediately available to the thread by its home
+   * scheduler instance and due to thread queue ownerships.
+   *
+   * This chain is protected by the thread wait lock.
+   *
+   * This chain is never empty.  The first scheduler node on the chain is the
+   * scheduler node of the home scheduler instance.
+   */
+  Chain_Control Wait_nodes;
+
+  /**
+   * @brief Scheduler nodes immediately available to the schedulers for this
+   * thread.
+   *
+   * This chain is protected by the thread state lock.
+   *
+   * This chain is never empty.  The first scheduler node on the chain is the
+   * scheduler node of the home scheduler instance.
+   */
+  Chain_Control Scheduler_nodes;
+
+  /**
+   * @brief Node for the Per_CPU_Control::Threads_in_need_for_help chain.
+   *
+   * This chain is protected by the Per_CPU_Control::Lock lock of the assigned
+   * processor.
+   */
+  Chain_Node Help_node;
+
+  /**
+   * @brief Count of nodes scheduler nodes minus one.
+   *
+   * This chain is protected by the thread state lock.
+   */
+  size_t helping_nodes;
+
+  /**
+   * @brief List of pending scheduler node requests.
+   *
+   * This list is protected by the thread scheduler lock.
+   */
+  Scheduler_Node *requests;
+
+  /**
+   * @brief The thread processor affinity set.
+   */
+  Processor_mask Affinity;
 #endif
+
+  /**
+   * @brief The scheduler nodes of this thread.
+   *
+   * Each thread has a scheduler node for each scheduler instance.
+   */
+  Scheduler_Node *nodes;
 } Thread_Scheduler_control;
 
 /**
@@ -373,7 +407,7 @@ typedef struct {
    *
    * The thread wait lock mechanism protects the following thread variables
    *  - POSIX_API_Control::Attributes,
-   *  - Thread_Control::current_priority,
+   *  - Scheduler_Node::Wait,
    *  - Thread_Control::Wait::Lock::Pending_requests,
    *  - Thread_Control::Wait::queue, and
    *  - Thread_Control::Wait::operations.
@@ -461,35 +495,16 @@ typedef struct {
 
   /** This field is the current execution state of this proxy. */
   States_Control           current_state;
-  /**
-   * @brief This field is the current priority state of this thread.
-   *
-   * Writes to this field are only allowed in _Thread_Initialize() or via
-   * _Thread_Change_priority().
-   */
-  Priority_Control         current_priority;
 
   /**
-   * @brief This field is the base priority of this thread.
-   *
-   * Writes to this field are only allowed in _Thread_Initialize() or via
-   * _Thread_Change_priority().
+   * @brief The base priority of this thread in its home scheduler instance.
    */
-  Priority_Control         real_priority;
+  Priority_Node            Real_priority;
 
-  /**
-   * @brief Hints if a priority restore is necessary once the resource count
-   * changes from one to zero.
-   *
-   * This is an optimization to speed up the mutex surrender sequence in case
-   * no attempt to change the priority was made during the mutex ownership.  On
-   * SMP configurations atomic fences must synchronize writes to
-   * Thread_Control::priority_restore_hint and Thread_Control::resource_count.
-   */
-  bool                     priority_restore_hint;
-
+#if defined(RTEMS_SCORE_THREAD_ENABLE_RESOURCE_COUNT)
   /** This field is the number of mutexes currently held by this proxy. */
   uint32_t                 resource_count;
+#endif
 
   /**
    * @brief Scheduler related control.
@@ -506,7 +521,7 @@ typedef struct {
      /****************** end of common block ********************/
 
   /**
-   * @brief Thread queue callout for _Thread_queue_Enqueue_critical().
+   * @brief Thread queue callout for _Thread_queue_Enqueue().
    */
   Thread_queue_MP_callout  thread_queue_callout;
 
@@ -680,6 +695,9 @@ typedef struct  {
  *
  *  Uses a leading underscore in the structure name to allow forward
  *  declarations in standard header files provided by Newlib and GCC.
+ *
+ *  In case the second member changes (currently Join_queue), then the memset()
+ *  in _Thread_Initialize() must be adjusted.
  */
 struct _Thread_Control {
   /** This field is the object management structure for each thread. */
@@ -708,34 +726,14 @@ struct _Thread_Control {
   States_Control           current_state;
 
   /**
-   * @brief This field is the current priority state of this thread.
-   *
-   * Writes to this field are only allowed in _Thread_Initialize() or via
-   * _Thread_Change_priority().
+   * @brief The base priority of this thread in its home scheduler instance.
    */
-  Priority_Control         current_priority;
+  Priority_Node            Real_priority;
 
-  /**
-   * @brief This field is the base priority of this thread.
-   *
-   * Writes to this field are only allowed in _Thread_Initialize() or via
-   * _Thread_Change_priority().
-   */
-  Priority_Control         real_priority;
-
-  /**
-   * @brief Hints if a priority restore is necessary once the resource count
-   * changes from one to zero.
-   *
-   * This is an optimization to speed up the mutex surrender sequence in case
-   * no attempt to change the priority was made during the mutex ownership.  On
-   * SMP configurations atomic fences must synchronize writes to
-   * Thread_Control::priority_restore_hint and Thread_Control::resource_count.
-   */
-  bool                     priority_restore_hint;
-
+#if defined(RTEMS_SCORE_THREAD_ENABLE_RESOURCE_COUNT)
   /** This field is the number of mutexes currently held by this thread. */
   uint32_t                 resource_count;
+#endif
 
   /**
    * @brief Scheduler related control.
@@ -764,13 +762,8 @@ struct _Thread_Control {
   SMP_lock_Stats Potpourri_stats;
 #endif
 
-#if defined(RTEMS_SMP)
-  /**
-   * @brief Resource node to build a dependency tree in case this thread owns
-   * resources or depends on a resource.
-   */
-  Resource_Node            Resource_node;
-#endif
+  /** This field is true if the thread is an idle thread. */
+  bool                                  is_idle;
 #if defined(RTEMS_MULTIPROCESSING)
   /** This field is true if the thread is offered globally */
   bool                                  is_global;
@@ -780,10 +773,6 @@ struct _Thread_Control {
   /** This field is true if the thread uses the floating point unit. */
   bool                                  is_fp;
 
-#if __RTEMS_ADA__
-  /** This field is the GNAT self context pointer. */
-  void                                 *rtems_ada_self;
-#endif
   /** This field is the length of the time quantum that this thread is
    *  allowed to consume.  The algorithm used to manage limits on CPU usage
    *  is specified by budget_algorithm.
@@ -864,18 +853,12 @@ void *_Thread_Idle_body(
 );
 #endif
 
-/**  This defines the type for a method which operates on a single thread.
- */
 typedef void (*rtems_per_thread_routine)( Thread_Control * );
 
-/**
- *  @brief Iterates over all threads.
- *  This routine iterates over all threads regardless of API and
- *  invokes the specified routine.
- */
+/* Use rtems_task_iterate() instead */
 void rtems_iterate_over_all_threads(
   rtems_per_thread_routine routine
-);
+) RTEMS_DEPRECATED;
 
 /**
  * @brief Thread control add-on.
@@ -927,6 +910,14 @@ extern const size_t _Thread_Control_add_on_count;
  * @see _Thread_Control_add_ons.
  */
 extern const size_t _Thread_Control_size;
+
+/**
+ * @brief Maximum size of a thread name in characters (including the
+ * terminating '\0' character).
+ *
+ * This value is provided via <rtems/confdefs.h>.
+ */
+extern const size_t _Thread_Maximum_name_size;
 
 /**@}*/
 

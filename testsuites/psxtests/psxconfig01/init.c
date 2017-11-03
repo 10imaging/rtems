@@ -60,14 +60,9 @@ const char rtems_test_name[] = "PSXCONFIG 1";
 #define CONFIGURE_MAXIMUM_TIMERS 59
 #define CONFIGURE_MAXIMUM_USER_EXTENSIONS 17
 
-#define CONFIGURE_MAXIMUM_POSIX_BARRIERS 31
-#define CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES 29
 #define POSIX_MQ_COUNT 5
-#define CONFIGURE_MAXIMUM_POSIX_MUTEXES 19
 #define CONFIGURE_MAXIMUM_POSIX_QUEUED_SIGNALS 7
-#define CONFIGURE_MAXIMUM_POSIX_RWLOCKS 31
 #define CONFIGURE_MAXIMUM_POSIX_SEMAPHORES 41
-#define CONFIGURE_MAXIMUM_POSIX_SPINLOCKS 17
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 
 #define CONFIGURE_MAXIMUM_POSIX_THREADS 3
@@ -226,12 +221,12 @@ static void print_info(void)
   rtems_test_assert(ok);
 
   printf(
-    "used blocks = %" PRIu32 ", "
-    "largest used block = %" PRIu32 ", "
-    "used space = %" PRIu32 "\n"
-    "free blocks = %" PRIu32 ", "
-    "largest free block = %" PRIu32 ", "
-    "free space = %" PRIu32 "\n",
+    "used blocks = %" PRIuPTR ", "
+    "largest used block = %" PRIuPTR ", "
+    "used space = %" PRIuPTR "\n"
+    "free blocks = %" PRIuPTR ", "
+    "largest free block = %" PRIuPTR ", "
+    "free space = %" PRIuPTR "\n",
     info.Used.number,
     info.Used.largest,
     info.Used.total,
@@ -301,7 +296,7 @@ static rtems_task Init(rtems_task_argument argument)
   rtems_test_assert(eno == EAGAIN);
   rtems_resource_snapshot_take(&snapshot);
   rtems_test_assert(
-    snapshot.active_posix_keys == CONFIGURE_POSIX_KEYS
+    snapshot.active_posix_keys == _CONFIGURE_POSIX_KEYS
   );
   rtems_test_assert(
     snapshot.active_posix_key_value_pairs == CONFIGURE_MAXIMUM_POSIX_KEYS
@@ -432,31 +427,6 @@ static rtems_task Init(rtems_task_argument argument)
   );
 #endif
 
-#ifdef CONFIGURE_MAXIMUM_POSIX_BARRIERS
-  for (i = 0; i < CONFIGURE_MAXIMUM_POSIX_BARRIERS; ++i) {
-    pthread_barrier_t barrier;
-    eno = pthread_barrier_init(&barrier, NULL, 1);
-    rtems_test_assert(eno == 0);
-  }
-  rtems_resource_snapshot_take(&snapshot);
-  rtems_test_assert(
-    snapshot.posix_api.active_barriers == CONFIGURE_MAXIMUM_POSIX_BARRIERS
-  );
-#endif
-
-#ifdef CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES
-  for (i = 0; i < CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES; ++i) {
-    pthread_cond_t cond;
-    eno = pthread_cond_init(&cond, NULL);
-    rtems_test_assert(eno == 0);
-  }
-  rtems_resource_snapshot_take(&snapshot);
-  rtems_test_assert(
-    snapshot.posix_api.active_condition_variables
-      == CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES
-  );
-#endif
-
 #ifdef POSIX_MQ_COUNT
   for (i = 0; i < POSIX_MQ_COUNT; ++i) {
     int oflag = O_RDWR | O_CREAT | O_EXCL;
@@ -476,30 +446,6 @@ static rtems_task Init(rtems_task_argument argument)
   );
 #endif
 
-#ifdef CONFIGURE_MAXIMUM_POSIX_MUTEXES
-  for (i = 0; i < CONFIGURE_MAXIMUM_POSIX_MUTEXES; ++i) {
-    pthread_mutex_t mutex;
-    eno = pthread_mutex_init(&mutex, NULL);
-    rtems_test_assert(eno == 0);
-  }
-  rtems_resource_snapshot_take(&snapshot);
-  rtems_test_assert(
-    snapshot.posix_api.active_mutexes == CONFIGURE_MAXIMUM_POSIX_MUTEXES
-  );
-#endif
-
-#ifdef CONFIGURE_MAXIMUM_POSIX_RWLOCKS
-  for (i = 0; i < CONFIGURE_MAXIMUM_POSIX_RWLOCKS; ++i) {
-    pthread_rwlock_t rwlock;
-    eno = pthread_rwlock_init(&rwlock, NULL);
-    rtems_test_assert(eno == 0);
-  }
-  rtems_resource_snapshot_take(&snapshot);
-  rtems_test_assert(
-    snapshot.posix_api.active_rwlocks == CONFIGURE_MAXIMUM_POSIX_RWLOCKS
-  );
-#endif
-
 #ifdef CONFIGURE_MAXIMUM_POSIX_SEMAPHORES
   for (i = 0; i < CONFIGURE_MAXIMUM_POSIX_SEMAPHORES; ++i) {
     int oflag = O_RDWR | O_CREAT | O_EXCL;
@@ -512,18 +458,6 @@ static rtems_task Init(rtems_task_argument argument)
   rtems_resource_snapshot_take(&snapshot);
   rtems_test_assert(
     snapshot.posix_api.active_semaphores == CONFIGURE_MAXIMUM_POSIX_SEMAPHORES
-  );
-#endif
-
-#ifdef CONFIGURE_MAXIMUM_POSIX_SPINLOCKS
-  for (i = 0; i < CONFIGURE_MAXIMUM_POSIX_SPINLOCKS; ++i) {
-    pthread_spinlock_t spinlock;
-    eno = pthread_spin_init(&spinlock, 0);
-    rtems_test_assert(eno == 0);
-  }
-  rtems_resource_snapshot_take(&snapshot);
-  rtems_test_assert(
-    snapshot.posix_api.active_spinlocks == CONFIGURE_MAXIMUM_POSIX_SPINLOCKS
   );
 #endif
 

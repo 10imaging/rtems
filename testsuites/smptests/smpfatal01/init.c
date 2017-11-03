@@ -16,7 +16,6 @@
   #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #include <rtems.h>
@@ -42,7 +41,7 @@ static void Init(rtems_task_argument arg)
 
 static void fatal_extension(
   rtems_fatal_source source,
-  bool is_internal,
+  bool always_set_to_false,
   rtems_fatal_code code
 )
 {
@@ -51,7 +50,7 @@ static void fatal_extension(
   if (source == RTEMS_FATAL_SOURCE_SMP) {
     uint32_t self = rtems_get_current_processor();
 
-    assert(!is_internal);
+    assert(!always_set_to_false);
     assert(code == SMP_FATAL_SHUTDOWN);
 
     if (self == main_cpu) {
@@ -126,9 +125,7 @@ static rtems_status_code test_driver_init(
   { .fatal = fatal_extension }, \
   RTEMS_TEST_INITIAL_EXTENSION
 
-#define CONFIGURE_SMP_APPLICATION
-
-#define CONFIGURE_SMP_MAXIMUM_PROCESSORS MAX_CPUS
+#define CONFIGURE_MAXIMUM_PROCESSORS MAX_CPUS
 
 #define CONFIGURE_MAXIMUM_TASKS 1
 

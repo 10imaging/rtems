@@ -41,8 +41,6 @@ _BSP_null_char( char c )
 {
 	int level;
 
-    if (c == '\n')
-        _BSP_null_char('\r');
 	rtems_interrupt_disable(level);
     while ( (MCF5282_UART_USR(CONSOLE_PORT) & MCF5282_UART_USR_TXRDY) == 0 )
         continue;
@@ -110,11 +108,12 @@ IntUartSet(int minor, int baud, int databits, int parity, int stopbits, int hwfl
 	info->stopbits = stopbits;
 	info->hwflow   = hwflow;
 
-    clock_speed = bsp_get_CPU_clock_speed();
-    /* determine the baud divisor value */
-    divisor = (clock_speed / ( 32 * baud ));
-    if ( divisor < 2 )
-        divisor = 2;
+	clock_speed = bsp_get_CPU_clock_speed();
+	/* determine the baud divisor value */
+	divisor = (clock_speed / ( 32 * baud ));
+	if ( divisor < 2 ) {
+		divisor = 2;
+	}
 
 	/* check to see if doing hardware flow control */
 	if ( hwflow )
@@ -190,7 +189,7 @@ IntUartSetAttributes(int minor, const struct termios *t)
 	if ( t != (const struct termios *)0 )
 	{
 		/* determine baud rate index */
-  		baud = rtems_termios_baud_to_number(t->c_cflag & CBAUD);
+    baud = rtems_termios_baud_to_number(t->c_ospeed);
 
 		/* determine data bits */
 		switch ( t->c_cflag & CSIZE )
@@ -447,7 +446,7 @@ IntUartInterruptOpen(int major, int minor, void *arg)
 		MCF5282_GPIO_PUAPAR |= MCF5282_GPIO_PUAPAR_PUAPA3|MCF5282_GPIO_PUAPAR_PUAPA2;
 		break;
 	case 2:
-		MCF5282_GPIO_PASPAR = 
+		MCF5282_GPIO_PASPAR =
 		  (MCF5282_GPIO_PASPAR
 		   & ~(MCF5282_GPIO_PASPAR_PASPA3(3)|MCF5282_GPIO_PASPAR_PASPA2(3)))
 		  |  (MCF5282_GPIO_PASPAR_PASPA3(2)|MCF5282_GPIO_PASPAR_PASPA2(2));

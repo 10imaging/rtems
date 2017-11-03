@@ -53,36 +53,9 @@ typedef struct Watchdog_Control Watchdog_Control;
 typedef uint32_t   Watchdog_Interval;
 
 /**
- *  @brief The clock discipline to use for the Watchdog timeout interval.
+ * @brief Special watchdog ticks value to indicate an infinite wait.
  */
-typedef enum {
-
-  /**
-   * @brief Indefinite wait.
-   *
-   * This is to indicate there is no timeout and not to use a watchdog. It
-   * must be equal to 0, which is an illegal relative clock interval, so that
-   * it may be used as a Watchdog_Interval value with WATCHDOG_RELATIVE to
-   * express an indefinite wait.
-   */
-  WATCHDOG_NO_TIMEOUT = 0,
-
-  /**
-   * @brief Relative clock.
-   *
-   * The reference time point for the watchdog is current ticks value
-   * during insert.  Time is measured in clock ticks.
-   */
-  WATCHDOG_RELATIVE,
-
-  /**
-   * @brief Absolute clock.
-   *
-   * The reference time point for this header is the POSIX Epoch.  Time is
-   * measured in nanoseconds since POSIX Epoch.
-   */
-  WATCHDOG_ABSOLUTE
-} Watchdog_Discipline;
+#define WATCHDOG_NO_TIMEOUT 0
 
 /**
  *  @brief Return type from a Watchdog Service Routine.
@@ -157,6 +130,31 @@ struct Watchdog_Control {
  * With a 1ms watchdog tick, this counter overflows after 50 days since boot.
  */
 extern volatile Watchdog_Interval _Watchdog_Ticks_since_boot;
+
+/**
+ * @brief The watchdog nanoseconds per tick.
+ *
+ * This constant is defined by the application configuration via
+ * <rtems/confdefs.h>.
+ */
+extern const uint32_t _Watchdog_Nanoseconds_per_tick;
+
+/**
+ * @brief The watchdog ticks per second.
+ *
+ * This constant is defined by the application configuration via
+ * <rtems/confdefs.h>.
+ */
+extern const uint32_t _Watchdog_Ticks_per_second;
+
+/**
+ * @brief The maximum number of seconds representable in the monotonic watchdog
+ * format.
+ *
+ * This constant is defined by the application configuration via
+ * <rtems/confdefs.h>.
+ */
+extern const uint64_t _Watchdog_Monotonic_max_seconds;
 
 /**@}*/
 

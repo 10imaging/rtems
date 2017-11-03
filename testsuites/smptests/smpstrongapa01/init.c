@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2016, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -18,7 +18,7 @@
 
 #include "tmacros.h"
 
-#include <rtems/score/threadimpl.h>
+#include <rtems.h>
 
 const char rtems_test_name[] = "SMPSTRONGAPA 1";
 
@@ -193,7 +193,7 @@ static void check_cpu_allocations(test_context *ctx, const test_action *action)
     if (e != IDLE) {
       rtems_test_assert(h->Object.id == ctx->task_ids[e]);
     } else {
-      rtems_test_assert(h->Start.Entry.adaptor == _Thread_Entry_adaptor_idle);
+      rtems_test_assert(h->is_idle);
     }
   }
 }
@@ -332,9 +332,7 @@ static void Init(rtems_task_argument arg)
 #define CONFIGURE_MAXIMUM_TASKS (1 + TASK_COUNT)
 #define CONFIGURE_MAXIMUM_TIMERS 1
 
-#define CONFIGURE_SMP_APPLICATION
-
-#define CONFIGURE_SMP_MAXIMUM_PROCESSORS CPU_COUNT
+#define CONFIGURE_MAXIMUM_PROCESSORS CPU_COUNT
 
 #define CONFIGURE_SCHEDULER_STRONG_APA
 

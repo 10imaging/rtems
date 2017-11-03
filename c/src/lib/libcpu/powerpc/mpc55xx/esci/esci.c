@@ -362,7 +362,7 @@ static int mpc55xx_esci_termios_set_attributes( int minor, const struct termios 
 	cr1.B.TE = 1;
 
 	/* Baud rate */
-	switch (t->c_cflag & CBAUD) {
+  switch (t->c_ospeed) {
 		case B50: br = 50; break;
 		case B75: br = 75; break;
 		case B110: br = 110; break;
@@ -659,9 +659,6 @@ static void mpc55xx_esci_output_char( char c)
 	mpc55xx_esci_driver_entry *e = &mpc55xx_esci_driver_table [MPC55XX_ESCI_CONSOLE_MINOR];
 
 	mpc55xx_esci_interrupts_disable( e);
-	if (c == '\n') {
-		mpc55xx_esci_write_char( e, '\r');
-	}
 	mpc55xx_esci_write_char( e, c);
 	mpc55xx_esci_interrupts_enable( e);
 }

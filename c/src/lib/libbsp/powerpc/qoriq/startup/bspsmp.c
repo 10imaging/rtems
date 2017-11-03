@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2013, 2017 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -38,12 +38,6 @@ void _start_secondary_processor(void);
 
 #define IPI_INDEX 0
 
-#define TLB_BEGIN (3 * QORIQ_TLB1_ENTRY_COUNT / 4)
-
-#define TLB_END QORIQ_TLB1_ENTRY_COUNT
-
-#define TLB_COUNT (TLB_END - TLB_BEGIN)
-
 #if QORIQ_THREAD_COUNT > 1
 static bool is_started_by_u_boot(uint32_t cpu_index)
 {
@@ -79,7 +73,7 @@ static void start_thread_if_necessary(uint32_t cpu_index_self)
         && _SMP_Should_start_processor(cpu_index_next)
     ) {
       /* Thread Initial Next Instruction Address (INIA) */
-      PPC_SET_THREAD_MGMT_REGISTER(321, (uint32_t) _start_thread);
+      PPC_SET_THREAD_MGMT_REGISTER(321, (uintptr_t) _start_thread);
 
       /* Thread Initial Machine State (IMSR) */
       PPC_SET_THREAD_MGMT_REGISTER(289, QORIQ_INITIAL_MSR);
@@ -96,19 +90,7 @@ void bsp_start_on_secondary_processor(void)
   uint32_t cpu_index_self = _SMP_Get_current_processor();
   const Per_CPU_Control *cpu_self = _Per_CPU_Get_by_index(cpu_index_self);
 
-  ppc_exc_initialize_with_vector_base(
-    (uintptr_t) cpu_self->interrupt_stack_low,
-    rtems_configuration_get_interrupt_stack_size(),
-    bsp_exc_vector_base
-  );
-
-  /* Now it is possible to make the code execute only */
-  qoriq_mmu_change_perm(
-    FSL_EIS_MAS3_SR | FSL_EIS_MAS3_SX,
-    FSL_EIS_MAS3_SX,
-    FSL_EIS_MAS3_SR
-  );
-
+  qoriq_initialize_exceptions(cpu_self->interrupt_stack_low);
   bsp_interrupt_facility_initialize();
 
   start_thread_if_necessary(cpu_index_self);
@@ -116,9 +98,31 @@ void bsp_start_on_secondary_processor(void)
   _SMP_Start_multitasking_on_secondary_processor();
 }
 
+#ifndef QORIQ_IS_HYPERVISOR_GUEST
 static void bsp_inter_processor_interrupt(void *arg)
 {
   _SMP_Inter_processor_interrupt_handler();
+}
+#endif
+
+static void setup_boot_page(void)
+{
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+  qoriq_mmu_context mmu_context;
+
+  qoriq_mmu_context_init(&mmu_context);
+  qoriq_mmu_add(
+    &mmu_context,
+    0xfffff000,
+    0xffffffff,
+    0,
+    0,
+    FSL_EIS_MAS3_SR | FSL_EIS_MAS3_SW,
+    0
+  );
+  qoriq_mmu_partition(&mmu_context, 1);
+  qoriq_mmu_write_to_tlb1(&mmu_context, QORIQ_TLB1_ENTRY_COUNT - 1);
+#endif
 }
 
 static uint32_t discover_processors(void)
@@ -151,6 +155,7 @@ uint32_t _CPU_SMP_Initialize(void)
   uint32_t cpu_count = 1;
 
   if (rtems_configuration_get_maximum_processors() > 0) {
+    setup_boot_page();
     cpu_count = discover_processors();
   }
 
@@ -170,11 +175,10 @@ static bool release_processor(
     const Per_CPU_Control *cpu = _Per_CPU_Get_by_index(cpu_index);
 
     spin_table->pir = cpu_index;
-    spin_table->r3_lower = (uint32_t) cpu->interrupt_stack_high;
-    spin_table->addr_upper = 0;
+    spin_table->r3 = (uintptr_t) cpu->interrupt_stack_high;
     rtems_cache_flush_multiple_data_lines(spin_table, sizeof(*spin_table));
     ppc_synchronize_data();
-    spin_table->addr_lower = (uint32_t) _start_secondary_processor;
+    spin_table->addr = (uintptr_t) _start_secondary_processor;
     rtems_cache_flush_multiple_data_lines(spin_table, sizeof(*spin_table));
   }
 
@@ -209,6 +213,9 @@ bool _CPU_SMP_Start_processor(uint32_t cpu_index)
 
 void _CPU_SMP_Finalize_initialization(uint32_t cpu_count)
 {
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+  (void) cpu_count;
+#else
   if (cpu_count > 1) {
     rtems_status_code sc;
 
@@ -223,6 +230,7 @@ void _CPU_SMP_Finalize_initialization(uint32_t cpu_count)
       bsp_fatal(QORIQ_FATAL_SMP_IPI_HANDLER_INSTALL);
     }
   }
+#endif
 }
 
 void _CPU_SMP_Prepare_start_multitasking(void)
@@ -232,5 +240,13 @@ void _CPU_SMP_Prepare_start_multitasking(void)
 
 void _CPU_SMP_Send_interrupt(uint32_t target_processor_index)
 {
+#ifdef QORIQ_IS_HYPERVISOR_GUEST
+  uint32_t msg;
+
+  /* DBELL message type */
+  msg = (0U << (63 - 36)) | target_processor_index;
+  __asm__ volatile ("msgsnd %0" : : "r" (msg));
+#else
   qoriq.pic.ipidr [IPI_INDEX].reg = 1U << target_processor_index;
+#endif
 }

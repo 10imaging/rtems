@@ -25,7 +25,7 @@
  *
  *  Copyright (c) 2001 Surrey Satellite Technology Limited (SSTL).
  *
- *  Copyright (c) 2010-2013 embedded brains GmbH.
+ *  Copyright (c) 2010, 2017 embedded brains GmbH.
  *
  *  The license and distribution terms for this file may be
  *  found in the file LICENSE in this distribution or at
@@ -48,25 +48,6 @@ extern "C" {
 #endif
 
 /* conditional compilation parameters */
-
-/*
- *  Should the calls to _Thread_Enable_dispatch be inlined?
- *
- *  If TRUE, then they are inlined.
- *  If FALSE, then a subroutine call is made.
- *
- *  Basically this is an example of the classic trade-off of size
- *  versus speed.  Inlining the call (TRUE) typically increases the
- *  size of RTEMS while speeding up the enabling of dispatching.
- *  [NOTE: In general, the _Thread_Dispatch_disable_level will
- *  only be 0 or 1 unless you are in an interrupt handler and that
- *  interrupt handler invokes the executive.]  When not inlined
- *  something calls _Thread_Enable_dispatch which in turns calls
- *  _Thread_Dispatch.  If the enable dispatch is inlined, then
- *  one subroutine call is avoided entirely.]
- */
-
-#define CPU_INLINE_ENABLE_DISPATCH       FALSE
 
 /*
  *  Does this port provide a CPU dependent IDLE task implementation?
@@ -104,19 +85,6 @@ extern "C" {
 #define CPU_CACHE_LINE_BYTES PPC_STRUCTURE_ALIGNMENT
 
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
-
-/*
- *  Define what is required to specify how the network to host conversion
- *  routines are handled.
- */
-
-#if defined(__BIG_ENDIAN__) || defined(_BIG_ENDIAN)
-#define CPU_BIG_ENDIAN                           TRUE
-#define CPU_LITTLE_ENDIAN                        FALSE
-#else
-#define CPU_BIG_ENDIAN                           FALSE
-#define CPU_LITTLE_ENDIAN                        TRUE
-#endif
 
 /*
  *  Does the CPU have hardware floating point?
@@ -171,8 +139,6 @@ extern "C" {
 
 #define CPU_IDLE_TASK_IS_FP      FALSE
 
-#define CPU_PER_CPU_CONTROL_SIZE 0
-
 #define CPU_MAXIMUM_PROCESSORS 32
 
 /*
@@ -215,10 +181,16 @@ extern "C" {
  */
 
 #ifndef __SPE__
-  #define PPC_GPR_TYPE uint32_t
-  #define PPC_GPR_SIZE 4
-  #define PPC_GPR_LOAD lwz
-  #define PPC_GPR_STORE stw
+  #define PPC_GPR_TYPE uintptr_t
+  #if defined(__powerpc64__)
+    #define PPC_GPR_SIZE 8
+    #define PPC_GPR_LOAD ld
+    #define PPC_GPR_STORE std
+  #else
+    #define PPC_GPR_SIZE 4
+    #define PPC_GPR_LOAD lwz
+    #define PPC_GPR_STORE stw
+  #endif
 #else
   #define PPC_GPR_TYPE uint64_t
   #define PPC_GPR_SIZE 8
@@ -226,11 +198,21 @@ extern "C" {
   #define PPC_GPR_STORE evstdd
 #endif
 
-#ifndef ASM
+#if defined(__powerpc64__)
+  #define PPC_REG_SIZE 8
+  #define PPC_REG_LOAD ld
+  #define PPC_REG_STORE std
+  #define PPC_REG_STORE_UPDATE stdu
+  #define PPC_REG_CMP cmpd
+#else
+  #define PPC_REG_SIZE 4
+  #define PPC_REG_LOAD lwz
+  #define PPC_REG_STORE stw
+  #define PPC_REG_STORE_UPDATE stwu
+  #define PPC_REG_CMP cmpw
+#endif
 
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
+#ifndef ASM
 
 /*
  * Non-volatile context according to E500ABIUG, EABI and 32-bit TLS (according
@@ -238,10 +220,10 @@ typedef struct {
  * Linux and Embedded")
  */
 typedef struct {
-  uint32_t gpr1;
   uint32_t msr;
-  uint32_t lr;
   uint32_t cr;
+  uintptr_t gpr1;
+  uintptr_t lr;
   PPC_GPR_TYPE gpr14;
   PPC_GPR_TYPE gpr15;
   PPC_GPR_TYPE gpr16;
@@ -260,9 +242,9 @@ typedef struct {
   PPC_GPR_TYPE gpr29;
   PPC_GPR_TYPE gpr30;
   PPC_GPR_TYPE gpr31;
-  uint32_t gpr2;
+  uint32_t isr_dispatch_disable;
+  uint32_t reserved_for_alignment;
   #if defined(PPC_MULTILIB_ALTIVEC)
-    uint32_t reserved_for_alignment;
     uint8_t v20[16];
     uint8_t v21[16];
     uint8_t v22[16];
@@ -308,12 +290,13 @@ typedef struct {
     double f30;
     double f31;
   #endif
+  /*
+   * The following items are at the structure end, so that we can use dcbz for
+   * the previous items to optimize the context switch.  We must not set the
+   * following items to zero via the dcbz.
+   */
+  uintptr_t tp;
   #if defined(RTEMS_SMP)
-    /*
-     * This item is at the structure end, so that we can use dcbz for the
-     * previous items to optimize the context switch.  We must not set this
-     * item to zero via the dcbz.
-     */
     volatile uint32_t is_executing;
   #endif
 } ppc_context;
@@ -359,13 +342,14 @@ static inline ppc_context *ppc_get_context( const Context_Control *context )
 #endif
 #endif /* ASM */
 
-#define PPC_CONTEXT_OFFSET_GPR1 (PPC_DEFAULT_CACHE_LINE_SIZE + 0)
-#define PPC_CONTEXT_OFFSET_MSR (PPC_DEFAULT_CACHE_LINE_SIZE + 4)
-#define PPC_CONTEXT_OFFSET_LR (PPC_DEFAULT_CACHE_LINE_SIZE + 8)
-#define PPC_CONTEXT_OFFSET_CR (PPC_DEFAULT_CACHE_LINE_SIZE + 12)
+#define PPC_CONTEXT_OFFSET_MSR (PPC_DEFAULT_CACHE_LINE_SIZE)
+#define PPC_CONTEXT_OFFSET_CR (PPC_DEFAULT_CACHE_LINE_SIZE + 4)
+#define PPC_CONTEXT_OFFSET_GPR1 (PPC_DEFAULT_CACHE_LINE_SIZE + 8)
+#define PPC_CONTEXT_OFFSET_LR (PPC_DEFAULT_CACHE_LINE_SIZE + PPC_REG_SIZE + 8)
 
 #define PPC_CONTEXT_GPR_OFFSET( gpr ) \
-  (((gpr) - 14) * PPC_GPR_SIZE + PPC_DEFAULT_CACHE_LINE_SIZE + 16)
+  (((gpr) - 14) * PPC_GPR_SIZE + \
+    PPC_DEFAULT_CACHE_LINE_SIZE + 8 + 2 * PPC_REG_SIZE)
 
 #define PPC_CONTEXT_OFFSET_GPR14 PPC_CONTEXT_GPR_OFFSET( 14 )
 #define PPC_CONTEXT_OFFSET_GPR15 PPC_CONTEXT_GPR_OFFSET( 15 )
@@ -385,11 +369,11 @@ static inline ppc_context *ppc_get_context( const Context_Control *context )
 #define PPC_CONTEXT_OFFSET_GPR29 PPC_CONTEXT_GPR_OFFSET( 29 )
 #define PPC_CONTEXT_OFFSET_GPR30 PPC_CONTEXT_GPR_OFFSET( 30 )
 #define PPC_CONTEXT_OFFSET_GPR31 PPC_CONTEXT_GPR_OFFSET( 31 )
-#define PPC_CONTEXT_OFFSET_GPR2 PPC_CONTEXT_GPR_OFFSET( 32 )
+#define PPC_CONTEXT_OFFSET_ISR_DISPATCH_DISABLE PPC_CONTEXT_GPR_OFFSET( 32 )
 
 #ifdef PPC_MULTILIB_ALTIVEC
   #define PPC_CONTEXT_OFFSET_V( v ) \
-    ( ( ( v ) - 20 ) * 16 + PPC_DEFAULT_CACHE_LINE_SIZE + 96 )
+    ( ( ( v ) - 20 ) * 16 + PPC_CONTEXT_OFFSET_ISR_DISPATCH_DISABLE + 8)
   #define PPC_CONTEXT_OFFSET_V20 PPC_CONTEXT_OFFSET_V( 20 )
   #define PPC_CONTEXT_OFFSET_V21 PPC_CONTEXT_OFFSET_V( 21 )
   #define PPC_CONTEXT_OFFSET_V22 PPC_CONTEXT_OFFSET_V( 22 )
@@ -404,10 +388,10 @@ static inline ppc_context *ppc_get_context( const Context_Control *context )
   #define PPC_CONTEXT_OFFSET_V31 PPC_CONTEXT_OFFSET_V( 31 )
   #define PPC_CONTEXT_OFFSET_VRSAVE PPC_CONTEXT_OFFSET_V( 32 )
   #define PPC_CONTEXT_OFFSET_F( f ) \
-    ( ( ( f ) - 14 ) * 8 + PPC_DEFAULT_CACHE_LINE_SIZE + 296 )
+    ( ( ( f ) - 14 ) * 8 + PPC_CONTEXT_OFFSET_VRSAVE + 8 )
 #else
   #define PPC_CONTEXT_OFFSET_F( f ) \
-    ( ( ( f ) - 14 ) * 8 + PPC_DEFAULT_CACHE_LINE_SIZE + 96 )
+    ( ( ( f ) - 14 ) * 8 + PPC_CONTEXT_OFFSET_ISR_DISPATCH_DISABLE + 8 )
 #endif
 
 #ifdef PPC_MULTILIB_FPU
@@ -435,12 +419,19 @@ static inline ppc_context *ppc_get_context( const Context_Control *context )
   #define PPC_CONTEXT_VOLATILE_SIZE PPC_CONTEXT_OFFSET_F( 32 )
 #elif defined(PPC_MULTILIB_ALTIVEC)
   #define PPC_CONTEXT_VOLATILE_SIZE (PPC_CONTEXT_OFFSET_VRSAVE + 4)
+#elif defined(__ALTIVEC__)
+  #define PPC_CONTEXT_VOLATILE_SIZE \
+    (PPC_CONTEXT_GPR_OFFSET( 32 ) + 8 \
+      + 16 * 12 + 32 + PPC_DEFAULT_CACHE_LINE_SIZE)
 #else
-  #define PPC_CONTEXT_VOLATILE_SIZE (PPC_CONTEXT_GPR_OFFSET( 32 ) + 4)
+  #define PPC_CONTEXT_VOLATILE_SIZE (PPC_CONTEXT_GPR_OFFSET( 32 ) + 8)
 #endif
 
+#define PPC_CONTEXT_OFFSET_TP PPC_CONTEXT_VOLATILE_SIZE
+
 #ifdef RTEMS_SMP
-  #define PPC_CONTEXT_OFFSET_IS_EXECUTING PPC_CONTEXT_VOLATILE_SIZE
+  #define PPC_CONTEXT_OFFSET_IS_EXECUTING \
+    (PPC_CONTEXT_OFFSET_TP + PPC_REG_SIZE)
 #endif
 
 #ifndef ASM
@@ -461,37 +452,6 @@ typedef struct {
 #endif
 #endif /* (PPC_HAS_FPU == 1) */
 } Context_Control_fp;
-
-typedef struct CPU_Interrupt_frame {
-    uint32_t   stacklink;	/* Ensure this is a real frame (also reg1 save) */
-    uint32_t   calleeLr;	/* link register used by callees: SVR4/EABI */
-
-    /* This is what is left out of the primary contexts */
-    uint32_t   gpr0;
-    uint32_t   gpr2;		/* play safe */
-    uint32_t   gpr3;
-    uint32_t   gpr4;
-    uint32_t   gpr5;
-    uint32_t   gpr6;
-    uint32_t   gpr7;
-    uint32_t   gpr8;
-    uint32_t   gpr9;
-    uint32_t   gpr10;
-    uint32_t   gpr11;
-    uint32_t   gpr12;
-    uint32_t   gpr13;   /* Play safe */
-    uint32_t   gpr28;   /* For internal use by the IRQ handler */
-    uint32_t   gpr29;   /* For internal use by the IRQ handler */
-    uint32_t   gpr30;   /* For internal use by the IRQ handler */
-    uint32_t   gpr31;   /* For internal use by the IRQ handler */
-    uint32_t   cr;	/* Bits of this are volatile, so no-one may save */
-    uint32_t   ctr;
-    uint32_t   xer;
-    uint32_t   lr;
-    uint32_t   pc;
-    uint32_t   msr;
-    uint32_t   pad[3];
-} CPU_Interrupt_frame;
 
 #endif /* ASM */
 
@@ -569,7 +529,7 @@ typedef struct CPU_Interrupt_frame {
  *  number (0)?
  */
 
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 /*
  *  Should the saving of the floating point registers be deferred
@@ -608,6 +568,8 @@ typedef struct CPU_Interrupt_frame {
 
 /* conservative setting (FALSE); probably doesn't affect performance too much */
 #define CPU_USE_DEFERRED_FP_SWITCH       FALSE
+
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
 
 /*
  *  Processor defined structures required for cpukit/score.
@@ -687,6 +649,11 @@ typedef struct CPU_Interrupt_frame {
 
 #ifndef ASM
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & MSR_EE ) != 0;
+}
+
 static inline uint32_t   _CPU_ISR_Get_level( void )
 {
   register unsigned int msr;
@@ -734,7 +701,11 @@ void _BSP_Fatal_error(unsigned int);
 
 #define CPU_STACK_MINIMUM_SIZE          (1024*8)
 
+#if defined(__powerpc64__)
+#define CPU_SIZEOF_POINTER 8
+#else
 #define CPU_SIZEOF_POINTER 4
+#endif
 
 /*
  *  CPU's worst alignment requirement for data types on a byte boundary.  This
@@ -869,8 +840,8 @@ static inline CPU_Counter_ticks _CPU_Counter_difference(
 
 void _CPU_Context_Initialize(
   Context_Control  *the_context,
-  uint32_t         *stack_base,
-  uint32_t          size,
+  void             *stack_base,
+  size_t            size,
   uint32_t          new_level,
   void             *entry_point,
   bool              is_fp,
@@ -889,23 +860,6 @@ void _CPU_Context_Initialize(
 
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
-
-/*
- *  The purpose of this macro is to allow the initial pointer into
- *  a floating point context area (used to save the floating point
- *  context) to be at an arbitrary place in the floating point
- *  context area.
- *
- *  This is necessary because some FP units are designed to have
- *  their context saved as a stack which grows into lower addresses.
- *  Other FP units can be saved by simply moving registers into offsets
- *  from the base of the context area.  Finally some FP units provide
- *  a "dump context" instruction which could fill in from high to low
- *  or low to high based on the whim of the CPU designers.
- */
-
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
 /*
  *  This routine initializes the FP context area passed to it to.
@@ -1124,13 +1078,15 @@ void _CPU_Context_validate( uintptr_t pattern );
 #endif
 
 typedef struct {
-  uint32_t EXC_SRR0;
-  uint32_t EXC_SRR1;
+  uintptr_t EXC_SRR0;
+  uintptr_t EXC_SRR1;
   uint32_t _EXC_number;
+  uint32_t RESERVED_FOR_ALIGNMENT_0;
   uint32_t EXC_CR;
-  uint32_t EXC_CTR;
   uint32_t EXC_XER;
-  uint32_t EXC_LR;
+  uintptr_t EXC_CTR;
+  uintptr_t EXC_LR;
+  uintptr_t RESERVED_FOR_ALIGNMENT_1;
   #ifdef __SPE__
     uint32_t EXC_SPEFSCR;
     uint64_t EXC_ACC;
@@ -1167,13 +1123,13 @@ typedef struct {
   PPC_GPR_TYPE GPR29;
   PPC_GPR_TYPE GPR30;
   PPC_GPR_TYPE GPR31;
-  #if defined(PPC_MULTILIB_ALTIVEC) || defined(PPC_MULTILIB_FPU)
-    uint32_t reserved_for_alignment;
-  #endif
+  uintptr_t RESERVED_FOR_ALIGNMENT_2;
   #ifdef PPC_MULTILIB_ALTIVEC
     uint32_t VRSAVE;
+    uint32_t RESERVED_FOR_ALIGNMENT_3[3];
 
     /* This field must take stvewx/lvewx requirements into account */
+    uint32_t RESERVED_FOR_ALIGNMENT_4[3];
     uint32_t VSCR;
 
     uint8_t V0[16];
@@ -1243,6 +1199,7 @@ typedef struct {
     double F30;
     double F31;
     uint64_t FPSCR;
+    uint64_t RESERVED_FOR_ALIGNMENT_5;
   #endif
 } CPU_Exception_frame;
 

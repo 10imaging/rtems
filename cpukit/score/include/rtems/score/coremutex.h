@@ -27,7 +27,7 @@
 #include <rtems/score/watchdog.h>
 #include <rtems/score/interr.h>
 
-struct Scheduler_Control;
+struct _Scheduler_Control;
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,15 +82,15 @@ typedef struct {
   CORE_recursive_mutex_Control Recursive;
 
   /**
-   * @brief The priority ceiling value for the mutex owner.
+   * @brief The priority ceiling node for the mutex owner.
    */
-  Priority_Control priority_ceiling;
+  Priority_Node Priority_ceiling;
 
 #if defined(RTEMS_SMP)
   /**
    * @brief The scheduler instance for this priority ceiling mutex.
    */
-  const struct Scheduler_Control *scheduler;
+  const struct _Scheduler_Control *scheduler;
 #endif
 } CORE_ceiling_mutex_Control;
 

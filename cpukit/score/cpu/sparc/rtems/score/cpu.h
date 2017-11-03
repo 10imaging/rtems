@@ -28,40 +28,45 @@ extern "C" {
 
 /* conditional compilation parameters */
 
-#if defined(RTEMS_SMP)
-  /*
-   * The SPARC ABI is a bit special with respect to the floating point context.
-   * The complete floating point context is volatile.  Thus from an ABI point
-   * of view nothing needs to be saved and restored during a context switch.
-   * Instead the floating point context must be saved and restored during
-   * interrupt processing.  Historically the deferred floating point switch is
-   * used for SPARC and the complete floating point context is saved and
-   * restored during a context switch to the new floating point unit owner.
-   * This is a bit dangerous since post-switch actions (e.g. signal handlers)
-   * and context switch extensions may silently corrupt the floating point
-   * context.  The floating point unit is disabled for interrupt handlers.
-   * Thus in case an interrupt handler uses the floating point unit then this
-   * will result in a trap.
-   *
-   * On SMP configurations the deferred floating point switch is not
-   * supported in principle.  So use here a safe floating point support.  Safe
-   * means that the volatile floating point context is saved and restored
-   * around a thread dispatch issued during interrupt processing.  Thus
-   * post-switch actions and context switch extensions may safely use the
-   * floating point unit.
-   */
-  #define SPARC_USE_SAFE_FP_SUPPORT
-#endif
-
-/**
- * Should the calls to _Thread_Enable_dispatch be inlined?
+/*
+ * The SPARC ABI is a bit special with respect to the floating point context.
+ * The complete floating point context is volatile.  Thus, from an ABI point
+ * of view nothing needs to be saved and restored during a context switch.
+ * Instead the floating point context must be saved and restored during
+ * interrupt processing.  Historically, the deferred floating point switch was
+ * used for SPARC and the complete floating point context is saved and
+ * restored during a context switch to the new floating point unit owner.
+ * This is a bit dangerous since post-switch actions (e.g. signal handlers)
+ * and context switch extensions may silently corrupt the floating point
+ * context.
  *
- * - If TRUE, then they are inlined.
- * - If FALSE, then a subroutine call is made.
+ * The floating point unit is disabled for interrupt handlers.  Thus, in case
+ * an interrupt handler uses the floating point unit then this will result in a
+ * trap (INTERNAL_ERROR_ILLEGAL_USE_OF_FLOATING_POINT_UNIT).
  *
- * On this port, it is faster to inline _Thread_Enable_dispatch.
+ * In uniprocessor configurations, a lazy floating point context switch is
+ * used.  In case an active floating point thread is interrupted (PSR[EF] == 1)
+ * and a thread dispatch is carried out, then this thread is registered as the
+ * floating point owner.  When a floating point owner is present during a
+ * context switch, the floating point unit is disabled for the heir thread
+ * (PSR[EF] == 0).  The floating point disabled trap checks that the use of the
+ * floating point unit is allowed and saves/restores the floating point context
+ * on demand.
+ *
+ * In SMP configurations, the deferred floating point switch is not supported
+ * in principle.  So, use here a synchronous floating point switching.
+ * Synchronous means that the volatile floating point context is saved and
+ * restored around a thread dispatch issued during interrupt processing.  Thus
+ * post-switch actions and context switch extensions may safely use the
+ * floating point unit.
  */
-#define CPU_INLINE_ENABLE_DISPATCH       TRUE
+#if SPARC_HAS_FPU == 1
+  #if defined(RTEMS_SMP)
+    #define SPARC_USE_SYNCHRONOUS_FP_SWITCH
+  #else
+    #define SPARC_USE_LAZY_FP_SWITCH
+  #endif
+#endif
 
 /**
  * Does the executive manage a dedicated interrupt stack in software?
@@ -117,7 +122,7 @@ extern "C" {
  * The SPARC port does not pass an Interrupt Stack Frame pointer to
  * interrupt handlers.
  */
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 /**
  * Does the CPU have hardware floating point?
@@ -127,7 +132,7 @@ extern "C" {
  *
  * This is set based upon the multilib settings.
  */
-#if ( SPARC_HAS_FPU == 1 ) && !defined(SPARC_USE_SAFE_FP_SUPPORT)
+#if ( SPARC_HAS_FPU == 1 ) && !defined(SPARC_USE_SYNCHRONOUS_FP_SWITCH)
   #define CPU_HARDWARE_FP     TRUE
 #else
   #define CPU_HARDWARE_FP     FALSE
@@ -160,28 +165,9 @@ extern "C" {
  */
 #define CPU_IDLE_TASK_IS_FP      FALSE
 
-/**
- * Should the saving of the floating point registers be deferred
- * until a context switch is made to another different floating point
- * task?
- *
- * - If TRUE, then the floating point context will not be stored until
- * necessary.  It will remain in the floating point registers and not
- * disturned until another floating point task is switched to.
- *
- * - If FALSE, then the floating point context is saved when a floating
- * point task is switched out and restored when the next floating point
- * task is restored.  The state of the floating point registers between
- * those two operations is not specified.
- *
- * On the SPARC, we can disable the FPU for integer only tasks so
- * it is safe to defer floating point context switches.
- */
-#if defined(SPARC_USE_SAFE_FP_SUPPORT)
-  #define CPU_USE_DEFERRED_FP_SWITCH FALSE
-#else
-  #define CPU_USE_DEFERRED_FP_SWITCH TRUE
-#endif
+#define CPU_USE_DEFERRED_FP_SWITCH FALSE
+
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
 
 /**
  * Does this port provide a CPU dependent IDLE task implementation?
@@ -214,22 +200,6 @@ extern "C" {
 #define CPU_CACHE_LINE_BYTES 64
 
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
-
-/**
- * Define what is required to specify how the network to host conversion
- * routines are handled.
- *
- * The SPARC is big endian.
- */
-#define CPU_BIG_ENDIAN                           TRUE
-
-/**
- * Define what is required to specify how the network to host conversion
- * routines are handled.
- *
- * The SPARC is NOT little endian.
- */
-#define CPU_LITTLE_ENDIAN                        FALSE
 
 /**
  * The following defines the number of bits actually used in the
@@ -301,7 +271,7 @@ typedef struct {
   uint32_t    saved_arg5;
   /** This field pads the structure so ldd and std instructions can be used. */
   uint32_t    pad0;
-}  CPU_Minimum_stack_frame;
+} SPARC_Minimum_stack_frame;
 
 #endif /* ASM */
 
@@ -354,30 +324,7 @@ typedef struct {
 /** This macro defines an offset into the stack frame for use in assembly. */
 #define CPU_STACK_FRAME_PAD0_OFFSET           0x5c
 
-/** This defines the size of the minimum stack frame. */
-#define CPU_MINIMUM_STACK_FRAME_SIZE          0x60
-
-#if ( SPARC_HAS_FPU == 1 )
-  #define CPU_PER_CPU_CONTROL_SIZE 8
-#else
-  #define CPU_PER_CPU_CONTROL_SIZE 4
-#endif
-
 #define CPU_MAXIMUM_PROCESSORS 32
-
-/**
- * @brief Offset of the CPU_Per_CPU_control::isr_dispatch_disable field
- * relative to the Per_CPU_Control begin.
- */
-#define SPARC_PER_CPU_ISR_DISPATCH_DISABLE 0
-
-#if ( SPARC_HAS_FPU == 1 )
-  /**
-   * @brief Offset of the CPU_Per_CPU_control::fsr field relative to the
-   * Per_CPU_Control begin.
-   */
-  #define SPARC_PER_CPU_FSR_OFFSET 4
-#endif
 
 /**
  * @defgroup Contexts SPARC Context Structures
@@ -401,27 +348,7 @@ typedef struct {
 /**@{**/
 
 #ifndef ASM
-
-typedef struct {
-  /**
-   * This flag is context switched with each thread.  It indicates
-   * that THIS thread has an _ISR_Dispatch stack frame on its stack.
-   * By using this flag, we can avoid nesting more interrupt dispatching
-   * attempts on a previously interrupted thread's stack.
-   */
-  uint32_t isr_dispatch_disable;
-
-#if ( SPARC_HAS_FPU == 1 )
-  /**
-   * @brief Memory location to store the FSR register during interrupt
-   * processing.
-   *
-   * This is a write-only field.  The FSR is written to force a completion of
-   * floating point operations in progress.
-   */
-  uint32_t fsr;
-#endif
-} CPU_Per_CPU_control;
+typedef struct Context_Control_fp Context_Control_fp;
 
 /**
  * @brief SPARC basic context.
@@ -498,6 +425,10 @@ typedef struct {
    * SPARC CPU models at high interrupt rates.
    */
   uint32_t   isr_dispatch_disable;
+
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
+  Context_Control_fp *fp_context;
+#endif
 
 #if defined(RTEMS_SMP)
   volatile uint32_t is_executing;
@@ -594,7 +525,7 @@ typedef struct {
  *
  * This structure defines floating point context area.
  */
-typedef struct {
+struct Context_Control_fp {
   /** This will contain the contents of the f0 and f1 register. */
   double      f0_f1;
   /** This will contain the contents of the f2 and f3 register. */
@@ -629,7 +560,7 @@ typedef struct {
   double      f30_f31;
   /** This will contain the contents of the floating point status register. */
   uint32_t    fsr;
-} Context_Control_fp;
+};
 
 #endif /* ASM */
 
@@ -689,7 +620,7 @@ typedef struct {
  */
 typedef struct {
   /** On an interrupt, we must save the minimum stack frame. */
-  CPU_Minimum_stack_frame  Stack_frame;
+  SPARC_Minimum_stack_frame Stack_frame;
   /** This is the offset of the PSR on an ISF. */
   uint32_t                 psr;
   /** This is the offset of the XXX on an ISF. */
@@ -734,61 +665,7 @@ typedef struct {
 
 #endif /* ASM */
 
-/*
- *  Offsets of fields with CPU_Interrupt_frame for assembly routines.
- */
-
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_PSR_OFFSET         CPU_MINIMUM_STACK_FRAME_SIZE + 0x00
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_PC_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x04
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_NPC_OFFSET         CPU_MINIMUM_STACK_FRAME_SIZE + 0x08
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_G1_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x0c
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_G2_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x10
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_G3_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x14
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_G4_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x18
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_G5_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x1c
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_G7_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x24
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I0_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x28
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I1_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x2c
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I2_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x30
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I3_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x34
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I4_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x38
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I5_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x3c
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I6_FP_OFFSET       CPU_MINIMUM_STACK_FRAME_SIZE + 0x40
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_I7_OFFSET          CPU_MINIMUM_STACK_FRAME_SIZE + 0x44
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_Y_OFFSET           CPU_MINIMUM_STACK_FRAME_SIZE + 0x48
-/** This macro defines an offset into the ISF for use in assembly. */
-#define ISF_TPC_OFFSET         CPU_MINIMUM_STACK_FRAME_SIZE + 0x4c
-
-/** This defines the size of the ISF area for use in assembly. */
-#define CONTEXT_CONTROL_INTERRUPT_FRAME_SIZE \
-        CPU_MINIMUM_STACK_FRAME_SIZE + 0x50
-
 #ifndef ASM
-/**
- * This variable is contains the initialize context for the FP unit.
- * It is filled in by _CPU_Initialize and copied into the task's FP
- * context area during _CPU_Context_Initialize.
- */
-extern Context_Control_fp _CPU_Null_fp_context;
-
 /**
  * The following type defines an entry in the SPARC's trap table.
  *
@@ -941,19 +818,10 @@ extern const CPU_Trap_table_entry _CPU_Trap_slot_template;
 #define CPU_PARTITION_ALIGNMENT    CPU_ALIGNMENT
 
 /**
- * This number corresponds to the byte alignment requirement for the
- * stack.  This alignment requirement may be stricter than that for the
- * data types alignment specified by CPU_ALIGNMENT.  If the CPU_ALIGNMENT
- * is strict enough for the stack, then this should be set to 0.
- *
- * NOTE:  This must be a power of 2 either 0 or greater than CPU_ALIGNMENT.
- *
- * The alignment restrictions for the SPARC are not that strict but this
- * should unsure that the stack is always sufficiently alignment that the
- * window overflow, underflow, and flush routines can use double word loads
- * and stores.
+ * Stack frames must be doubleword aligned according to the System V ABI for
+ * SPARC.
  */
-#define CPU_STACK_ALIGNMENT        16
+#define CPU_STACK_ALIGNMENT CPU_ALIGNMENT
 
 #ifndef ASM
 
@@ -989,6 +857,14 @@ extern const CPU_Trap_table_entry _CPU_Trap_slot_template;
  */
 #define _CPU_ISR_Flash( _level ) \
   sparc_flash_interrupts( _level )
+
+#define _CPU_ISR_Is_enabled( _isr_cookie ) \
+  sparc_interrupt_is_enabled( _isr_cookie )
+
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & SPARC_PSR_PIL_MASK ) == 0;
+}
 
 /**
  * Map interrupt level in task mode onto the hardware that the CPU
@@ -1072,25 +948,22 @@ void _CPU_Context_Initialize(
    _CPU_Context_restore( (_the_context) );
 
 /**
- * The FP context area for the SPARC is a simple structure and nothing
- * special is required to find the "starting load point"
- */
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
-
-/**
- * This routine initializes the FP context area passed to it to.
- *
- * The SPARC allows us to use the simple initialization model
- * in which an "initial" FP context was saved into _CPU_Null_fp_context
- * at CPU initialization and it is simply copied into the destination
- * context.
+ * @brief Nothing to do due to the synchronous or lazy floating point switch.
  */
 #define _CPU_Context_Initialize_fp( _destination ) \
-  do { \
-   *(*(_destination)) = _CPU_Null_fp_context; \
-  } while (0)
+  do { } while ( 0 )
 
+/**
+ * @brief Nothing to do due to the synchronous or lazy floating point switch.
+ */
+#define _CPU_Context_save_fp( _fp_context_ptr ) \
+  do { } while ( 0 )
+
+/**
+ * @brief Nothing to do due to the synchronous or lazy floating point switch.
+ */
+#define _CPU_Context_restore_fp( _fp_context_ptr ) \
+  do { } while ( 0 )
 /* end of Context handler macros */
 
 /* Fatal Error manager macros */
@@ -1185,14 +1058,6 @@ void _CPU_Context_restore(
   Context_Control *new_context
 ) RTEMS_NO_RETURN;
 
-/**
- * @brief The pointer to the current per-CPU control is available via register
- * g6.
- */
-register struct Per_CPU_Control *_SPARC_Per_CPU_current __asm__( "g6" );
-
-#define _CPU_Get_current_per_CPU_control() _SPARC_Per_CPU_current
-
 #if defined(RTEMS_SMP)
   uint32_t _CPU_SMP_Initialize( void );
 
@@ -1224,27 +1089,16 @@ register struct Per_CPU_Control *_SPARC_Per_CPU_current __asm__( "g6" );
   }
 #endif
 
-/**
- * @brief SPARC specific save FPU method.
- *
- * This routine saves the floating point context passed to it.
- *
- * @param[in] fp_context_ptr is the area to save into
- */
-void _CPU_Context_save_fp(
-  Context_Control_fp **fp_context_ptr
-);
-
-/**
- * @brief SPARC specific restore FPU method.
- *
- * This routine restores the floating point context passed to it.
- *
- * @param[in] fp_context_ptr is the area to restore from
- */
-void _CPU_Context_restore_fp(
-  Context_Control_fp **fp_context_ptr
-);
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
+#define _CPU_Context_Destroy( _the_thread, _the_context ) \
+  do { \
+    Per_CPU_Control *cpu_self = _Per_CPU_Get(); \
+    Thread_Control *_fp_owner = cpu_self->cpu_per_cpu.fp_owner; \
+    if ( _fp_owner == _the_thread ) { \
+      cpu_self->cpu_per_cpu.fp_owner = NULL; \
+    } \
+  } while ( 0 )
+#endif
 
 void _CPU_Context_volatile_clobber( uintptr_t pattern );
 

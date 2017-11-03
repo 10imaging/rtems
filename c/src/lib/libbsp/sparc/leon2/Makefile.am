@@ -23,7 +23,10 @@ noinst_LIBRARIES = libbspstart.a
 libbspstart_a_SOURCES = ../../sparc/shared/start/start.S
 project_lib_DATA = start.$(OBJEXT)
 
-dist_project_lib_DATA += startup/linkcmds ../shared/startup/linkcmds.base
+dist_project_lib_DATA += ../shared/startup/linkcmds.base
+dist_project_lib_DATA += startup/linkcmds
+dist_project_lib_DATA += startup/linkcmds.leon2
+dist_project_lib_DATA += startup/linkcmds.at697f
 
 noinst_LIBRARIES += libbsp.a
 libbsp_a_SOURCES =
@@ -96,9 +99,11 @@ libbsp_a_SOURCES += ../../sparc/shared/timer/tlib.c
 # PCI
 include_bsp_HEADERS += ../../sparc/shared/include/grpci.h
 include_bsp_HEADERS += ../../sparc/shared/include/grpci2.h
+include_bsp_HEADERS += ../../sparc/shared/include/grpci2dma.h
 include_bsp_HEADERS += ../../sparc/shared/include/pcif.h
 include_bsp_HEADERS += include/at697_pci.h
 libbsp_a_SOURCES += ../../sparc/shared/pci/grpci2.c
+libbsp_a_SOURCES += ../../sparc/shared/pci/grpci2dma.c
 libbsp_a_SOURCES += ../../sparc/shared/pci/grpci.c
 libbsp_a_SOURCES += ../../sparc/shared/pci/pcif.c
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/pci_memreg_sparc_le.c
@@ -112,12 +117,14 @@ include_bsp_HEADERS += ../../sparc/shared/include/gr_rasta_io.h
 include_bsp_HEADERS += ../../sparc/shared/include/gr_rasta_spw_router.h
 include_bsp_HEADERS += ../../sparc/shared/include/gr_rasta_tmtc.h
 include_bsp_HEADERS += ../../sparc/shared/include/gr_leon4_n2x.h
+include_bsp_HEADERS += ../../sparc/shared/include/gr_cpci_gr740.h
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_701.c
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_rasta_adcdac.c
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_rasta_io.c
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_rasta_spw_router.c
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_rasta_tmtc.c
 libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_leon4_n2x.c
+libbsp_a_SOURCES +=  ../../sparc/shared/pci/gr_cpci_gr740.c
 
 # B1553BRM
 include_bsp_HEADERS += ../../sparc/shared/include/b1553brm.h
@@ -143,14 +150,17 @@ libbsp_a_SOURCES += ../../sparc/shared/can/occan.c \
     ../../sparc/shared/can/grcan.c
 
 # SpaceWire
+if !HAS_SMP
 include_bsp_HEADERS += ../../sparc/shared/include/grspw.h
-include_bsp_HEADERS += ../../sparc/shared/include/grspw_router.h
 libbsp_a_SOURCES += ../../sparc/shared/spw/grspw.c
+endif
+include_bsp_HEADERS += ../../sparc/shared/include/grspw_pkt.h
+include_bsp_HEADERS += ../../sparc/shared/include/grspw_router.h
+libbsp_a_SOURCES += ../../sparc/shared/spw/grspw_pkt.c
 libbsp_a_SOURCES += ../../sparc/shared/spw/grspw_router.c
 
 # UART (RAW)
 include_bsp_HEADERS += ../../sparc/shared/include/apbuart.h
-libbsp_a_SOURCES += ../../sparc/shared/uart/apbuart.c
 
 # I2CMST
 include_bsp_HEADERS += ../../sparc/shared/include/i2cmst.h
@@ -184,6 +194,14 @@ libbsp_a_SOURCES += ../../sparc/shared/analog/gradcdac.c
 libbsp_a_SOURCES += ../../sparc/shared/mem/mctrl.c
 include_bsp_HEADERS += ../../sparc/shared/include/mctrl.h
 
+# l2cache
+libbsp_a_SOURCES += ../../sparc/shared/l2c/l2c.c
+include_bsp_HEADERS += ../../sparc/shared/include/l2c.h
+
+# griommu
+libbsp_a_SOURCES += ../../sparc/shared/iommu/griommu.c
+include_bsp_HEADERS += ../../sparc/shared/include/griommu.h
+
 # timer
 libbsp_a_SOURCES += timer/timer.c
 
@@ -192,6 +210,15 @@ include_bsp_HEADERS += ../../sparc/shared/include/grtc.h
 include_bsp_HEADERS += ../../sparc/shared/include/grtm.h
 libbsp_a_SOURCES += ../../sparc/shared/tmtc/grtc.c
 libbsp_a_SOURCES += ../../sparc/shared/tmtc/grtm.c
+
+# MEMSCRUB
+libbsp_a_SOURCES += ../../sparc/shared/scrub/memscrub.c
+include_bsp_HEADERS += ../../sparc/shared/include/memscrub.h
+
+# L4STAT
+libbsp_a_SOURCES += ../../sparc/shared/stat/l4stat.c
+include_bsp_HEADERS += ../../sparc/shared/include/l4stat.h
+
 
 # Driver Manager
 include_drvmgrdir = $(includedir)/drvmgr

@@ -164,65 +164,27 @@ static inline void _TOD_Acquire( ISR_lock_Context *lock_context )
  *
  * The caller must be the owner of the TOD lock.
  *
- * @param tod_as_timestamp The new time of day in timestamp format representing
+ * @param tod The new time of day in timespec format representing
  *   the time since UNIX Epoch.
  * @param lock_context The ISR lock context used for the corresponding
  *   _TOD_Acquire().  The caller must be the owner of the TOD lock.  This
  *   function will release the TOD lock.
  */
 void _TOD_Set(
-  const Timestamp_Control *tod_as_timestamp,
-  ISR_lock_Context        *lock_context
+  const struct timespec *tod,
+  ISR_lock_Context      *lock_context
 );
-
-/**
- * @brief Sets the time of day with timespec format.
- *
- * @param tod_as_timespec The new time of day in timespec format.
- *
- * @see _TOD_Set().
- */
-static inline void _TOD_Set_with_timespec(
-  const struct timespec *tod_as_timespec
-)
-{
-  Timestamp_Control tod_as_timestamp;
-  ISR_lock_Context  lock_context;
-
-  _Timestamp_Set(
-    &tod_as_timestamp,
-    tod_as_timespec->tv_sec,
-    tod_as_timespec->tv_nsec
-  );
-
-  _TOD_Lock();
-  _TOD_Acquire( &lock_context );
-  _TOD_Set( &tod_as_timestamp, &lock_context );
-  _TOD_Unlock();
-}
-
-/**
- *  @brief Gets the current time in the bintime format.
- *
- *  @param[out] time is the value gathered by the bintime request
- */
-static inline void _TOD_Get(
-  Timestamp_Control *time
-)
-{
-  _Timecounter_Bintime(time);
-}
 
 /**
  *  @brief Gets the current time in the timespec format.
  *
- *  @param[out] time is the value gathered by the nanotime request
+ *  @param[out] time is the value gathered by the request
  */
-static inline void _TOD_Get_as_timespec(
-  struct timespec *time
+static inline void _TOD_Get(
+  struct timespec *tod
 )
 {
-  _Timecounter_Nanotime(time);
+  _Timecounter_Nanotime( tod );
 }
 
 /**
@@ -239,7 +201,7 @@ static inline void _TOD_Get_uptime(
   Timestamp_Control *time
 )
 {
-  _Timecounter_Binuptime( time );
+  *time = _Timecounter_Sbinuptime();
 }
 
 /**
@@ -254,8 +216,7 @@ static inline void _TOD_Get_zero_based_uptime(
   Timestamp_Control *time
 )
 {
-  _Timecounter_Binuptime( time );
-  --time->sec;
+  *time = _Timecounter_Sbinuptime() - SBT_1S;
 }
 
 /**
@@ -324,7 +285,7 @@ RTEMS_INLINE_ROUTINE void _TOD_Get_timeval(
  * @param[in] delta is the amount to adjust
  */
 void _TOD_Adjust(
-  const Timestamp_Control *delta
+  const struct timespec *delta
 );
 
 /**
@@ -336,46 +297,6 @@ RTEMS_INLINE_ROUTINE bool _TOD_Is_set( void )
 {
   return _TOD.is_set;
 }
-
-/**
- * @brief Absolute timeout conversion results.
- *
- * This enumeration defines the possible results of converting
- * an absolute time used for timeouts to POSIX blocking calls to
- * a number of ticks for example.
- */
-typedef enum {
-  /** The timeout is invalid. */
-  TOD_ABSOLUTE_TIMEOUT_INVALID,
-  /** The timeout represents a time that is in the past. */
-  TOD_ABSOLUTE_TIMEOUT_IS_IN_PAST,
-  /** The timeout represents a time that is equal to the current time. */
-  TOD_ABSOLUTE_TIMEOUT_IS_NOW,
-  /** The timeout represents a time that is in the future. */
-  TOD_ABSOLUTE_TIMEOUT_IS_IN_FUTURE,
-} TOD_Absolute_timeout_conversion_results;
-
-/**
- * @brief Convert absolute timeout to ticks.
- *
- * This method takes an absolute time being used as a timeout
- * to a blocking directive, validates it and returns the number
- * of corresponding clock ticks for use by the SuperCore.
- *
- * @param[in] abstime is a pointer to the timeout
- * @param[in] clock is the time source to use for the timeout
- * @param[out] ticks_out will contain the number of ticks
- *
- * @return This method returns the number of ticks in @a ticks_out
- *         and a status value indicating whether the absolute time
- *         is valid, in the past, equal to the current time or in
- *         the future as it should be.
- */
-TOD_Absolute_timeout_conversion_results _TOD_Absolute_timeout_to_ticks(
-  const struct timespec *abstime,
-  clockid_t              clock,
-  Watchdog_Interval     *ticks_out
-);
 
 /**@}*/
 

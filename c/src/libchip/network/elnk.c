@@ -100,6 +100,7 @@
 #include <libcpu/byteorder.h>
 #endif
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -1824,7 +1825,7 @@ xl_mediacheck(struct elnk_softc		*sc)
          return;
       else {
          printk("etherlink : unit elnk%d bogus xcvr value "
-                "in EEPROM (%x)\n", sc->xl_unit, sc->xl_xcvr);
+                "in EEPROM (%" PRIx32 ")\n", sc->xl_unit, sc->xl_xcvr);
          printk("etherlink : unit elnk%d choosing new default based "
                 "on card type\n", sc->xl_unit);
       }
@@ -1871,16 +1872,6 @@ static void no_op(const rtems_irq_connect_data* irq)
 {
    return;
 }
-
-
-
-
-static int elnkIsOn(const rtems_irq_connect_data* irq)
-{
-  return BSP_irq_enabled_at_i8259s (irq->name);
-}
-
-
 
 
 
@@ -2214,7 +2205,7 @@ elnk_initialize_hardware (struct elnk_softc *sc)
    sc->irqInfo.hdl  = (rtems_irq_hdl)elnk_interrupt_handler_entry;
    sc->irqInfo.on   = no_op;
    sc->irqInfo.off  = no_op;
-   sc->irqInfo.isOn = elnkIsOn;
+   sc->irqInfo.isOn = NULL;
 
    if( sc->irqInfo.name != 255 )
    {
@@ -2356,7 +2347,7 @@ elnk_rxDaemon (void *arg)
 /*
  * Driver transmit daemon
  */
-void
+static void
 elnk_txDaemon (void *arg)
 {
    struct elnk_softc     *sc;
@@ -2714,13 +2705,18 @@ elnk_init (void *arg)
                   xl_setcfg(sc);
                   break;
                case XL_XCVR_MII:
-                  printk("etherlink : unit elnk%d MII media not supported!\n", sc->xl_unit);
+                  printk(
+                   "etherlink : unit elnk%d MII media not supported!\n",
+                   sc->xl_unit);
                   break;
                case XL_XCVR_100BFX:
                   media = IFM_ETHER|IFM_100_FX;
                   break;
                default:
-                  printk("etherlink : unit elnk%d unknown XCVR type: %d\n", sc->xl_unit, sc->xl_xcvr);
+                  printk(
+                    "etherlink : unit elnk%d unknown XCVR type: %" PRId32 "\n",
+                    sc->xl_unit,
+                    sc->xl_xcvr);
                   /*
                    * This will probably be wrong, but it prevents
                    * the ifmedia code from panicking.
@@ -3109,6 +3105,9 @@ struct el_boards
 {
       int pbus,pdev,pfun, vid, did, tindex;
 };
+
+/* Prototype to avoid warning. This must be a global symbol. */
+int rtems_elnk_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach);
 
 /*
  * Attach an ELNK driver to the system

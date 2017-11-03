@@ -21,13 +21,16 @@
 #include <rtems/score/schedulersimpleimpl.h>
 #include <rtems/score/thread.h>
 
-Scheduler_Void_or_thread _Scheduler_simple_Unblock(
+void _Scheduler_simple_Unblock(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 )
 {
   Scheduler_simple_Context *context;
   Priority_Control          priority;
+
+  (void) node;
 
   context = _Scheduler_simple_Get_context( scheduler );
   _Scheduler_simple_Insert_priority_fifo( &context->Ready, the_thread );
@@ -51,6 +54,4 @@ Scheduler_Void_or_thread _Scheduler_simple_Unblock(
       priority == PRIORITY_PSEUDO_ISR
     );
   }
-
-  SCHEDULER_RETURN_VOID_OR_NULL;
 }

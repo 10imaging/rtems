@@ -96,8 +96,6 @@ static uint8_t _DacConfigureDmaChannels(DacDma *pDacd)
 {
 
 	/* Driver initialize */
-	XDMAD_Initialize(pDacd->pXdmad, 0);
-
 	XDMAD_FreeChannel(pDacd->pXdmad, dacDmaTxChannel);
 
 	/* Allocate a DMA channel for DAC0/1 TX. */
@@ -195,6 +193,7 @@ uint32_t Dac_ConfigureDma(DacDma *pDacd ,
 	pDacd->dacId  = DacId;
 	pDacd->semaphore = 1;
 	pDacd->pCurrentCommand = 0;
+	assert(pXdmad == &XDMAD_Instance);
 	pDacd->pXdmad = pXdmad;
 	return 0;
 }

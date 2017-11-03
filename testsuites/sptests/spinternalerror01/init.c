@@ -16,7 +16,6 @@
   #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #include <bsp.h>
@@ -26,18 +25,16 @@ const char rtems_test_name[] = "SPINTERNALERROR 1";
 
 #define FATAL_SOURCE 0xdeadbeef
 
-#define FATAL_IS_INTERNAL false
-
 #define FATAL_ERROR 0x600df00d
 
 void boot_card( const char *cmdline )
 {
-  _Terminate( FATAL_SOURCE, FATAL_IS_INTERNAL, FATAL_ERROR );
+  _Terminate( FATAL_SOURCE, FATAL_ERROR );
 }
 
 static void fatal_extension(
   Internal_errors_Source source,
-  bool is_internal,
+  bool always_set_to_false,
   Internal_errors_t error
 )
 {
@@ -45,7 +42,7 @@ static void fatal_extension(
 
   if (
     source == FATAL_SOURCE
-      && is_internal == FATAL_IS_INTERNAL
+      && !always_set_to_false
       && error == FATAL_ERROR
   ) {
     TEST_END();

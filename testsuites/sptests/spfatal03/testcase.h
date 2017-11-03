@@ -9,14 +9,15 @@
  *  http://www.rtems.org/license/LICENSE.
  */
 
+#include <rtems/bspIo.h>
+
 #define CONFIGURE_MAXIMUM_SEMAPHORES 10
 
 #define FATAL_ERROR_TEST_NAME            "3"
 #define FATAL_ERROR_DESCRIPTION          "Core Mutex obtain in critical section"
 #define FATAL_ERROR_EXPECTED_SOURCE      INTERNAL_ERROR_CORE
-#define FATAL_ERROR_EXPECTED_IS_INTERNAL FALSE
 #define FATAL_ERROR_EXPECTED_ERROR       \
-          INTERNAL_ERROR_THREAD_QUEUE_ENQUEUE_FROM_BAD_STATE
+          INTERNAL_ERROR_BAD_THREAD_DISPATCH_DISABLE_LEVEL
 
 void force_error(void)
 {

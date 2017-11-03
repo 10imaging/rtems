@@ -48,13 +48,21 @@ static inline Scheduler_priority_SMP_Node *_Scheduler_priority_SMP_Thread_get_no
   Thread_Control *thread
 )
 {
-  return (Scheduler_priority_SMP_Node *) _Scheduler_Thread_get_node( thread );
+  return (Scheduler_priority_SMP_Node *) _Thread_Scheduler_get_home_node( thread );
 }
 
 static inline Scheduler_priority_SMP_Node *
 _Scheduler_priority_SMP_Node_downcast( Scheduler_Node *node )
 {
   return (Scheduler_priority_SMP_Node *) node;
+}
+
+static inline bool _Scheduler_priority_SMP_Has_ready( Scheduler_Context *context )
+{
+  Scheduler_priority_SMP_Context *self =
+    _Scheduler_priority_SMP_Get_self( context );
+
+  return !_Priority_bit_map_Is_empty( &self->Bit_map );
 }
 
 static inline void _Scheduler_priority_SMP_Move_from_scheduled_to_ready(
@@ -67,9 +75,9 @@ static inline void _Scheduler_priority_SMP_Move_from_scheduled_to_ready(
   Scheduler_priority_SMP_Node *node =
     _Scheduler_priority_SMP_Node_downcast( scheduled_to_ready );
 
-  _Chain_Extract_unprotected( &node->Base.Base.Node );
+  _Chain_Extract_unprotected( &node->Base.Base.Node.Chain );
   _Scheduler_priority_Ready_queue_enqueue_first(
-    &node->Base.Base.Node,
+    &node->Base.Base.Node.Chain,
     &node->Ready_queue,
     &self->Bit_map
   );
@@ -86,13 +94,13 @@ static inline void _Scheduler_priority_SMP_Move_from_ready_to_scheduled(
     _Scheduler_priority_SMP_Node_downcast( ready_to_scheduled );
 
   _Scheduler_priority_Ready_queue_extract(
-    &node->Base.Base.Node,
+    &node->Base.Base.Node.Chain,
     &node->Ready_queue,
     &self->Bit_map
   );
   _Chain_Insert_ordered_unprotected(
     &self->Base.Scheduled,
-    &node->Base.Base.Node,
+    &node->Base.Base.Node.Chain,
     _Scheduler_SMP_Insert_priority_fifo_order
   );
 }
@@ -108,7 +116,7 @@ static inline void _Scheduler_priority_SMP_Insert_ready_lifo(
     _Scheduler_priority_SMP_Node_downcast( thread );
 
   _Scheduler_priority_Ready_queue_enqueue(
-    &node->Base.Base.Node,
+    &node->Base.Base.Node.Chain,
     &node->Ready_queue,
     &self->Bit_map
   );
@@ -125,7 +133,7 @@ static inline void _Scheduler_priority_SMP_Insert_ready_fifo(
     _Scheduler_priority_SMP_Node_downcast( thread );
 
   _Scheduler_priority_Ready_queue_enqueue_first(
-    &node->Base.Base.Node,
+    &node->Base.Base.Node.Chain,
     &node->Ready_queue,
     &self->Bit_map
   );
@@ -142,7 +150,7 @@ static inline void _Scheduler_priority_SMP_Extract_from_ready(
     _Scheduler_priority_SMP_Node_downcast( thread );
 
   _Scheduler_priority_Ready_queue_extract(
-    &node->Base.Base.Node,
+    &node->Base.Base.Node.Chain,
     &node->Ready_queue,
     &self->Bit_map
   );

@@ -4,7 +4,7 @@
  * Copyright © 2001-2003 Free Software Foundation, Inc.
  * Copyright © 2001-2007 Red Hat, Inc.
  * Copyright © 2004-2010 David Woodhouse <dwmw2@infradead.org>
- * Copyright © 2013 embedded brains GmbH <rtems@embedded-brains.de>
+ * Copyright © 2013, 2016 embedded brains GmbH <rtems@embedded-brains.de>
  *
  * Created by Dominic Ostrowski <dominic.ostrowski@3glab.com>
  * Contributors: David Woodhouse, Nick Garnett, Richard Panton.
@@ -512,12 +512,93 @@ static ssize_t rtems_jffs2_dir_read(rtems_libio_t *iop, void *buf, size_t len)
 	}
 }
 
+static uint32_t rtems_jffs2_count_blocks(const struct list_head *list)
+{
+	uint32_t count = 0;
+	struct jffs2_eraseblock *jeb;
+
+	list_for_each_entry(jeb, list, list) {
+		++count;
+	}
+
+	return count;
+}
+
+static void rtems_jffs2_get_info(
+	const struct jffs2_sb_info *c,
+	rtems_jffs2_info           *info
+)
+{
+	info->flash_size = c->flash_size;
+	info->flash_blocks = c->nr_blocks;
+	info->flash_block_size = c->sector_size;
+	info->used_size = c->used_size;
+	info->dirty_size = c->dirty_size;
+	info->wasted_size = c->wasted_size;
+	info->free_size = c->free_size;
+	info->bad_size = c->bad_size;
+	info->clean_blocks = rtems_jffs2_count_blocks(&c->clean_list);
+	info->dirty_blocks = rtems_jffs2_count_blocks(&c->very_dirty_list)
+		+ rtems_jffs2_count_blocks(&c->dirty_list);
+	info->dirty_blocks += c->gcblock != NULL;
+	info->erasable_blocks = rtems_jffs2_count_blocks(&c->erasable_list)
+		+ rtems_jffs2_count_blocks(&c->erasable_pending_wbuf_list)
+		+ rtems_jffs2_count_blocks(&c->erasing_list)
+		+ rtems_jffs2_count_blocks(&c->erase_checking_list)
+		+ rtems_jffs2_count_blocks(&c->erase_pending_list)
+		+ rtems_jffs2_count_blocks(&c->erase_complete_list);
+	info->free_blocks = rtems_jffs2_count_blocks(&c->free_list);
+	info->free_blocks += c->nextblock != NULL;
+	info->bad_blocks = rtems_jffs2_count_blocks(&c->bad_list);
+}
+
+static int rtems_jffs2_on_demand_garbage_collection(struct jffs2_sb_info *c)
+{
+	if (jffs2_thread_should_wake(c)) {
+		return -jffs2_garbage_collect_pass(c);
+	} else {
+		return 0;
+	}
+}
+
+static int rtems_jffs2_ioctl(
+	rtems_libio_t   *iop,
+	ioctl_command_t  request,
+	void            *buffer
+)
+{
+	struct _inode *inode = rtems_jffs2_get_inode_by_iop(iop);
+	int eno;
+
+	rtems_jffs2_do_lock(inode->i_sb);
+
+	switch (request) {
+		case RTEMS_JFFS2_GET_INFO:
+			rtems_jffs2_get_info(&inode->i_sb->jffs2_sb, buffer);
+			eno = 0;
+			break;
+		case RTEMS_JFFS2_ON_DEMAND_GARBAGE_COLLECTION:
+			eno = rtems_jffs2_on_demand_garbage_collection(&inode->i_sb->jffs2_sb);
+			break;
+		case RTEMS_JFFS2_FORCE_GARBAGE_COLLECTION:
+			eno = -jffs2_garbage_collect_pass(&inode->i_sb->jffs2_sb);
+			break;
+		default:
+			eno = EINVAL;
+			break;
+	}
+
+	rtems_jffs2_do_unlock(inode->i_sb);
+
+	return rtems_jffs2_eno_to_rv_and_errno(eno);
+}
+
 static const rtems_filesystem_file_handlers_r rtems_jffs2_directory_handlers = {
 	.open_h = rtems_filesystem_default_open,
 	.close_h = rtems_filesystem_default_close,
 	.read_h = rtems_jffs2_dir_read,
 	.write_h = rtems_filesystem_default_write,
-	.ioctl_h = rtems_filesystem_default_ioctl,
+	.ioctl_h = rtems_jffs2_ioctl,
 	.lseek_h = rtems_filesystem_default_lseek_directory,
 	.fstat_h = rtems_jffs2_fstat,
 	.ftruncate_h = rtems_filesystem_default_ftruncate_directory,
@@ -525,6 +606,7 @@ static const rtems_filesystem_file_handlers_r rtems_jffs2_directory_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h = rtems_filesystem_default_fcntl,
 	.kqfilter_h = rtems_filesystem_default_kqfilter,
+	.mmap_h = rtems_filesystem_default_mmap,
 	.poll_h = rtems_filesystem_default_poll,
 	.readv_h = rtems_filesystem_default_readv,
 	.writev_h = rtems_filesystem_default_writev
@@ -590,10 +672,10 @@ static ssize_t rtems_jffs2_file_write(rtems_libio_t *iop, const void *buf, size_
 
 	rtems_jffs2_do_lock(inode->i_sb);
 
-	if ((iop->flags & LIBIO_FLAGS_APPEND) == 0) {
-		pos = iop->offset;
-	} else {
+	if (rtems_libio_iop_is_append(iop)) {
 		pos = inode->i_size;
+	} else {
+		pos = iop->offset;
 	}
 
 	if (pos > inode->i_size) {
@@ -659,7 +741,7 @@ static const rtems_filesystem_file_handlers_r rtems_jffs2_file_handlers = {
 	.close_h = rtems_filesystem_default_close,
 	.read_h = rtems_jffs2_file_read,
 	.write_h = rtems_jffs2_file_write,
-	.ioctl_h = rtems_filesystem_default_ioctl,
+	.ioctl_h = rtems_jffs2_ioctl,
 	.lseek_h = rtems_filesystem_default_lseek_file,
 	.fstat_h = rtems_jffs2_fstat,
 	.ftruncate_h = rtems_jffs2_file_ftruncate,
@@ -667,6 +749,7 @@ static const rtems_filesystem_file_handlers_r rtems_jffs2_file_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h = rtems_filesystem_default_fcntl,
 	.kqfilter_h = rtems_filesystem_default_kqfilter,
+	.mmap_h = rtems_filesystem_default_mmap,
 	.poll_h = rtems_filesystem_default_poll,
 	.readv_h = rtems_filesystem_default_readv,
 	.writev_h = rtems_filesystem_default_writev
@@ -677,7 +760,7 @@ static const rtems_filesystem_file_handlers_r rtems_jffs2_link_handlers = {
 	.close_h = rtems_filesystem_default_close,
 	.read_h = rtems_filesystem_default_read,
 	.write_h = rtems_filesystem_default_write,
-	.ioctl_h = rtems_filesystem_default_ioctl,
+	.ioctl_h = rtems_jffs2_ioctl,
 	.lseek_h = rtems_filesystem_default_lseek,
 	.fstat_h = rtems_jffs2_fstat,
 	.ftruncate_h = rtems_filesystem_default_ftruncate,
@@ -685,6 +768,7 @@ static const rtems_filesystem_file_handlers_r rtems_jffs2_link_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h = rtems_filesystem_default_fcntl,
 	.kqfilter_h = rtems_filesystem_default_kqfilter,
+	.mmap_h = rtems_filesystem_default_mmap,
 	.poll_h = rtems_filesystem_default_poll,
 	.readv_h = rtems_filesystem_default_readv,
 	.writev_h = rtems_filesystem_default_writev

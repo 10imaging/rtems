@@ -38,8 +38,11 @@
  *  File descriptor Table Information
  */
 
-rtems_id           rtems_libio_semaphore;
-rtems_libio_t     *rtems_libio_iop_freelist;
+rtems_id rtems_libio_semaphore;
+
+void *rtems_libio_iop_free_head;
+
+void **rtems_libio_iop_free_tail = &rtems_libio_iop_free_head;
 
 static void rtems_libio_init( void )
 {
@@ -50,10 +53,11 @@ static void rtems_libio_init( void )
 
     if (rtems_libio_number_iops > 0)
     {
-        iop = rtems_libio_iop_freelist = &rtems_libio_iops[0];
+        iop = rtems_libio_iop_free_head = &rtems_libio_iops[0];
         for (i = 0 ; (i + 1) < rtems_libio_number_iops ; i++, iop++)
           iop->data1 = iop + 1;
         iop->data1 = NULL;
+        rtems_libio_iop_free_tail = &iop->data1;
     }
 
   /*
@@ -64,7 +68,7 @@ static void rtems_libio_init( void )
     rtems_libio_free_user_env
   );
   if (eno != 0) {
-    rtems_fatal_error_occurred( RTEMS_UNSATISFIED );
+    _Internal_error( INTERNAL_ERROR_LIBIO_USER_ENV_KEY_CREATE_FAILED );
   }
 
   /*
@@ -79,8 +83,9 @@ static void rtems_libio_init( void )
     RTEMS_NO_PRIORITY,
     &rtems_libio_semaphore
   );
-  if ( rc != RTEMS_SUCCESSFUL )
-    rtems_fatal_error_occurred( rc );
+  if ( rc != RTEMS_SUCCESSFUL ) {
+    _Internal_error( INTERNAL_ERROR_LIBIO_SEM_CREATE_FAILED );
+  }
 }
 
 RTEMS_SYSINIT_ITEM(

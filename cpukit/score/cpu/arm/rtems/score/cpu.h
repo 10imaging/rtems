@@ -8,7 +8,7 @@
  *  This include file contains information pertaining to the ARM
  *  processor.
  *
- *  Copyright (c) 2009-2015 embedded brains GmbH.
+ *  Copyright (c) 2009, 2017 embedded brains GmbH
  *
  *  Copyright (c) 2007 Ray Xu <Rayx.cn@gmail.com>
  *
@@ -97,23 +97,6 @@
  */
 /**@{**/
 
-/* If someone uses THUMB we assume she wants minimal code size */
-#ifdef __thumb__
-  #define CPU_INLINE_ENABLE_DISPATCH FALSE
-#else
-  #define CPU_INLINE_ENABLE_DISPATCH TRUE
-#endif
-
-#if defined(__ARMEL__)
-  #define CPU_BIG_ENDIAN FALSE
-  #define CPU_LITTLE_ENDIAN TRUE
-#elif defined(__ARMEB__)
-  #define CPU_BIG_ENDIAN TRUE
-  #define CPU_LITTLE_ENDIAN FALSE
-#else
-  #error "unknown endianness"
-#endif
-
 /*
  *  The ARM uses the PIC interrupt model.
  */
@@ -125,7 +108,7 @@
 
 #define CPU_ALLOCATE_INTERRUPT_STACK FALSE
 
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 #define CPU_HARDWARE_FP FALSE
 
@@ -137,6 +120,8 @@
 
 #define CPU_USE_DEFERRED_FP_SWITCH FALSE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH TRUE
+
 #if defined(ARM_MULTILIB_HAS_WFI)
   #define CPU_PROVIDES_IDLE_THREAD_BODY TRUE
 #else
@@ -146,27 +131,13 @@
 #define CPU_STACK_GROWS_UP FALSE
 
 #if defined(ARM_MULTILIB_CACHE_LINE_MAX_64)
-  #define CPU_CACHE_LINE_BYTES 32
-#else
   #define CPU_CACHE_LINE_BYTES 64
+#else
+  #define CPU_CACHE_LINE_BYTES 32
 #endif
 
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
 
-/*
- * The interrupt mask disables only normal interrupts (IRQ).
- *
- * In order to support fast interrupts (FIQ) such that they can do something
- * useful, we have to disable the operating system support for FIQs.  Having
- * operating system support for them would require that FIQs are disabled
- * during critical sections of the operating system and application.  At this
- * level IRQs and FIQs would be equal.  It is true that FIQs could interrupt
- * the non critical sections of IRQs, so here they would have a small
- * advantage.  Without operating system support, the FIQs can execute at any
- * time (of course not during the service of another FIQ). If someone needs
- * operating system support for a FIQ, she can trigger a software interrupt and
- * service the request in a two-step process.
- */
 #define CPU_MODES_INTERRUPT_MASK 0x1
 
 #define CPU_CONTEXT_FP_SIZE sizeof( Context_Control_fp )
@@ -204,8 +175,6 @@
 
 #define CPU_USE_GENERIC_BITFIELD_CODE TRUE
 
-#define CPU_PER_CPU_CONTROL_SIZE 0
-
 #define CPU_MAXIMUM_PROCESSORS 32
 
 /** @} */
@@ -218,11 +187,17 @@
   #define ARM_CONTEXT_CONTROL_D8_OFFSET 48
 #endif
 
+#ifdef ARM_MULTILIB_ARCH_V4
+  #define ARM_CONTEXT_CONTROL_ISR_DISPATCH_DISABLE 40
+#endif
+
 #ifdef RTEMS_SMP
-  #ifdef ARM_MULTILIB_VFP
+  #if defined(ARM_MULTILIB_VFP)
     #define ARM_CONTEXT_CONTROL_IS_EXECUTING_OFFSET 112
-  #else
+  #elif defined(ARM_MULTILIB_HAS_THREAD_ID_REGISTER)
     #define ARM_CONTEXT_CONTROL_IS_EXECUTING_OFFSET 48
+  #else
+    #define ARM_CONTEXT_CONTROL_IS_EXECUTING_OFFSET 44
   #endif
 #endif
 
@@ -246,12 +221,7 @@ extern "C" {
 /**@{**/
 
 typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
-
-typedef struct {
 #if defined(ARM_MULTILIB_ARCH_V4)
-  uint32_t register_cpsr;
   uint32_t register_r4;
   uint32_t register_r5;
   uint32_t register_r6;
@@ -262,6 +232,7 @@ typedef struct {
   uint32_t register_fp;
   uint32_t register_sp;
   uint32_t register_lr;
+  uint32_t isr_dispatch_disable;
 #elif defined(ARM_MULTILIB_ARCH_V6M) || defined(ARM_MULTILIB_ARCH_V7M)
   uint32_t register_r4;
   uint32_t register_r5;
@@ -299,8 +270,6 @@ typedef struct {
   /* Not supported */
 } Context_Control_fp;
 
-extern uint32_t arm_cpu_mode;
-
 static inline void _ARM_Data_memory_barrier( void )
 {
 #ifdef ARM_MULTILIB_HAS_BARRIER_INSTRUCTIONS
@@ -335,6 +304,20 @@ static inline uint32_t arm_interrupt_disable( void )
 #if defined(ARM_MULTILIB_ARCH_V4)
   uint32_t arm_switch_reg;
 
+  /*
+   * Disable only normal interrupts (IRQ).
+   *
+   * In order to support fast interrupts (FIQ) such that they can do something
+   * useful, we have to disable the operating system support for FIQs.  Having
+   * operating system support for them would require that FIQs are disabled
+   * during critical sections of the operating system and application.  At this
+   * level IRQs and FIQs would be equal.  It is true that FIQs could interrupt
+   * the non critical sections of IRQs, so here they would have a small
+   * advantage.  Without operating system support, the FIQs can execute at any
+   * time (of course not during the service of another FIQ). If someone needs
+   * operating system support for a FIQ, she can trigger a software interrupt and
+   * service the request in a two-step process.
+   */
   __asm__ volatile (
     ARM_SWITCH_TO_ARM
     "mrs %[level], cpsr\n"
@@ -352,8 +335,6 @@ static inline uint32_t arm_interrupt_disable( void )
     : [level] "=&r" (level)
     : [basepri] "r" (basepri)
   );
-#else
-  level = 0;
 #endif
 
   return level;
@@ -418,6 +399,15 @@ static inline void arm_interrupt_flash( uint32_t level )
 #define _CPU_ISR_Flash( _isr_cookie ) \
   arm_interrupt_flash( _isr_cookie )
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+#if defined(ARM_MULTILIB_ARCH_V4)
+  return ( level & 0x80 ) == 0;
+#elif defined(ARM_MULTILIB_ARCH_V7M)
+  return level == 0;
+#endif
+}
+
 void _CPU_ISR_Set_level( uint32_t level );
 
 uint32_t _CPU_ISR_Get_level( void );
@@ -454,9 +444,6 @@ void _CPU_Context_Initialize(
 
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
-
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
 #define _CPU_Context_Initialize_fp( _destination ) \
   do { \
@@ -700,17 +687,9 @@ typedef struct {
   uint32_t reserved_for_stack_alignment;
 } CPU_Exception_frame;
 
-typedef CPU_Exception_frame CPU_Interrupt_frame;
-
 void _CPU_Exception_frame_print( const CPU_Exception_frame *frame );
 
 void _ARM_Exception_default( CPU_Exception_frame *frame );
-
-/*
- * FIXME: In case your BSP uses this function, then convert it to use
- * the shared start.S file for ARM.
- */
-void rtems_exception_init_mngt( void );
 
 /** @} */
 

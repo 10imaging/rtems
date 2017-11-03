@@ -173,6 +173,17 @@ typedef struct {
 } qoriq_uart;
 
 typedef struct {
+  uint32_t gpdir;
+  uint32_t gpodr;
+  uint32_t gpdat;
+  uint32_t gpier;
+  uint32_t gpimr;
+  uint32_t gpicr;
+  uint32_t gpibe;
+  QORIQ_RESERVE(0x001c, 0x1000);
+} qoriq_gpio;
+
+typedef struct {
   QORIQ_RESERVE(0x000, 0x100);
   uint16_t caplength;
   uint16_t hciversion;
@@ -311,7 +322,9 @@ typedef struct {
   QORIQ_FILL(0x11d500, 0x11d600, qoriq_uart);
   qoriq_uart uart_3;
   QORIQ_FILL(0x11d600, 0x11e000, qoriq_uart);
-  QORIQ_RESERVE(0x11e000, 0x210000);
+  QORIQ_RESERVE(0x11e000, 0x130000);
+  qoriq_gpio gpio[4];
+  QORIQ_RESERVE(0x134000, 0x210000);
   qoriq_usb usb_1;
   QORIQ_FILL(0x210000, 0x211000, qoriq_usb);
   QORIQ_RESERVE(0x211000, 0x318000);
@@ -391,9 +404,6 @@ typedef struct {
 } qoriq_pci_express;
 
 typedef struct {
-} qoriq_gpio;
-
-typedef struct {
 } qoriq_tdm;
 
 typedef struct {
@@ -459,7 +469,6 @@ typedef struct {
   QORIQ_FILL(0x0c000, 0x0d000, qoriq_dma);
   QORIQ_RESERVE(0x0d000, 0x0f000);
   qoriq_gpio gpio;
-  QORIQ_FILL(0x0f000, 0x10000, qoriq_gpio);
   QORIQ_RESERVE(0x10000, 0x16000);
   qoriq_tdm tdm;
   QORIQ_FILL(0x16000, 0x17000, qoriq_tdm);

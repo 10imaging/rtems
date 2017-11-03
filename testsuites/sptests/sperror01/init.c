@@ -11,7 +11,6 @@
 #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include <tmacros.h>
 
 #include "test_support.h"
@@ -25,13 +24,13 @@ rtems_task Init(rtems_task_argument argument);
 
 static void fatal_extension(
   rtems_fatal_source source,
-  bool is_internal,
+  bool always_set_to_false,
   rtems_fatal_code error
 )
 {
   if (
     source == RTEMS_FATAL_SOURCE_EXIT
-      && !is_internal
+      && !always_set_to_false
       && error == ENOMEM
   ) {
     TEST_END();
@@ -73,6 +72,8 @@ rtems_task Init(
   { .fatal = fatal_extension }, RTEMS_TEST_INITIAL_EXTENSION
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE
+
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
 
 #define CONFIGURE_INIT
 

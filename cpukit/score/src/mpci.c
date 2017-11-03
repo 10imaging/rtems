@@ -95,11 +95,7 @@ static void _MPCI_Handler_initialization( void )
   users_mpci_table = _Configuration_MP_table->User_mpci_table;
 
   if ( _System_state_Is_multiprocessing && !users_mpci_table )
-    _Terminate(
-      INTERNAL_ERROR_CORE,
-      true,
-      INTERNAL_ERROR_NO_MPCI
-    );
+    _Internal_error( INTERNAL_ERROR_NO_MPCI );
 
   _MPCI_table = users_mpci_table;
 
@@ -152,7 +148,7 @@ static void _MPCI_Create_server( void )
   _Thread_Initialize(
     &_Thread_Internal_information,
     _MPCI_Receive_server_tcb,
-    _Scheduler_Get_by_CPU_index( _SMP_Get_current_processor() ),
+    &_Scheduler_Table[ 0 ],
     NULL,        /* allocate the stack */
     _Stack_Minimum() +
       CPU_MPCI_RECEIVE_SERVER_EXTRA_STACK +
@@ -191,11 +187,7 @@ MP_packet_Prefix *_MPCI_Get_packet ( void )
   (*_MPCI_table->get_packet)( &the_packet );
 
   if ( the_packet == NULL )
-    _Terminate(
-      INTERNAL_ERROR_CORE,
-      true,
-      INTERNAL_ERROR_OUT_OF_PACKETS
-    );
+    _Internal_error( INTERNAL_ERROR_OUT_OF_PACKETS );
 
   /*
    *  Put in a default timeout that will be used for
@@ -226,47 +218,62 @@ void _MPCI_Send_process_packet (
   (*_MPCI_table->send_packet)( destination, the_packet );
 }
 
+static void _MPCI_Enqueue_callout(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Thread_queue_Context *queue_context
+)
+{
+  _Thread_Dispatch_unnest( _Per_CPU_Get() );
+}
+
 Status_Control _MPCI_Send_request_packet(
   uint32_t          destination,
   MP_packet_Prefix *the_packet,
   States_Control    extra_state
 )
 {
-  Per_CPU_Control *cpu_self;
-  Thread_Control  *executing;
+  Per_CPU_Control      *cpu_self;
+  Thread_queue_Context  queue_context;
+  Thread_Control       *executing;
+
+  /*
+   *  See if we need a default timeout
+   */
+
+  if (the_packet->timeout == MPCI_DEFAULT_TIMEOUT)
+      the_packet->timeout = _MPCI_table->default_timeout;
+
+  _Thread_queue_Context_initialize( &queue_context );
+  _Thread_queue_Context_set_thread_state(
+    &queue_context,
+    STATES_WAITING_FOR_RPC_REPLY | extra_state
+  );
+  _Thread_queue_Context_set_enqueue_callout(
+    &queue_context,
+    _MPCI_Enqueue_callout
+  );
+  _Thread_queue_Context_set_relative_timeout( &queue_context, the_packet->timeout );
 
   cpu_self = _Thread_Dispatch_disable();
 
-    executing = _Per_CPU_Get_executing( cpu_self );
+  executing = _Per_CPU_Get_executing( cpu_self );
+  executing->Wait.remote_id = the_packet->id;
 
-    the_packet->source_tid      = executing->Object.id;
-    the_packet->source_priority = _Thread_Get_priority( executing );
-    the_packet->to_convert =
-       ( the_packet->to_convert - sizeof(MP_packet_Prefix) ) / sizeof(uint32_t);
+  the_packet->source_tid      = executing->Object.id;
+  the_packet->source_priority = _Thread_Get_priority( executing );
+  the_packet->to_convert =
+     ( the_packet->to_convert - sizeof(MP_packet_Prefix) ) / sizeof(uint32_t);
 
-    executing->Wait.remote_id = the_packet->id;
+  (*_MPCI_table->send_packet)( destination, the_packet );
 
-    (*_MPCI_table->send_packet)( destination, the_packet );
-
-    /*
-     *  See if we need a default timeout
-     */
-
-    if (the_packet->timeout == MPCI_DEFAULT_TIMEOUT)
-        the_packet->timeout = _MPCI_table->default_timeout;
-
-    _Thread_queue_Enqueue(
-      &_MPCI_Remote_blocked_threads,
-      &_Thread_queue_Operations_FIFO,
-      executing,
-      STATES_WAITING_FOR_RPC_REPLY | extra_state,
-      the_packet->timeout,
-      WATCHDOG_RELATIVE,
-      2
-    );
-
-  _Thread_Dispatch_enable( cpu_self );
-
+  _Thread_queue_Acquire( &_MPCI_Remote_blocked_threads, &queue_context );
+  _Thread_queue_Enqueue(
+    &_MPCI_Remote_blocked_threads.Queue,
+    &_Thread_queue_Operations_FIFO,
+    executing,
+    &queue_context
+  );
   return _Thread_Wait_get_status( executing );
 }
 
@@ -360,11 +367,7 @@ void _MPCI_Receive_server(
       the_function = _MPCI_Packet_processors[ the_packet->the_class ];
 
       if ( !the_function )
-        _Terminate(
-          INTERNAL_ERROR_CORE,
-          true,
-          INTERNAL_ERROR_BAD_PACKET
-        );
+        _Internal_error( INTERNAL_ERROR_BAD_PACKET );
 
        (*the_function)( the_packet );
     }
@@ -446,11 +449,7 @@ void _MPCI_Internal_packets_Process_packet (
 
         _MPCI_Return_packet( the_packet_prefix );
 
-        _Terminate(
-          INTERNAL_ERROR_CORE,
-          true,
-          INTERNAL_ERROR_INCONSISTENT_MP_INFORMATION
-        );
+        _Internal_error( INTERNAL_ERROR_INCONSISTENT_MP_INFORMATION );
       }
 
       _MPCI_Return_packet( the_packet_prefix );

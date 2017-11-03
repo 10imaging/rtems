@@ -187,14 +187,42 @@
 #endif /* __thumb__ */
 .endm
 
-.macro GET_SELF_CPU_CONTROL REG, TMP
-	ldr	\REG, =_Per_CPU_Information
-#ifdef RTEMS_SMP
-	/* Use ARMv7 Multiprocessor Affinity Register (MPIDR) */
-	mrc	p15, 0, \TMP, c0, c0, 5
+.macro SWITCH_FROM_THUMB_2_TO_ARM
+#ifdef __thumb2__
+.align 2
+	bx	pc
+.arm
+#endif /* __thumb__ */
+.endm
 
-	and	\TMP, \TMP, #0xff
-	add	\REG, \REG, \TMP, asl #PER_CPU_CONTROL_SIZE_LOG2
+.macro SWITCH_FROM_ARM_TO_THUMB_2 REG
+#ifdef __thumb2__
+	add	\REG, pc, #1
+	bx	\REG
+.thumb
+#endif /* __thumb__ */
+.endm
+
+.macro BLX_TO_THUMB_1 TARGET
+#if defined(__thumb__) && !defined(__thumb2__)
+	add	lr, pc, #1
+	bx	lr
+.thumb
+	bl	\TARGET
+.align 2
+	bx	pc
+.arm
+#else
+	bl	\TARGET
+#endif
+.endm
+
+.macro GET_SELF_CPU_CONTROL REG
+#ifdef RTEMS_SMP
+	/* Use PL1 only Thread ID Register (TPIDRPRW) */
+	mrc	p15, 0, \REG, c13, c0, 4
+#else
+	ldr	\REG, =_Per_CPU_Information
 #endif
 .endm
 

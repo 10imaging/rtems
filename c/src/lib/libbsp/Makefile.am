@@ -1,6 +1,6 @@
 include $(top_srcdir)/automake/compile.am
 
-SUBDIRS = @libbsp_cpu_subdir@
+_SUBDIRS = @libbsp_cpu_subdir@
 DIST_SUBDIRS = @libbsp_cpu_subdir@
 
 EXTRA_DIST = MERGE.PROCEDURE bsp.am
@@ -37,9 +37,10 @@ include_bspdir = $(includedir)/bsp
 include_bsp_HEADERS =
 include_bsp_HEADERS += shared/include/default-initial-extension.h
 include_bsp_HEADERS += shared/include/fatal.h
+include_bsp_HEADERS += shared/include/fdt.h
 include_bsp_HEADERS += shared/include/console-termios.h
 include_bsp_HEADERS += shared/include/gpio.h
 
 include $(srcdir)/preinstall.am
-include $(top_srcdir)/automake/subdirs.am
 include $(top_srcdir)/automake/local.am
+include $(top_srcdir)/automake/subdirs.am

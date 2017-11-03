@@ -8,6 +8,8 @@
 #include <rtems/score/percpu.h>
 #include <rtems/score/threaddispatch.h>
 
+#include <inttypes.h>
+
 static void
 rebootQuestion(void)
 {
@@ -23,7 +25,6 @@ void BSP_panic(char *s)
 }
 
 #define THESRC _Internal_errors_What_happened.the_source
-#define ISITNL _Internal_errors_What_happened.is_internal
 #define THEERR _Internal_errors_What_happened.the_error
 
 void _BSP_Fatal_error(unsigned int v)
@@ -36,7 +37,6 @@ void _BSP_Fatal_error(unsigned int v)
 
   printk("%s\n",_RTEMS_version);
   printk("FATAL ERROR:\n");
-  printk("Internal error: %s\n", ISITNL? "Yes":"No");
   printk("Environment:");
   switch (THESRC) {
     case INTERNAL_ERROR_CORE:
@@ -62,12 +62,13 @@ void _BSP_Fatal_error(unsigned int v)
     printk("enabled\n");
   else
     printk(
-      "  Error occurred in a Thread Dispatching DISABLED context (level %i)\n",
+      "  Error occurred in a Thread Dispatching DISABLED"
+      "  context (level %" PRIu32 ")\n",
       _Thread_Dispatch_get_disable_level());
 
   if ( _ISR_Nest_level ) {
     printk(
-      "  Error occurred from ISR context (ISR nest level %i)\n",
+      "  Error occurred from ISR context (ISR nest level %" PRIu32 ")\n",
       _ISR_Nest_level
     );
   }

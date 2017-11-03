@@ -21,7 +21,11 @@ rtems_monitor_sema_canonical(
     const Semaphore_Control *rtems_sema = (const Semaphore_Control *) sema_void;
     Thread_Control *owner;
 
-    memset(canonical_sema, 0, sizeof(*canonical_sema));
+    canonical_sema->attribute = 0;
+    canonical_sema->priority_ceiling = 0;
+    canonical_sema->max_count = 0;
+    canonical_sema->cur_count = 0;
+    canonical_sema->holder_id = 0;
 
 #if defined(RTEMS_MULTIPROCESSING)
     if (rtems_sema->is_global) {
@@ -84,7 +88,7 @@ rtems_monitor_sema_canonical(
 #if defined(RTEMS_SMP)
       case SEMAPHORE_VARIANT_MRSP:
         canonical_sema->cur_count =
-          rtems_sema->Core_control.MRSP.Resource.owner == NULL;
+          _MRSP_Get_owner( &rtems_sema->Core_control.MRSP ) == NULL;
         canonical_sema->max_count = 1;
         break;
 #endif

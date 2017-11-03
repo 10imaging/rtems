@@ -25,6 +25,7 @@
 
 #include <bsp.h>
 #include <ambapp.h>
+#include <rtems/bspIo.h>
 
 /*#define DEBUG 1*/
 #define DBG(args...)
@@ -39,22 +40,45 @@ struct grlib_gptimer_regs {
 
 /* AMBA IMPLEMENTATION */
 
-int ambapp_bus_init1(struct drvmgr_bus *bus);
-int ambapp_bus_remove(struct drvmgr_bus *bus);
-int ambapp_unite(struct drvmgr_drv *drv, struct drvmgr_dev *dev);
-int ambapp_int_register(struct drvmgr_dev *dev, int index, const char *info, drvmgr_isr isr, void *arg);
-int ambapp_int_unregister(struct drvmgr_dev *dev, int index, drvmgr_isr isr, void *arg);
-int ambapp_int_clear(struct drvmgr_dev *dev, int index);
-int ambapp_int_mask(struct drvmgr_dev *dev, int index);
-int ambapp_int_unmask(struct drvmgr_dev *dev, int index);
-int ambapp_get_params(struct drvmgr_dev *dev, struct drvmgr_bus_params *params);
-int ambapp_bus_freq_get(
+static int ambapp_bus_init1(struct drvmgr_bus *bus);
+static int ambapp_bus_remove(struct drvmgr_bus *bus);
+static int ambapp_unite(struct drvmgr_drv *drv, struct drvmgr_dev *dev);
+static int ambapp_int_register(
+	struct drvmgr_dev *dev,
+	int index,
+	const char *info,
+	drvmgr_isr isr,
+	void *arg);
+static int ambapp_int_unregister(
+	struct drvmgr_dev *dev,
+	int index,
+	drvmgr_isr isr,
+	void *arg);
+static int ambapp_int_clear(struct drvmgr_dev *dev, int index);
+static int ambapp_int_mask(struct drvmgr_dev *dev, int index);
+static int ambapp_int_unmask(struct drvmgr_dev *dev, int index);
+static int ambapp_get_params(
+	struct drvmgr_dev *dev,
+	struct drvmgr_bus_params *params);
+static int ambapp_bus_freq_get(
 	struct drvmgr_dev *dev,
 	int options,
 	unsigned int *freq_hz);
-void ambapp_dev_info(struct drvmgr_dev *, void (*print)(void *p, char *str), void *p);
+#ifdef AMBAPPBUS_INFO_AVAIL
+static void ambapp_dev_info(
+	struct drvmgr_dev *,
+	void (*print)(void *p, char *str),
+	void *p);
+#endif
 
-struct drvmgr_bus_ops ambapp_bus_ops =
+#ifdef RTEMS_SMP
+static int ambapp_int_set_affinity(
+	struct drvmgr_dev *dev,
+	int index,
+	const Processor_mask *cpus);
+#endif
+
+static struct drvmgr_bus_ops ambapp_bus_ops =
 {
 	.init		= 
 	{
@@ -69,6 +93,9 @@ struct drvmgr_bus_ops ambapp_bus_ops =
 	.int_unregister	= ambapp_int_unregister,
 	.int_clear	= ambapp_int_clear,
 	.int_mask	= ambapp_int_mask,
+#ifdef RTEMS_SMP
+	.int_set_affinity = ambapp_int_set_affinity,
+#endif
 	.int_unmask	= ambapp_int_unmask,
 	.get_params	= ambapp_get_params,
 	.get_freq	= ambapp_bus_freq_get,
@@ -81,7 +108,7 @@ struct ambapp_priv {
 	struct ambapp_config		*config;
 };
 
-int ambapp_unite(struct drvmgr_drv *drv, struct drvmgr_dev *dev)
+static int ambapp_unite(struct drvmgr_drv *drv, struct drvmgr_dev *dev)
 {
 	struct amba_drv_info *adrv;
 	struct amba_dev_id *id;
@@ -138,7 +165,7 @@ static int ambapp_int_get(struct drvmgr_dev *dev, int index)
 	return irq;
 }
 
-int ambapp_int_register(
+static int ambapp_int_register(
 	struct drvmgr_dev *dev,
 	int index,
 	const char *info,
@@ -166,7 +193,7 @@ int ambapp_int_register(
 	}
 }
 
-int ambapp_int_unregister(
+static int ambapp_int_unregister(
 	struct drvmgr_dev *dev,
 	int index,
 	drvmgr_isr isr,
@@ -193,7 +220,7 @@ int ambapp_int_unregister(
 	}
 }
 
-int ambapp_int_clear(
+static int ambapp_int_clear(
 	struct drvmgr_dev *dev,
 	int index)
 {
@@ -218,7 +245,7 @@ int ambapp_int_clear(
 	}
 }
 
-int ambapp_int_mask(
+static int ambapp_int_mask(
 	struct drvmgr_dev *dev,
 	int index)
 {
@@ -243,7 +270,7 @@ int ambapp_int_mask(
 	}
 }
 
-int ambapp_int_unmask(
+static int ambapp_int_unmask(
 	struct drvmgr_dev *dev,
 	int index)
 {
@@ -304,7 +331,7 @@ void ambapp_bus_freq_register(
 	ambapp_freq_init(priv->config->abus, adev, freq_hz);
 }
 
-int ambapp_bus_freq_get(
+static int ambapp_bus_freq_get(
 	struct drvmgr_dev *dev,
 	int options,
 	unsigned int *freq_hz)
@@ -337,7 +364,9 @@ int ambapp_bus_freq_get(
 	return 0;
 }
 
-int ambapp_get_params(struct drvmgr_dev *dev, struct drvmgr_bus_params *params)
+static int ambapp_get_params(
+	struct drvmgr_dev *dev,
+	struct drvmgr_bus_params *params)
 {
 	struct ambapp_priv *priv = dev->parent->priv;
 
@@ -350,7 +379,7 @@ int ambapp_get_params(struct drvmgr_dev *dev, struct drvmgr_bus_params *params)
 }
 
 #ifdef AMBAPPBUS_INFO_AVAIL
-void ambapp_dev_info(
+static void ambapp_dev_info(
 	struct drvmgr_dev *dev,
 	void (*print_line)(void *p, char *str),
 	void *p)
@@ -453,7 +482,11 @@ void ambapp_dev_info(
 }
 #endif
 
-/* Fix device in last stage */
+/* Fix device in last stage and/or register additional devices.
+ * Function returns:
+ *  0  Register device as normal
+ *  1  Fixup function handles registration
+ */
 static int ambapp_dev_fixup(struct drvmgr_dev *dev, struct amba_dev_info *pnp)
 {
 	/* OCCAN speciality:
@@ -464,12 +497,14 @@ static int ambapp_dev_fixup(struct drvmgr_dev *dev, struct amba_dev_info *pnp)
 	 *
 	 *  Now, lets detect sub cores.
 	 */
-	if ( (pnp->info.device == GAISLER_CANAHB) && (pnp->info.vendor == VENDOR_GAISLER) ) {
-		struct drvmgr_dev *newdev;
+	if ( (pnp->info.device == GAISLER_CANAHB) &&
+	     (pnp->info.vendor == VENDOR_GAISLER) ) {
+		struct drvmgr_dev *newdev, *devs_to_register[8];
 		struct amba_dev_info *pnpinfo;
 		int subcores;
 		int core;
 
+		devs_to_register[0] = dev;
 		subcores = (pnp->info.ahb_slv->ver & 0x7) + 1;
 		for(core = 1; core < subcores; core++) {
 			drvmgr_alloc_dev(&newdev, sizeof(*pnpinfo));
@@ -480,10 +515,14 @@ static int ambapp_dev_fixup(struct drvmgr_dev *dev, struct amba_dev_info *pnp)
 			pnpinfo->info.irq += core;
 			newdev->businfo = (void *)pnpinfo;
 
-			/* Register device */
-			drvmgr_dev_register(newdev);
+			devs_to_register[core] = newdev;
 		}
-	} else if ( (pnp->info.device == GAISLER_GPIO) && (pnp->info.vendor == VENDOR_GAISLER) ) {
+		/* Register all CAN devices */
+		for(core = 0; core < subcores; core++)
+			drvmgr_dev_register(devs_to_register[core]);
+		return 1;
+	} else if ( (pnp->info.device == GAISLER_GPIO) &&
+		    (pnp->info.vendor == VENDOR_GAISLER) ) {
 		/* PIO[N] is connected to IRQ[N]. */
 		pnp->info.irq = 0;
 	}
@@ -583,10 +622,29 @@ static void ambapp_core_register(
 	/* Connect device with PnP information */
 	newdev->businfo = (void *)pnpinfo;
 
-	ambapp_dev_fixup(newdev, pnpinfo);
+	if ( ambapp_dev_fixup(newdev, pnpinfo) == 0 )
+		drvmgr_dev_register(newdev); /* Register New Device */
+}
 
-	/* Register New Device */
-	drvmgr_dev_register(newdev);
+/* Fix device registration.
+ * Function returns:
+ *  0  Register device as normal
+ *  1  Fixup function handles registration
+ */
+static int ambapp_dev_register_fixup(struct ambapp_dev *dev, struct ambapp_dev_reg_struct *p)
+{
+	/* GR740 GRPCI2 speciality:
+	 * - In the GR740 the APB_SLV is detected before the AHB_SLV
+	 *   which makes the registration incorrect. We deal with it in 
+	 *   this function. */
+	if (    (dev->dev_type == DEV_APB_SLV) &&
+		    (dev->device == GAISLER_GRPCI2) &&
+		    (dev->vendor == VENDOR_GAISLER) &&
+		    (p->ahb_slv == NULL) ) {
+		DBG("GRPCI2 APB_SLV detected before AHB_SLV. Skipping APB_SLV registration.\n");
+		return 1;
+	}
+	return 0;
 }
 
 /* Register one AMBA device */
@@ -606,6 +664,11 @@ static int ambapp_dev_register(struct ambapp_dev *dev, int index, void *arg)
 	
 	DBG("Found [%d:%x:%x], %s\n", index, dev->vendor, dev->device, type);
 #endif
+
+	/* Fixup for device registration */
+	if (ambapp_dev_register_fixup(dev, p)){
+		return 0;
+	}
 
 	if ( dev->dev_type == DEV_AHB_MST ) {
 		if ( p->ahb_mst ) {
@@ -737,13 +800,41 @@ int ambapp_bus_register(struct drvmgr_dev *dev, struct ambapp_config *config)
 /*** BUS INITIALIZE FUNCTIONS ***/
 
 /* Initialize the bus, register devices on this bus */
-int ambapp_bus_init1(struct drvmgr_bus *bus)
+static int ambapp_bus_init1(struct drvmgr_bus *bus)
 {
 	/* Initialize the bus, register devices on this bus */
 	return ambapp_ids_register(bus);
 }
 
-int ambapp_bus_remove(struct drvmgr_bus *bus)
+static int ambapp_bus_remove(struct drvmgr_bus *bus)
 {
 	return DRVMGR_OK;
 }
+
+#ifdef RTEMS_SMP
+static int ambapp_int_set_affinity(
+	struct drvmgr_dev *dev,
+	int index,
+	const Processor_mask *cpus)
+{
+	struct ambapp_priv *priv;
+	int irq;
+
+	priv = dev->parent->priv;
+
+	/* Get IRQ number from index and device information */
+	irq = ambapp_int_get(dev, index);
+	if (irq < 0)
+		return DRVMGR_EINVAL;
+
+	DBG("Set interrupt affinity on 0x%x for dev 0x%x (IRQ: %d)\n",
+		(unsigned int)dev->parent->dev, (unsigned int)dev, irq);
+
+	if (priv->config->ops->int_set_affinity) {
+		/* Let device override driver default */
+		return priv->config->ops->int_set_affinity(dev, irq, cpus);
+	} else {
+		return DRVMGR_ENOSYS;
+	}
+}
+#endif

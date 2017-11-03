@@ -93,11 +93,24 @@ rtems_status_code ppc_exc_set_handler(unsigned vector, ppc_exc_handler_t handler
 
 void ppc_exc_wrapup(BSP_Exception_frame *frame)
 {
-  /* dispatch_disable level is decremented from assembly code.  */
-  if ( _Thread_Dispatch_necessary ) {
-    /* FIXME: I believe it should be OK to re-enable
-     *        interrupts around the execution of _Thread_Dispatch();
-     */
-    _Thread_Dispatch();
+  Per_CPU_Control *cpu_self;
+
+  cpu_self = _Per_CPU_Get();
+
+  if (cpu_self->isr_dispatch_disable) {
+    return;
   }
+
+  while (cpu_self->dispatch_necessary) {
+    rtems_interrupt_level level;
+
+    cpu_self->isr_dispatch_disable = 1;
+    cpu_self->thread_dispatch_disable_level = 1;
+    _Thread_Do_dispatch(cpu_self, frame->EXC_SRR1);
+    rtems_interrupt_local_disable(level);
+    (void) level;
+    cpu_self = _Per_CPU_Get();
+  }
+
+  cpu_self->isr_dispatch_disable = 0;
 }

@@ -129,8 +129,6 @@ typedef struct _Xdmad {
 	sXdmadChannel XdmaChannels[XDMACCHID_NUMBER];
 	uint8_t  numControllers;
 	uint8_t  numChannels;
-	uint8_t  pollingMode;
-	uint8_t  pollingTimeout;
 	uint8_t  xdmaMutex;
 } sXdmad;
 
@@ -217,16 +215,13 @@ typedef struct _LinkedListDescriporView3 {
 
 /**     @}*/
 
+extern sXdmad XDMAD_Instance;
+
 /*----------------------------------------------------------------------------
  *        Exported functions
  *----------------------------------------------------------------------------*/
 /** \addtogroup dmad_functions DMA Driver Functions
         @{*/
-extern void XDMAD_Initialize(sXdmad *pXdmad,
-							  uint8_t bPollingMode);
-
-extern void XDMAD_Handler(sXdmad *pDmad);
-
 extern uint32_t XDMAD_AllocateChannel(sXdmad *pXdmad,
 									   uint8_t bSrcID, uint8_t bDstID);
 extern eXdmadRC XDMAD_FreeChannel(sXdmad *pXdmad, uint32_t dwChannel);
@@ -243,6 +238,8 @@ extern eXdmadRC XDMAD_PrepareChannel(sXdmad *pXdmad, uint32_t dwChannel);
 extern eXdmadRC XDMAD_IsTransferDone(sXdmad *pXdmad, uint32_t dwChannel);
 
 extern eXdmadRC XDMAD_StartTransfer(sXdmad *pXdmad, uint32_t dwChannel);
+
+extern void XDMAD_DoNothingCallback(uint32_t Channel, void *pArg);
 
 extern eXdmadRC XDMAD_SetCallback(sXdmad *pXdmad,
 								   uint32_t dwChannel,

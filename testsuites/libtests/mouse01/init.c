@@ -95,10 +95,8 @@ void printf_uid_message(
   struct MW_UID_MESSAGE *uid
 )
 {
-  rtems_printer printer;
-  rtems_print_printer_printf( &printer );
   uid_print_message_with_plugin(
-    &printer,
+    &rtems_test_printer,
     uid
   );
 }
@@ -180,6 +178,9 @@ rtems_task Init(
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE
+
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
+
 #define CONFIGURE_INIT
 
 #include <rtems/confdefs.h>

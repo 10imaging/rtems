@@ -99,8 +99,11 @@ size_t _Thread_queue_Flush_critical(
     if ( do_unblock ) {
       Scheduler_Node *scheduler_node;
 
-      scheduler_node = _Scheduler_Thread_get_own_node( first );
-      _Chain_Append_unprotected( &unblock, &scheduler_node->Wait.Node.Chain );
+      scheduler_node = _Thread_Scheduler_get_home_node( first );
+      _Chain_Append_unprotected(
+        &unblock,
+        &scheduler_node->Wait.Priority.Node.Node.Chain
+      );
     }
 
     ++flushed;
@@ -112,9 +115,7 @@ size_t _Thread_queue_Flush_critical(
   if ( node != tail ) {
     Per_CPU_Control *cpu_self;
 
-    cpu_self = _Thread_Dispatch_disable_critical(
-      &queue_context->Lock_context.Lock_context
-    );
+    cpu_self = _Thread_queue_Dispatch_disable( queue_context );
     _Thread_queue_Queue_release( queue, &queue_context->Lock_context.Lock_context );
 
     do {
@@ -123,7 +124,7 @@ size_t _Thread_queue_Flush_critical(
       Chain_Node     *next;
 
       next = _Chain_Next( node );
-      scheduler_node = SCHEDULER_NODE_OF_WAIT_CHAIN_NODE( node );
+      scheduler_node = SCHEDULER_NODE_OF_WAIT_PRIORITY_NODE( node );
       the_thread = _Scheduler_Node_get_owner( scheduler_node );
       _Thread_Remove_timer_and_unblock( the_thread, queue );
 

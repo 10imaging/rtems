@@ -36,8 +36,8 @@ void au1x00_clock_init(void);
   } while(0)
 
 /* Set for rising edge interrupt */
-#define Clock_driver_support_install_isr( _new, _old )  \
-  do {                                                  \
+#define Clock_driver_support_install_isr( _new ) \
+  do { \
     rtems_interrupt_handler_install( \
       CLOCK_VECTOR, \
       "clock", \
@@ -71,7 +71,6 @@ void au1x00_clock_init(void)
 
     tick_interval = 32768 * rtems_configuration_get_microseconds_per_tick();
     tick_interval = tick_interval / 1000000;
-    printk("tick_interval = %d\n", tick_interval);
 
     last_match = AU1X00_SYS_TOYREAD(AU1X00_SYS_ADDR);
     AU1X00_SYS_TOYMATCH2(AU1X00_SYS_ADDR) = last_match + (50*tick_interval);
@@ -83,8 +82,6 @@ void au1x00_clock_init(void)
   do {                                                  \
      au1x00_clock_init(); \
   } while(0)
-
-
 
 #define Clock_driver_support_shutdown_hardware()
 

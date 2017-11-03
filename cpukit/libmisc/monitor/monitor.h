@@ -95,18 +95,18 @@ typedef struct {
     rtems_id                   id;
     rtems_name                 name;
   /* end of common portion */
+    char                       short_name[5];
+    char                       long_name[16];
     Thread_Entry_information   entry;
     void                      *stack;
     uint32_t                   stack_size;
-    uint32_t                   cpu;
+    char                       scheduler_name[5];
     rtems_task_priority        priority;
     States_Control             state;
     rtems_event_set            events;
     rtems_mode                 modes;
     rtems_attribute            attributes;
-    rtems_id                   wait_id;
-    const void                *wait_queue;
-    const void                *wait_operations;
+    char                       wait[17];
     uint32_t                   ticks;
 } rtems_monitor_task_t;
 

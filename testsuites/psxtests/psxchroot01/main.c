@@ -2,7 +2,6 @@
  *  Simple test program -- simplified version of sample test hello.
  */
 
-#define CONFIGURE_INIT
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"

@@ -115,8 +115,6 @@ rtems_device_driver console_initialize(
   rtems_termios_device_context_initialize(&ctx->base, "T32 Console");
   rtems_termios_device_install(
     CONSOLE_DEVICE_NAME,
-    major,
-    0,
     &t32_console_handler,
     NULL,
     &ctx->base
@@ -125,15 +123,6 @@ rtems_device_driver console_initialize(
   return RTEMS_SUCCESSFUL;
 }
 
-static void t32_output_char(char c)
-{
-  if (c == '\n') {
-    t32_console_write_char_polled('\r');
-  }
-
-  t32_console_write_char_polled(c);
-}
-
-BSP_output_char_function_type BSP_output_char = t32_output_char;
+BSP_output_char_function_type BSP_output_char = t32_console_write_char_polled;
 
 BSP_polling_getchar_function_type BSP_poll_char = NULL;

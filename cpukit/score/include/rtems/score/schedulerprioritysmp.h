@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (c) 2013-2014 embedded brains GmbH.  All rights reserved.
+ * Copyright (c) 2013, 2016 embedded brains GmbH.  All rights reserved.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -87,6 +87,10 @@ typedef struct {
     _Scheduler_default_Map_priority, \
     _Scheduler_default_Unmap_priority, \
     _Scheduler_priority_SMP_Ask_for_help, \
+    _Scheduler_priority_SMP_Reconsider_help_request, \
+    _Scheduler_priority_SMP_Withdraw_node, \
+    _Scheduler_priority_SMP_Add_processor, \
+    _Scheduler_priority_SMP_Remove_processor, \
     _Scheduler_priority_SMP_Node_initialize, \
     _Scheduler_default_Node_destroy, \
     _Scheduler_default_Release_job, \
@@ -107,28 +111,55 @@ void _Scheduler_priority_SMP_Node_initialize(
 
 void _Scheduler_priority_SMP_Block(
   const Scheduler_Control *scheduler,
-  Thread_Control *thread
+  Thread_Control          *thread,
+  Scheduler_Node          *node
 );
 
-Thread_Control *_Scheduler_priority_SMP_Unblock(
+void _Scheduler_priority_SMP_Unblock(
   const Scheduler_Control *scheduler,
-  Thread_Control *thread
+  Thread_Control          *thread,
+  Scheduler_Node          *node
 );
 
-Thread_Control *_Scheduler_priority_SMP_Update_priority(
+void _Scheduler_priority_SMP_Update_priority(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-Thread_Control *_Scheduler_priority_SMP_Ask_for_help(
+bool _Scheduler_priority_SMP_Ask_for_help(
   const Scheduler_Control *scheduler,
-  Thread_Control          *needs_help,
-  Thread_Control          *offers_help
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-Thread_Control *_Scheduler_priority_SMP_Yield(
+void _Scheduler_priority_SMP_Reconsider_help_request(
   const Scheduler_Control *scheduler,
-  Thread_Control *thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
+);
+
+void _Scheduler_priority_SMP_Withdraw_node(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node,
+  Thread_Scheduler_state   next_state
+);
+
+void _Scheduler_priority_SMP_Add_processor(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *idle
+);
+
+Thread_Control *_Scheduler_priority_SMP_Remove_processor(
+  const Scheduler_Control *scheduler,
+  struct Per_CPU_Control  *cpu
+);
+
+void _Scheduler_priority_SMP_Yield(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *thread,
+  Scheduler_Node          *node
 );
 
 /** @} */

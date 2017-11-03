@@ -15,6 +15,7 @@
 
 #include <bsp.h>
 #include <rtems/bspIo.h>
+#include <inttypes.h>
 
 void _CPU_Exception_frame_print( const CPU_Exception_frame *frame )
 {
@@ -26,7 +27,11 @@ void _CPU_Exception_frame_print( const CPU_Exception_frame *frame )
   real_trap = SPARC_REAL_TRAP_NUMBER(trap);
   isf = frame->isf;
 
-  printk( "Unexpected trap (%2d) at address 0x%08x\n", real_trap, isf->tpc);
+  printk(
+    "Unexpected trap (%2" PRId32 ") at address 0x%08" PRIx32 "\n",
+    real_trap,
+    isf->tpc
+  );
 
   switch (real_trap) {
 
@@ -56,7 +61,7 @@ void _CPU_Exception_frame_print( const CPU_Exception_frame *frame )
       printk( "fp exception\n" );
       break;
     case 0x09:
-      printk("data access exception at 0x%08x\n",
+      printk("data access exception at 0x%08" PRIx32 "\n",
         ERC32_MEC.First_Failing_Address );
       break;
     case 0x0A:
@@ -128,6 +133,12 @@ static rtems_isr bsp_spurious_handler(
     .isf = isf
   };
 
+#if !defined(SPARC_USE_LAZY_FP_SWITCH)
+  if ( SPARC_REAL_TRAP_NUMBER( trap ) == 4 ) {
+    _Internal_error( INTERNAL_ERROR_ILLEGAL_USE_OF_FLOATING_POINT_UNIT );
+  }
+#endif
+
   rtems_fatal(
     RTEMS_FATAL_SOURCE_EXCEPTION,
     (rtems_fatal_code) &frame
@@ -161,9 +172,15 @@ void bsp_spurious_initialize()
      */
 
     if (( trap == 5 || trap == 6 ) ||
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
+        ( trap == 4 ) ||
+#endif
         (( trap >= 0x11 ) && ( trap <= 0x1f )) ||
         (( trap >= 0x70 ) && ( trap <= 0x83 )) ||
         ( trap == 0x80 + SPARC_SWTRAP_IRQDIS ) ||
+#if defined(SPARC_USE_SYNCHRONOUS_FP_SWITCH)
+        ( trap == 0x80 + SPARC_SWTRAP_IRQDIS_FP ) ||
+#endif
         ( trap == 0x80 + SPARC_SWTRAP_IRQEN ))
       continue;
 

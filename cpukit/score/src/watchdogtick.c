@@ -76,16 +76,16 @@ void _Watchdog_Tick( Per_CPU_Control *cpu )
   cpu->Watchdog.ticks = ticks;
 
   _Watchdog_Tickle(
-    &cpu->Watchdog.Header[ PER_CPU_WATCHDOG_RELATIVE ],
+    &cpu->Watchdog.Header[ PER_CPU_WATCHDOG_MONOTONIC ],
     ticks,
     &cpu->Watchdog.Lock,
     &lock_context
   );
 
   _Timecounter_Getnanotime( &now );
-  _Watchdog_Per_CPU_tickle_absolute(
+  _Watchdog_Per_CPU_tickle_realtime(
     cpu,
-    _Watchdog_Ticks_from_timespec( &now )
+    _Watchdog_Realtime_from_timespec( &now )
   );
 
   _Scheduler_Tick( cpu );

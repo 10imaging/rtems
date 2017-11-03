@@ -166,7 +166,6 @@ void _User_extensions_Thread_exitted_visitor(
 
 typedef struct {
   Internal_errors_Source source;
-  bool                   is_internal;
   Internal_errors_t      error;
 } User_extensions_Fatal_context;
 
@@ -261,8 +260,16 @@ static inline void _User_extensions_Thread_switch(
   const Chain_Node    *node = _Chain_Immutable_first( chain );
 
   if ( node != tail ) {
-    Per_CPU_Control *cpu_self = _Per_CPU_Get();
+    Per_CPU_Control *cpu_self;
+#if defined(RTEMS_SMP)
+    ISR_Level        level;
+#endif
 
+    cpu_self = _Per_CPU_Get();
+
+#if defined(RTEMS_SMP)
+    _ISR_Local_disable( level );
+#endif
     _Per_CPU_Acquire( cpu_self );
 
     while ( node != tail ) {
@@ -275,6 +282,9 @@ static inline void _User_extensions_Thread_switch(
     }
 
     _Per_CPU_Release( cpu_self );
+#if defined(RTEMS_SMP)
+    _ISR_Local_enable( level );
+#endif
   }
 }
 
@@ -289,16 +299,15 @@ static inline void _User_extensions_Thread_exitted( Thread_Control *executing )
 
 static inline void _User_extensions_Fatal(
   Internal_errors_Source source,
-  bool                   is_internal,
   Internal_errors_t      error
 )
 {
-  User_extensions_Fatal_context ctx = { source, is_internal, error };
+  User_extensions_Fatal_context ctx = { source, error };
 
   _User_extensions_Iterate(
     &ctx,
     _User_extensions_Fatal_visitor,
-    CHAIN_ITERATOR_BACKWARD
+    CHAIN_ITERATOR_FORWARD
   );
 }
 
@@ -309,7 +318,7 @@ static inline void _User_extensions_Thread_terminate(
   _User_extensions_Iterate(
     executing,
     _User_extensions_Thread_terminate_visitor,
-    CHAIN_ITERATOR_FORWARD
+    CHAIN_ITERATOR_BACKWARD
   );
 }
 

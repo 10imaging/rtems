@@ -9,7 +9,7 @@
 /*
  * Based on concepts of Pavel Pisa, Till Straumann and Eric Valette.
  *
- * Copyright (c) 2008-2014 embedded brains GmbH.
+ * Copyright (c) 2008, 2017 embedded brains GmbH.
  *
  *  embedded brains GmbH
  *  Dornierstr. 4
@@ -28,6 +28,7 @@
 #include <stdlib.h>
 
 #include <rtems/score/apimutex.h>
+#include <rtems/score/processormask.h>
 #include <rtems/score/sysstate.h>
 
 #ifdef BSP_INTERRUPT_USE_INDEX_TABLE
@@ -44,7 +45,7 @@ static uint8_t bsp_interrupt_handler_unique_table
 
 static void bsp_interrupt_handler_empty(void *arg)
 {
-  rtems_vector_number vector = (rtems_vector_number) arg;
+  rtems_vector_number vector = (rtems_vector_number) (uintptr_t) arg;
 
   bsp_interrupt_handler_default(vector);
 }
@@ -101,7 +102,7 @@ static inline void bsp_interrupt_clear_handler_entry(
 {
   e->handler = bsp_interrupt_handler_empty;
   bsp_interrupt_fence(ATOMIC_ORDER_RELEASE);
-  e->arg = (void *) vector;
+  e->arg = (void *) (uintptr_t) vector;
   e->info = NULL;
   e->next = NULL;
 }
@@ -125,7 +126,7 @@ static inline bool bsp_interrupt_allocate_handler_index(
 
     return false;
   #else
-    *index = vector;
+    *index = bsp_interrupt_handler_index(vector);
     return true;
   #endif
 }
@@ -207,7 +208,6 @@ static rtems_status_code bsp_interrupt_handler_install(
   void *arg
 )
 {
-  rtems_status_code sc = RTEMS_SUCCESSFUL;
   rtems_interrupt_level level;
   rtems_vector_number index = 0;
   bsp_interrupt_handler_entry *head = NULL;
@@ -346,11 +346,7 @@ static rtems_status_code bsp_interrupt_handler_install(
 
   /* Enable the vector if necessary */
   if (enable_vector) {
-    sc = bsp_interrupt_vector_enable(vector);
-    if (sc != RTEMS_SUCCESSFUL) {
-      bsp_interrupt_unlock();
-      return sc;
-    }
+    bsp_interrupt_vector_enable(vector);
   }
 
   /* Unlock */
@@ -375,7 +371,6 @@ static rtems_status_code bsp_interrupt_handler_remove(
   void *arg
 )
 {
-  rtems_status_code sc = RTEMS_SUCCESSFUL;
   rtems_interrupt_level level;
   rtems_vector_number index = 0;
   bsp_interrupt_handler_entry *head = NULL;
@@ -446,7 +441,7 @@ static rtems_status_code bsp_interrupt_handler_remove(
        */
 
       /* Disable the vector */
-      sc = bsp_interrupt_vector_disable(vector);
+      bsp_interrupt_vector_disable(vector);
 
       /* Clear entry */
       bsp_interrupt_disable(level);
@@ -458,12 +453,6 @@ static rtems_status_code bsp_interrupt_handler_remove(
 
       /* Allow shared handlers */
       bsp_interrupt_set_handler_unique(index, false);
-
-      /* Check status code */
-      if (sc != RTEMS_SUCCESSFUL) {
-        bsp_interrupt_unlock();
-        return sc;
-      }
     } else {
       /*
        * The match is the list tail and has a predecessor.
@@ -584,4 +573,55 @@ bool bsp_interrupt_handler_is_empty(rtems_vector_number vector)
   empty = bsp_interrupt_is_empty_handler_entry(head);
 
   return empty;
+}
+
+rtems_status_code rtems_interrupt_set_affinity(
+  rtems_vector_number  vector,
+  size_t               affinity_size,
+  const cpu_set_t     *affinity
+)
+{
+  Processor_mask             set;
+  Processor_mask_Copy_status status;
+
+  if (!bsp_interrupt_is_valid_vector(vector)) {
+    return RTEMS_INVALID_ID;
+  }
+
+  status = _Processor_mask_From_cpu_set_t(&set, affinity_size, affinity);
+  if (status != PROCESSOR_MASK_COPY_LOSSLESS) {
+    return RTEMS_INVALID_SIZE;
+  }
+
+#if defined(RTEMS_SMP)
+  bsp_interrupt_set_affinity(vector, &set);
+#endif
+  return RTEMS_SUCCESSFUL;
+}
+
+rtems_status_code rtems_interrupt_get_affinity(
+  rtems_vector_number  vector,
+  size_t               affinity_size,
+  cpu_set_t           *affinity
+)
+{
+  Processor_mask             set;
+  Processor_mask_Copy_status status;
+
+  if (!bsp_interrupt_is_valid_vector(vector)) {
+    return RTEMS_INVALID_ID;
+  }
+
+#if defined(RTEMS_SMP)
+  bsp_interrupt_get_affinity(vector, &set);
+#else
+  _Processor_mask_From_index(&set, 0);
+#endif
+
+  status = _Processor_mask_To_cpu_set_t(&set, affinity_size, affinity);
+  if (status != PROCESSOR_MASK_COPY_LOSSLESS) {
+    return RTEMS_INVALID_SIZE;
+  }
+
+  return RTEMS_SUCCESSFUL;
 }

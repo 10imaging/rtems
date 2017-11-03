@@ -27,11 +27,6 @@ extern "C" {
 #include <rtems/score/types.h>
 #include <rtems/score/nios2.h>
 
-/*
- * TODO: Run the timing tests and figure out what is better.
- */
-#define CPU_INLINE_ENABLE_DISPATCH FALSE
-
 #define CPU_HAS_SOFTWARE_INTERRUPT_STACK TRUE
 
 #define CPU_SIMPLE_VECTORED_INTERRUPTS TRUE
@@ -60,6 +55,8 @@ extern "C" {
 
 #define CPU_USE_DEFERRED_FP_SWITCH FALSE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 #define CPU_PROVIDES_IDLE_THREAD_BODY FALSE
 
 #define CPU_STACK_GROWS_UP FALSE
@@ -69,10 +66,6 @@ extern "C" {
 
 #define CPU_STRUCTURE_ALIGNMENT \
   RTEMS_SECTION( ".sdata" ) RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
-
-#define CPU_BIG_ENDIAN FALSE
-
-#define CPU_LITTLE_ENDIAN TRUE
 
 #define CPU_STACK_MINIMUM_SIZE (4 * 1024)
 
@@ -107,15 +100,9 @@ extern "C" {
 
 #define CPU_MPCI_RECEIVE_SERVER_EXTRA_STACK 0
 
-#define CPU_PER_CPU_CONTROL_SIZE 0
-
 #define CPU_MAXIMUM_PROCESSORS 32
 
 #ifndef ASM
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 /**
  * @brief Thread register context.
@@ -251,6 +238,8 @@ typedef struct {
     __builtin_wrctl( 0, (int) _isr_cookie ); \
     __builtin_wrctl( 0, _status ); \
   } while ( 0 )
+
+bool _CPU_ISR_Is_enabled( uint32_t level );
 
 /**
  * @brief Sets the interrupt level for the executing thread.

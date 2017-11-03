@@ -23,13 +23,12 @@
 rtems_task Init(rtems_task_argument argument);
 
 const char rtems_test_name[] = "HELLO WORLD";
-rtems_printer rtems_test_printer;
 
 rtems_task Init(
   rtems_task_argument ignored
 )
 {
-  rtems_print_printer_printf(&rtems_test_printer);
+  rtems_print_printer_fprintf_putc(&rtems_test_printer);
   rtems_test_begin();
   printf( "Hello World\n" );
   rtems_test_end();
@@ -42,9 +41,10 @@ rtems_task Init(
 #define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
 
 #define CONFIGURE_MAXIMUM_TASKS            1
-#define CONFIGURE_USE_DEVFS_AS_BASE_FILESYSTEM
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE
+
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
 
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 

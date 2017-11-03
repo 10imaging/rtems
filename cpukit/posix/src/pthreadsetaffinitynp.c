@@ -24,10 +24,7 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include <rtems/posix/pthreadimpl.h>
-#include <rtems/posix/priorityimpl.h>
 #include <rtems/score/threadimpl.h>
-#include <rtems/score/cpusetimpl.h>
 #include <rtems/score/schedulerimpl.h>
 
 int pthread_setaffinity_np(
@@ -59,13 +56,6 @@ int pthread_setaffinity_np(
     cpusetsize,
     cpuset
   );
-
-  if ( ok ) {
-    POSIX_API_Control *api;
-
-    api = the_thread->API_Extensions[ THREAD_API_POSIX ];
-    CPU_COPY( api->Attributes.affinityset, cpuset );
-  }
 
   _Thread_State_release( the_thread, &lock_context );
   _Thread_Dispatch_enable( cpu_self );

@@ -12,6 +12,8 @@
  * http://www.rtems.org/license/LICENSE.
  */
 
+#include <string.h>
+
 #include <rtems/score/armv7m.h>
 
 #include <bsp.h>
@@ -22,18 +24,16 @@
 
 #ifdef ARM_MULTILIB_ARCH_V7M
 
-rtems_status_code bsp_interrupt_vector_enable(rtems_vector_number vector)
+void bsp_interrupt_vector_enable(rtems_vector_number vector)
 {
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
   _ARMV7M_NVIC_Set_enable((int) vector);
-
-  return RTEMS_SUCCESSFUL;
 }
 
-rtems_status_code bsp_interrupt_vector_disable(rtems_vector_number vector)
+void bsp_interrupt_vector_disable(rtems_vector_number vector)
 {
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
   _ARMV7M_NVIC_Clear_enable((int) vector);
-
-  return RTEMS_SUCCESSFUL;
 }
 
 rtems_status_code bsp_interrupt_facility_initialize(void)

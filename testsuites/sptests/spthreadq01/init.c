@@ -40,10 +40,6 @@ typedef struct {
   rtems_id mq;
   rtems_id br;
 #if defined(RTEMS_POSIX_API)
-  sem_t psem;
-  pthread_mutex_t pmtx;
-  pthread_cond_t pcv;
-  pthread_rwlock_t prw;
   mqd_t pmq;
 #endif
 } test_context;
@@ -71,6 +67,7 @@ static rtems_id get_wait_id(test_context *ctx)
   Thread_queue_Context queue_context;
   rtems_id id;
 
+  _Thread_queue_Context_initialize(&queue_context);
   _Thread_Wait_acquire(ctx->master, &queue_context);
   id = _Thread_Wait_get_id(ctx->master);
   _Thread_Wait_release(ctx->master, &queue_context);
@@ -116,43 +113,7 @@ static void posix_worker(test_context *ctx)
 {
 #if defined(RTEMS_POSIX_API)
   int rv;
-  int eno;
   char buf[1];
-
-  wake_up_master(ctx);
-  rtems_test_assert(get_wait_id(ctx) == ctx->psem);
-
-  rv = sem_post(&ctx->psem);
-  rtems_test_assert(rv == 0);
-
-  eno = pthread_mutex_lock(&ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  wake_up_master(ctx);
-  rtems_test_assert(get_wait_id(ctx) == ctx->pmtx);
-
-  eno = pthread_mutex_unlock(&ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_mutex_lock(&ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  rtems_test_assert(get_wait_id(ctx) == ctx->pcv);
-
-  eno = pthread_cond_signal(&ctx->pcv);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_mutex_unlock(&ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_rwlock_wrlock(&ctx->prw);
-  rtems_test_assert(eno == 0);
-
-  wake_up_master(ctx);
-  rtems_test_assert(get_wait_id(ctx) == ctx->prw);
-
-  eno = pthread_rwlock_unlock(&ctx->prw);
-  rtems_test_assert(eno == 0);
 
   wake_up_master(ctx);
   rtems_test_assert(get_wait_id(ctx) == ctx->pmq);
@@ -216,21 +177,7 @@ static void test_classic_init(test_context *ctx)
 static void test_posix_init(test_context *ctx)
 {
 #if defined(RTEMS_POSIX_API)
-  int rv;
-  int eno;
   struct mq_attr attr;
-
-  rv = sem_init(&ctx->psem, 0, 0);
-  rtems_test_assert(rv == 0);
-
-  eno = pthread_mutex_init(&ctx->pmtx, NULL);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_cond_init(&ctx->pcv, NULL);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_rwlock_init(&ctx->prw, NULL);
-  rtems_test_assert(eno == 0);
 
   memset(&attr, 0, sizeof(attr));
   attr.mq_maxmsg = 1;
@@ -305,32 +252,9 @@ static void test_classic_obj(test_context *ctx)
 static void test_posix_obj(test_context *ctx)
 {
 #if defined(RTEMS_POSIX_API)
-  int rv;
-  int eno;
   char buf[1];
   unsigned prio;
   ssize_t n;
-
-  wait_for_worker(ctx);
-
-  rv = sem_wait(&ctx->psem);
-  rtems_test_assert(rv == 0);
-
-  wait_for_worker(ctx);
-
-  eno = pthread_mutex_lock(&ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_cond_wait(&ctx->pcv, &ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  eno = pthread_mutex_unlock(&ctx->pmtx);
-  rtems_test_assert(eno == 0);
-
-  wait_for_worker(ctx);
-
-  eno = pthread_rwlock_wrlock(&ctx->prw);
-  rtems_test_assert(eno == 0);
 
   wait_for_worker(ctx);
 
@@ -376,10 +300,6 @@ static rtems_task Init(
 #define CONFIGURE_MAXIMUM_BARRIERS  1
 
 #if defined(RTEMS_POSIX_API)
-  #define CONFIGURE_MAXIMUM_POSIX_SEMAPHORES 1
-  #define CONFIGURE_MAXIMUM_POSIX_MUTEXES 1
-  #define CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES 1
-  #define CONFIGURE_MAXIMUM_POSIX_RWLOCKS 1
   #define CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUES 1
   #define CONFIGURE_MESSAGE_BUFFER_MEMORY \
     (2 * CONFIGURE_MESSAGE_BUFFERS_FOR_QUEUE(1, 1))

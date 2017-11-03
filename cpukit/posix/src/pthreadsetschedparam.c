@@ -30,82 +30,88 @@
 #include <rtems/score/threadimpl.h>
 #include <rtems/score/schedulerimpl.h>
 
-typedef struct {
-  int                                  policy;
-  const struct sched_param            *param;
-  Thread_CPU_budget_algorithms         budget_algorithm;
-  Thread_CPU_budget_algorithm_callout  budget_callout;
-  int                                  error;
-} POSIX_Set_sched_param_context;
-
-static bool _POSIX_Set_sched_param_filter(
-  Thread_Control   *the_thread,
-  Priority_Control *new_priority_p,
-  void             *arg
+static int _POSIX_Set_sched_param(
+  Thread_Control                       *the_thread,
+  int                                   policy,
+  struct sched_param                   *param,
+  Thread_CPU_budget_algorithms          budget_algorithm,
+  Thread_CPU_budget_algorithm_callout   budget_callout,
+  Thread_queue_Context                 *queue_context
 )
 {
-  POSIX_Set_sched_param_context *context;
-  const struct sched_param      *param;
-  const Scheduler_Control       *scheduler;
-  POSIX_API_Control             *api;
-  int                            low_prio;
-  int                            high_prio;
-  bool                           valid;
-  Priority_Control               core_low_prio;
-  Priority_Control               core_high_prio;
-  Priority_Control               current_priority;
+  const Scheduler_Control *scheduler;
+  POSIX_API_Control       *api;
+  int                      normal_prio;
+  int                      low_prio;
+  bool                     valid;
+  Priority_Control         core_normal_prio;
+  Priority_Control         core_low_prio;
 
-  context = arg;
-  param = context->param;
-  scheduler = _Scheduler_Get_own( the_thread );
+  normal_prio = param->sched_priority;
 
-  if ( context->policy == SCHED_SPORADIC ) {
+  scheduler = _Thread_Scheduler_get_home( the_thread );
+
+  core_normal_prio = _POSIX_Priority_To_core( scheduler, normal_prio, &valid );
+  if ( !valid ) {
+    return EINVAL;
+  }
+
+  if ( policy == SCHED_SPORADIC ) {
     low_prio = param->sched_ss_low_priority;
-    high_prio = param->sched_priority;
   } else {
-    low_prio = param->sched_priority;
-    high_prio = low_prio;
+    low_prio = normal_prio;
   }
 
   core_low_prio = _POSIX_Priority_To_core( scheduler, low_prio, &valid );
   if ( !valid ) {
-    context->error = EINVAL;
-    return false;
+    return EINVAL;
   }
-
-  core_high_prio = _POSIX_Priority_To_core( scheduler, high_prio, &valid );
-  if ( !valid ) {
-    context->error = EINVAL;
-    return false;
-  }
-
-  *new_priority_p = core_high_prio;
-
-  current_priority = _Thread_Get_priority( the_thread );
-  the_thread->real_priority = core_high_prio;
 
   api = the_thread->API_Extensions[ THREAD_API_POSIX ];
 
-  _Watchdog_Per_CPU_remove_relative( &api->Sporadic.Timer );
+  _Watchdog_Per_CPU_remove_monotonic( &api->Sporadic.Timer );
 
-  api->Attributes.schedpolicy = context->policy;
-  api->Attributes.schedparam  = *param;
-  api->Sporadic.low_priority  = core_low_prio;
-  api->Sporadic.high_priority = core_high_prio;
+  _Priority_Node_set_priority( &the_thread->Real_priority, core_normal_prio );
 
-  the_thread->budget_algorithm = context->budget_algorithm;
-  the_thread->budget_callout   = context->budget_callout;
+  if ( _Priority_Node_is_active( &api->Sporadic.Low_priority ) ) {
+    _Thread_Priority_add(
+      the_thread,
+      &the_thread->Real_priority,
+      queue_context
+    );
+    _Thread_Priority_remove(
+      the_thread,
+      &api->Sporadic.Low_priority,
+      queue_context
+    );
+    _Priority_Node_set_inactive( &api->Sporadic.Low_priority );
+  } else {
+    _Thread_Priority_changed(
+      the_thread,
+      &the_thread->Real_priority,
+      false,
+      queue_context
+    );
+  }
 
-  if ( context->policy == SCHED_SPORADIC ) {
+  api->schedpolicy = policy;
+
+  the_thread->budget_algorithm = budget_algorithm;
+  the_thread->budget_callout   = budget_callout;
+
+  _Priority_Node_set_priority( &api->Sporadic.Low_priority, core_low_prio );
+  api->Sporadic.sched_ss_repl_period = param->sched_ss_repl_period;
+  api->Sporadic.sched_ss_init_budget = param->sched_ss_init_budget;
+  api->Sporadic.sched_ss_max_repl = param->sched_ss_max_repl;
+
+  if ( policy == SCHED_SPORADIC ) {
     _POSIX_Threads_Sporadic_timer_insert( the_thread, api );
   } else {
     the_thread->cpu_time_budget =
       rtems_configuration_get_ticks_per_timeslice();
   }
 
-  context->error = 0;
-  return _Thread_Priority_less_than( current_priority, core_high_prio )
-    || !_Thread_Owns_resources( the_thread );
+  return 0;
 }
 
 int pthread_setschedparam(
@@ -114,11 +120,12 @@ int pthread_setschedparam(
   struct sched_param *param
 )
 {
-  Thread_Control                *the_thread;
-  Per_CPU_Control               *cpu_self;
-  POSIX_Set_sched_param_context  context;
-  ISR_lock_Context               lock_context;
-  int                            error;
+  Thread_CPU_budget_algorithms         budget_algorithm;
+  Thread_CPU_budget_algorithm_callout  budget_callout;
+  Thread_Control                      *the_thread;
+  Per_CPU_Control                     *cpu_self;
+  Thread_queue_Context                 queue_context;
+  int                                  error;
 
   if ( param == NULL ) {
     return EINVAL;
@@ -127,33 +134,33 @@ int pthread_setschedparam(
   error = _POSIX_Thread_Translate_sched_param(
     policy,
     param,
-    &context.budget_algorithm,
-    &context.budget_callout
+    &budget_algorithm,
+    &budget_callout
   );
   if ( error != 0 ) {
     return error;
   }
 
-  context.policy = policy;
-  context.param = param;
-
-  the_thread = _Thread_Get( thread, &lock_context );
+  _Thread_queue_Context_initialize( &queue_context );
+  _Thread_queue_Context_clear_priority_updates( &queue_context );
+  the_thread = _Thread_Get( thread, &queue_context.Lock_context.Lock_context );
 
   if ( the_thread == NULL ) {
     return ESRCH;
   }
 
-  cpu_self = _Thread_Dispatch_disable_critical( &lock_context );
-  _ISR_lock_ISR_enable( &lock_context );
-
-  _Thread_Change_priority(
+  _Thread_Wait_acquire_critical( the_thread, &queue_context );
+  error = _POSIX_Set_sched_param(
     the_thread,
-    0,
-    &context,
-    _POSIX_Set_sched_param_filter,
-    false
+    policy,
+    param,
+    budget_algorithm,
+    budget_callout,
+    &queue_context
   );
-
+  cpu_self = _Thread_queue_Dispatch_disable( &queue_context );
+  _Thread_Wait_release( the_thread, &queue_context );
+  _Thread_Priority_update( &queue_context );
   _Thread_Dispatch_enable( cpu_self );
-  return context.error;
+  return error;
 }

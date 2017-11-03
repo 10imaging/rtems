@@ -28,8 +28,6 @@ extern "C" {
 
 /* conditional compilation parameters */
 
-#define CPU_INLINE_ENABLE_DISPATCH       TRUE
-
 /*
  *  Does the CPU follow the simple vectored interrupt model?
  *
@@ -63,7 +61,7 @@ extern "C" {
  *  number (0)?
  */
 
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 /*
  *  Some family members have no FP, some have an FPU such as the
@@ -96,6 +94,7 @@ extern "C" {
 #define CPU_ALL_TASKS_ARE_FP             FALSE
 #define CPU_IDLE_TASK_IS_FP              FALSE
 #define CPU_USE_DEFERRED_FP_SWITCH       TRUE
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
 
 #define CPU_PROVIDES_IDLE_THREAD_BODY    TRUE
 #define CPU_STACK_GROWS_UP               FALSE
@@ -104,16 +103,6 @@ extern "C" {
 #define CPU_CACHE_LINE_BYTES 16
 
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
-
-/*
- *  Define what is required to specify how the network to host conversion
- *  routines are handled.
- */
-
-#define CPU_BIG_ENDIAN                           TRUE
-#define CPU_LITTLE_ENDIAN                        FALSE
-
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 #define CPU_MAXIMUM_PROCESSORS 32
 
@@ -128,10 +117,6 @@ extern "C" {
 #ifndef ASM
 
 /* structures */
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 /*
  *  Basic integer context for the m68k family.
@@ -186,12 +171,6 @@ typedef struct {
       double df;
     } _operand2;
   } Context_Control_fp;
-
-  /*
-   *  This software FP implementation is only for GCC.
-   */
-  #define _CPU_Context_Fp_start( _base, _offset ) \
-     ((void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
   #define _CPU_Context_Initialize_fp( _fp_area ) \
      { \
@@ -249,9 +228,6 @@ typedef struct {
       #endif
     } Context_Control_fp;
 
-    #define _CPU_Context_Fp_start( _base, _offset ) \
-      ((void *) _Addresses_Add_offset( (_base), (_offset) ))
-
     /*
      * The reset value for all context relevant registers except the FP data
      * registers is zero.  The reset value of the FP data register is NAN.  The
@@ -275,17 +251,15 @@ typedef struct {
       uint8_t fp_save_area [M68K_FP_STATE_SIZE + 112];
     } Context_Control_fp;
 
-    #define _CPU_Context_Fp_start( _base, _offset ) \
-       ( \
-         (void *) _Addresses_Add_offset( \
-            (_base), \
-            (_offset) + CPU_CONTEXT_FP_SIZE - 4 \
-         ) \
-       )
-
+    /*
+     * The floating-point context is saved/restored via FSAVE/FRESTORE which
+     * use a growing down stack.  Initialize the stack and adjust the FP area
+     * pointer accordingly.
+     */
     #define _CPU_Context_Initialize_fp( _fp_area ) \
        { \
-         uint32_t   *_fp_context = (uint32_t *)*(_fp_area); \
+         uint32_t *_fp_context = _Addresses_Add_offset( \
+           *(_fp_area), CPU_CONTEXT_FP_SIZE - 4); \
          *(--(_fp_context)) = 0; \
          *(_fp_area) = (void *)(_fp_context); \
        }
@@ -406,6 +380,11 @@ extern void*                     _VBR;
 
 #define _CPU_ISR_Flash( _level ) \
   m68k_flash_interrupts( _level )
+
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return ( level & 0x0700 ) == 0;
+}
 
 #define _CPU_ISR_Set_level( _newlevel ) \
    m68k_set_interrupt_level( _newlevel )

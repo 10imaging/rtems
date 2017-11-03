@@ -24,7 +24,6 @@
 #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #include <assert.h>

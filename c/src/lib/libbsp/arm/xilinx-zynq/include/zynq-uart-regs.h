@@ -30,7 +30,9 @@
 
 #include <bsp/utility.h>
 
-typedef struct {
+#define ZYNQ_UART_FIFO_DEPTH 64
+
+typedef struct zynq_uart {
 	uint32_t control;
 #define ZYNQ_UART_CONTROL_STPBRK BSP_BIT32(8)
 #define ZYNQ_UART_CONTROL_STTBRK BSP_BIT32(7)

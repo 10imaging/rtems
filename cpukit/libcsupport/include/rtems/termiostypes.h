@@ -20,6 +20,7 @@
 #include <rtems/libio.h>
 #include <rtems/assoc.h>
 #include <rtems/chain.h>
+#include <sys/ioccom.h>
 #include <stdint.h>
 #include <termios.h>
 
@@ -57,7 +58,8 @@ struct rtems_termios_rawbuf {
 typedef enum {
   TERMIOS_POLLED,
   TERMIOS_IRQ_DRIVEN,
-  TERMIOS_TASK_DRIVEN
+  TERMIOS_TASK_DRIVEN,
+  TERMIOS_IRQ_SERVER_DRIVEN
 } rtems_termios_device_mode;
 
 struct rtems_termios_tty;
@@ -70,8 +72,34 @@ struct rtems_termios_tty;
  * rtems_termios_device_install().
  */
 typedef struct rtems_termios_device_context {
-  rtems_interrupt_lock interrupt_lock;
+  union {
+    /* Used for TERMIOS_POLLED and TERMIOS_IRQ_DRIVEN */
+    rtems_interrupt_lock interrupt;
+
+    /* Used for TERMIOS_IRQ_SERVER_DRIVEN or TERMIOS_TASK_DRIVEN */
+    rtems_id mutex;
+  } lock;
+
+  void ( *lock_acquire )(
+    struct rtems_termios_device_context *,
+    rtems_interrupt_lock_context *
+  );
+
+  void ( *lock_release )(
+    struct rtems_termios_device_context *,
+    rtems_interrupt_lock_context *
+  );
 } rtems_termios_device_context;
+
+void rtems_termios_device_lock_acquire_default(
+  rtems_termios_device_context *ctx,
+  rtems_interrupt_lock_context *lock_context
+);
+
+void rtems_termios_device_lock_release_default(
+  rtems_termios_device_context *ctx,
+  rtems_interrupt_lock_context *lock_context
+);
 
 /**
  * @brief Initializes a device context.
@@ -86,7 +114,9 @@ RTEMS_INLINE_ROUTINE void rtems_termios_device_context_initialize(
   const char                   *name
 )
 {
-  rtems_interrupt_lock_initialize( &context->interrupt_lock, name );
+  rtems_interrupt_lock_initialize( &context->lock.interrupt, name );
+  context->lock_acquire = rtems_termios_device_lock_acquire_default;
+  context->lock_release = rtems_termios_device_lock_release_default;
 }
 
 /**
@@ -96,7 +126,11 @@ RTEMS_INLINE_ROUTINE void rtems_termios_device_context_initialize(
  *   is only used if profiling is enabled.
  */
 #define RTEMS_TERMIOS_DEVICE_CONTEXT_INITIALIZER( name ) \
-  { RTEMS_INTERRUPT_LOCK_INITIALIZER( name ) }
+  { \
+    { RTEMS_INTERRUPT_LOCK_INITIALIZER( name ) }, \
+    rtems_termios_device_lock_acquire_default, \
+    rtems_termios_device_lock_release_default \
+  }
 
 /**
  * @brief Termios device handler.
@@ -145,8 +179,9 @@ typedef struct {
   /**
    * @brief Polled read.
    *
-   * In case mode is TERMIOS_IRQ_DRIVEN or TERMIOS_TASK_DRIVEN, then data is
-   * received via rtems_termios_enqueue_raw_characters().
+   * In case mode is TERMIOS_IRQ_DRIVEN, TERMIOS_IRQ_SERVER_DRIVEN or
+   * TERMIOS_TASK_DRIVEN, then data is received via
+   * rtems_termios_enqueue_raw_characters().
    *
    * @param[in] context The Termios device context.
    *
@@ -181,6 +216,21 @@ typedef struct {
   bool (*set_attributes)(
     rtems_termios_device_context *context,
     const struct termios         *term
+  );
+
+  /**
+   * @brief IO control handler.
+   *
+   * Invoked in case the Termios layer cannot deal with the IO request.
+   *
+   * @param[in] context The Termios device context.
+   * @param[in] request The IO control request.
+   * @param[in] buffer The IO control buffer.
+   */
+  int (*ioctl)(
+    rtems_termios_device_context *context,
+    ioctl_command_t               request,
+    void                         *buffer
   );
 
   /**
@@ -328,7 +378,7 @@ typedef struct rtems_termios_tty {
    */
   struct ttywakeup tty_snd;
   struct ttywakeup tty_rcv;
-  int              tty_rcvwakeup;
+  bool             tty_rcvwakeup;
 
   /**
    * @brief Corresponding device node.
@@ -344,10 +394,9 @@ typedef struct rtems_termios_tty {
 /**
  * @brief Installs a Termios device.
  *
- * @param[in] device_file If not @c NULL, then a device file for the specified
- *   major and minor number will be created.
- * @param[in] major The device major number of the corresponding device driver.
- * @param[in] minor The device minor number of the corresponding device driver.
+ * The installed Termios device may be removed via unlink().
+ *
+ * @param[in] device_file The device file path.
  * @param[in] handler The device handler.  It must be persistent throughout the
  *   installed time of the device.
  * @param[in] flow The device flow control handler.  The device flow control
@@ -359,63 +408,16 @@ typedef struct rtems_termios_tty {
  * @retval RTEMS_SUCCESSFUL Successful operation.
  * @retval RTEMS_NO_MEMORY Not enough memory to create a device node.
  * @retval RTEMS_UNSATISFIED Creation of the device file failed.
- * @retval RTEMS_RESOURCE_IN_USE There exists a device node for this major and
- *   minor number pair.
  * @retval RTEMS_INCORRECT_STATE Termios is not initialized.
  *
- * @see rtems_termios_device_remove(), rtems_termios_device_open(),
- *   rtems_termios_device_close() and rtems_termios_get_device_context().
+ * @see rtems_termios_get_device_context().
  */
 rtems_status_code rtems_termios_device_install(
   const char                         *device_file,
-  rtems_device_major_number           major,
-  rtems_device_minor_number           minor,
   const rtems_termios_device_handler *handler,
   const rtems_termios_device_flow    *flow,
   rtems_termios_device_context       *context
 );
-
-/**
- * @brief Removes a Termios device.
- *
- * @param[in] device_file If not @c NULL, then the device file to remove.
- * @param[in] major The device major number of the corresponding device driver.
- * @param[in] minor The device minor number of the corresponding device driver.
- *
- * @retval RTEMS_SUCCESSFUL Successful operation.
- * @retval RTEMS_INVALID_ID There is no device installed with this major and
- * minor number pair.
- * @retval RTEMS_RESOURCE_IN_USE This device is currently in use.
- * @retval RTEMS_UNSATISFIED Removal of the device file failed.
- * @retval RTEMS_INCORRECT_STATE Termios is not initialized.
- *
- * @see rtems_termios_device_install().
- */
-rtems_status_code rtems_termios_device_remove(
-  const char                *device_file,
-  rtems_device_major_number  major,
-  rtems_device_minor_number  minor
-);
-
-/**
- * @brief Opens an installed Termios device.
- *
- * @see rtems_termios_device_install().
- */
-rtems_status_code rtems_termios_device_open(
-  rtems_device_major_number  major,
-  rtems_device_minor_number  minor,
-  void                      *arg
-);
-
-/**
- * @brief Closes an installed Termios device.
- *
- * @retval RTEMS_SUCCESSFUL Successful operation.
- *
- * @see rtems_termios_device_install().
- */
-rtems_status_code rtems_termios_device_close(void *arg);
 
 /**
  * @brief Returns the device context of an installed Termios device.
@@ -441,7 +443,7 @@ RTEMS_INLINE_ROUTINE void rtems_termios_device_lock_acquire(
   rtems_interrupt_lock_context *lock_context
 )
 {
-  rtems_interrupt_lock_acquire( &context->interrupt_lock, lock_context );
+  ( *context->lock_acquire )( context, lock_context );
 }
 
 /**
@@ -456,7 +458,7 @@ RTEMS_INLINE_ROUTINE void rtems_termios_device_lock_release(
   rtems_interrupt_lock_context *lock_context
 )
 {
-  rtems_interrupt_lock_release( &context->interrupt_lock, lock_context );
+  ( *context->lock_release )( context, lock_context );
 }
 
 /**
@@ -526,20 +528,18 @@ extern const rtems_assoc_t rtems_termios_baud_table [];
  *  @retval B0 Invalid baud value or a baud value of 0.
  *  @retval other Baud constant according to @a baud.
  */
-tcflag_t rtems_termios_number_to_baud(rtems_termios_baud_t baud);
+speed_t rtems_termios_number_to_baud(rtems_termios_baud_t baud);
 
 /**
- *  @brief Convert Baud Part of Termios control flags to an integral Baud Value
- *
- *  There is no need to mask the @a c_cflag with @c CBAUD.
+ *  @brief Converts the baud flags to an integral baud value.
  *
  *  @retval 0 Invalid baud value or a baud value of @c B0.
  *  @retval other Integral baud value.
  */
-rtems_termios_baud_t rtems_termios_baud_to_number(tcflag_t c_cflag);
+rtems_termios_baud_t rtems_termios_baud_to_number(speed_t baud);
 
-/** 
- *  @brief Convert Bxxx Constant to Index 
+/**
+ *  @brief Convert Bxxx Constant to Index
  */
 int  rtems_termios_baud_to_index(rtems_termios_baud_t termios_baud);
 
@@ -553,6 +553,47 @@ int rtems_termios_set_initial_baud(
   struct rtems_termios_tty *tty,
   rtems_termios_baud_t baud
 );
+
+/**
+ * @brief Termios kqueue() filter filesystem node handler
+ *
+ * Real implementation is provided by libbsd.
+ */
+int rtems_termios_kqfilter(
+  rtems_libio_t *iop,
+  struct knote  *kn
+);
+
+/**
+ * @brief Termios mmap() filter filesystem node handler
+ *
+ * Real implementation is provided by libbsd.
+ */
+int rtems_termios_mmap(
+  rtems_libio_t *iop,
+  void         **addr,
+  size_t         len,
+  int            prot,
+  off_t          off
+);
+
+/**
+ * @brief Termios poll() filesystem node handler.
+ *
+ * Real implementation is provided by libbsd.
+ */
+int rtems_termios_poll(
+  rtems_libio_t *iop,
+  int            events
+);
+
+#define RTEMS_IO_SNDWAKEUP _IOW('t', 11, struct ttywakeup ) /* send tty wakeup */
+#define RTEMS_IO_RCVWAKEUP _IOW('t', 12, struct ttywakeup ) /* recv tty wakeup */
+
+#define	OLCUC		0x00000100	/* map lower case to upper case on output */
+#define	IUCLC		0x00004000	/* map upper case to lower case on input */
+
+#define RTEMS_TERMIOS_NUMBER_BAUD_RATES 25
 
 #ifdef __cplusplus
 }

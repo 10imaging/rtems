@@ -4,9 +4,12 @@
 # Format is one line per test that is _NOT_ built.
 #
 
-fileio
-fsdosfsname01
-iostream
-sptls01
-sptls02
-utf8proc01
+exclude: cdtest
+exclude: dl05
+exclude: fileio
+exclude: fsdosfsname01
+exclude: iostream
+exclude: linpack
+exclude: sptls01
+exclude: sptls02
+exclude: utf8proc01

@@ -4,6 +4,7 @@ include_rtems_HEADERS = rtems/asm.h
 
 include_rtems_scoredir = $(includedir)/rtems/score
 include_rtems_score_HEADERS = rtems/score/cpu.h
+include_rtems_score_HEADERS += rtems/score/cpuimpl.h
 include_rtems_score_HEADERS += rtems/score/cpu_asm.h
 include_rtems_score_HEADERS += rtems/score/arm.h
 include_rtems_score_HEADERS += rtems/score/armv4.h
@@ -22,8 +23,6 @@ libscorecpu_a_SOURCES += arm-context-validate.S
 libscorecpu_a_SOURCES += arm-context-volatile-clobber.S
 libscorecpu_a_SOURCES += arm_exc_abort.S
 libscorecpu_a_SOURCES += arm_exc_interrupt.S
-libscorecpu_a_SOURCES += arm_exc_handler_low.S
-libscorecpu_a_SOURCES += arm_exc_handler_high.c
 libscorecpu_a_SOURCES += arm-exception-frame-print.c
 libscorecpu_a_SOURCES += arm-exception-default.c
 libscorecpu_a_SOURCES += armv4-exception-default.S

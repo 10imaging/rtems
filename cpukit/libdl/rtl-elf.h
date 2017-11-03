@@ -29,9 +29,13 @@ extern "C" {
  **/
 
 /*
- * Always 32bit for RTEMS at the moment. Do not add '()'. Leave plain.
+ * Do not add '()'. Leave plain.
  */
+#if defined(__powerpc64__) || defined(__arch64__)
+#define ELFSIZE 64
+#else
 #define ELFSIZE 32
+#endif
 
 /*
  * Define _STANDALONE then remove after.
@@ -53,6 +57,18 @@ extern "C" {
  * some C++ symbol lengths.
  */
 #define RTEMS_RTL_ELF_STRING_MAX (256)
+
+/**
+ * Architecture specific handler to translate unknown section flags to RTL
+ * section flags.
+ *
+ * @param obj The object file being relocated.
+ * @param shdr The ELF section header.
+ * @retval 0 Unknown or unsupported flags.
+ * @retval uint32_t RTL object file flags.
+ */
+uint32_t rtems_rtl_elf_section_flags (const rtems_rtl_obj_t* obj,
+                                      const Elf_Shdr*        shdr);
 
 /**
  * Architecture specific handler to check is a relocation record's type is
@@ -137,19 +153,19 @@ bool rtems_rtl_elf_find_symbol (rtems_rtl_obj_t* obj,
 bool rtems_rtl_elf_file_check (rtems_rtl_obj_t* obj, int fd);
 
 /**
- * The ELF file details handler.
- *
- * @param obj Load the details of the obj.
- */
-bool rtems_rtl_elf_load_details (rtems_rtl_obj_t* obj);
-
-/**
  * The ELF format load handler.
  *
  * @param obj The object to load.
  * @param fd The file descriptor.
  */
 bool rtems_rtl_elf_file_load (rtems_rtl_obj_t* obj, int fd);
+
+/**
+ * The ELF format unload handler.
+ *
+ * @param obj The object to unload.
+ */
+bool rtems_rtl_elf_file_unload (rtems_rtl_obj_t* obj);
 
 /**
  * The ELF format signature handler.

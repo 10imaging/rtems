@@ -92,62 +92,28 @@ void _Scheduler_simple_Schedule(
   Thread_Control          *the_thread
 );
 
-/**
- *  @brief Invoked when a thread wishes to voluntarily
- *  transfer control of the processor to another thread in the queue.
- *
- *  This routine is invoked when a thread wishes to voluntarily
- *  transfer control of the processor to another thread in the queue.
- *  It will remove the specified THREAD from the scheduler.informaiton
- *  (where the ready queue is stored) and place it immediately at the
- *  between the last entry of its priority and the next priority thread.
- *  Reset timeslice and yield the processor functions both use this routine,
- *  therefore if reset is true and this is the only thread on the queue then
- *  the timeslice counter is reset.  The heir THREAD will be updated if the
- *  running is also the currently the heir.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in,out] the_thread The yielding thread.
- */
-Scheduler_Void_or_thread _Scheduler_simple_Yield(
+void _Scheduler_simple_Yield(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-/**
- *  @brief Remove a simple-priority-based thread from the queue.
- *
- *  This routine removes @a the_thread from the scheduling decision,
- *  that is, removes it from the ready queue.  It performs
- *  any necessary scheduling operations including the selection of
- *  a new heir thread.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread is the thread that is to be blocked
- */
 void _Scheduler_simple_Block(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-/**
- *  @brief Unblock a simple-priority-based thread.
- *
- *  This routine adds @a the_thread to the scheduling decision,
- *  that is, adds it to the ready queue and
- *  updates any appropriate scheduling variables, for example the heir thread.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread is the thread that is to be unblocked
- */
-Scheduler_Void_or_thread _Scheduler_simple_Unblock(
+void _Scheduler_simple_Unblock(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-Scheduler_Void_or_thread _Scheduler_simple_Update_priority(
+void _Scheduler_simple_Update_priority(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
 /**@}*/

@@ -27,8 +27,8 @@
 
 #include <rtems/posix/priorityimpl.h>
 #include <rtems/posix/pthreadimpl.h>
+#include <rtems/posix/pthreadattrimpl.h>
 #include <rtems/score/assert.h>
-#include <rtems/score/cpusetimpl.h>
 #include <rtems/score/threadimpl.h>
 #include <rtems/score/apimutex.h>
 #include <rtems/score/stackimpl.h>
@@ -61,11 +61,11 @@ int pthread_create(
     }
   };
   const pthread_attr_t               *the_attr;
+  int                                 normal_prio;
   int                                 low_prio;
-  int                                 high_prio;
   bool                                valid;
+  Priority_Control                    core_normal_prio;
   Priority_Control                    core_low_prio;
-  Priority_Control                    core_high_prio;
   Thread_CPU_budget_algorithms        budget_algorithm;
   Thread_CPU_budget_algorithm_callout budget_callout;
   bool                                is_fp;
@@ -74,8 +74,10 @@ int pthread_create(
   Thread_Control                     *executing;
   const Scheduler_Control            *scheduler;
   POSIX_API_Control                  *api;
+  const POSIX_API_Control            *executing_api;
   int                                 schedpolicy = SCHED_RR;
   struct sched_param                  schedparam;
+  size_t                              stacksize;
   Objects_Name                        name;
   int                                 error;
   ISR_lock_Context                    lock_context;
@@ -95,8 +97,15 @@ int pthread_create(
    *  NOTE: If the user provides the stack we will let it drop below
    *        twice the minimum.
    */
-  if ( the_attr->stackaddr && !_Stack_Is_enough(the_attr->stacksize) )
-    return EINVAL;
+  if ( the_attr->stackaddr != NULL ) {
+    if ( !_Stack_Is_enough(the_attr->stacksize) ) {
+      return EINVAL;
+    }
+
+    stacksize = the_attr->stacksize;
+  } else {
+    stacksize = _POSIX_Threads_Ensure_minimum_stack( the_attr->stacksize );
+  }
 
   #if 0
     int  cputime_clock_allowed;  /* see time.h */
@@ -149,33 +158,29 @@ int pthread_create(
     return error;
   }
 
-  if ( schedpolicy == SCHED_SPORADIC ) {
-    low_prio = schedparam.sched_ss_low_priority;
-    high_prio = schedparam.sched_priority;
-  } else {
-    low_prio = schedparam.sched_priority;
-    high_prio = low_prio;
+  normal_prio = schedparam.sched_priority;
+
+  scheduler = _Thread_Scheduler_get_home( executing );
+
+  core_normal_prio = _POSIX_Priority_To_core( scheduler, normal_prio, &valid );
+  if ( !valid ) {
+    return EINVAL;
   }
 
-  scheduler = _Scheduler_Get_own( executing );
+  if ( schedpolicy == SCHED_SPORADIC ) {
+    low_prio = schedparam.sched_ss_low_priority;
+  } else {
+    low_prio = normal_prio;
+  }
 
   core_low_prio = _POSIX_Priority_To_core( scheduler, low_prio, &valid );
   if ( !valid ) {
     return EINVAL;
   }
 
-  core_high_prio = _POSIX_Priority_To_core( scheduler, high_prio, &valid );
-  if ( !valid ) {
+  if ( the_attr->affinityset == NULL ) {
     return EINVAL;
   }
-
-#if defined(RTEMS_SMP)
-#if __RTEMS_HAVE_SYS_CPUSET_H__
-  status = _CPU_set_Is_valid( the_attr->affinityset, the_attr->affinitysetsize );
-  if ( !status )
-    return EINVAL;
-#endif
-#endif
 
   /*
    *  Currently all POSIX threads are floating point if the hardware
@@ -203,9 +208,9 @@ int pthread_create(
     the_thread,
     scheduler,
     the_attr->stackaddr,
-    _POSIX_Threads_Ensure_minimum_stack(the_attr->stacksize),
+    stacksize,
     is_fp,
-    core_high_prio,
+    core_normal_prio,
     true,                 /* preemptible */
     budget_algorithm,
     budget_callout,
@@ -224,7 +229,6 @@ int pthread_create(
 
   the_thread->Life.state |= THREAD_LIFE_CHANGE_DEFERRED;
 
-#if defined(RTEMS_SMP) && __RTEMS_HAVE_SYS_CPUSET_H__
   _ISR_lock_ISR_disable( &lock_context );
    status = _Scheduler_Set_affinity(
      the_thread,
@@ -237,21 +241,29 @@ int pthread_create(
      _RTEMS_Unlock_allocator();
      return EINVAL;
    }
-#endif
 
   /*
    *  finish initializing the per API structure
    */
   api = the_thread->API_Extensions[ THREAD_API_POSIX ];
+  executing_api = executing->API_Extensions[ THREAD_API_POSIX ];
 
-  _POSIX_Threads_Copy_attributes( &api->Attributes, the_attr );
-  api->Sporadic.low_priority = core_low_prio;
-  api->Sporadic.high_priority = core_high_prio;
+  api->signals_unblocked = executing_api->signals_unblocked;
+
+  api->created_with_explicit_scheduler =
+    ( the_attr->inheritsched == PTHREAD_EXPLICIT_SCHED );
+  api->schedpolicy = the_attr->schedpolicy;
+
+  _Priority_Node_set_priority( &api->Sporadic.Low_priority, core_low_prio );
+  api->Sporadic.sched_ss_repl_period =
+    the_attr->schedparam.sched_ss_repl_period;
+  api->Sporadic.sched_ss_init_budget =
+    the_attr->schedparam.sched_ss_init_budget;
+  api->Sporadic.sched_ss_max_repl =
+    the_attr->schedparam.sched_ss_max_repl;
 
   if ( schedpolicy == SCHED_SPORADIC ) {
-    _ISR_lock_ISR_disable( &lock_context );
-    _POSIX_Threads_Sporadic_timer_insert( the_thread, api );
-    _ISR_lock_ISR_enable( &lock_context );
+    _POSIX_Threads_Sporadic_timer( &api->Sporadic.Timer );
   }
 
   /*

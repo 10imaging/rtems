@@ -53,6 +53,9 @@ include_bsp_HEADERS += include/irq.h
 include_bsp_HEADERS += include/pin-config.h
 include_bsp_HEADERS += include/atsam-i2c.h
 include_bsp_HEADERS += include/i2c.h
+include_bsp_HEADERS += include/atsam-spi.h
+include_bsp_HEADERS += include/spi.h
+include_bsp_HEADERS += include/sc16is752.h
 include_bsp_HEADERS += include/power.h
 
 include_libchipdir = $(includedir)/libchip
@@ -332,7 +335,6 @@ libbsp_a_SOURCES += ../../shared/bootcard.c
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c
-libbsp_a_SOURCES += ../../shared/cpucounterread.c
 libbsp_a_SOURCES += ../../shared/cpucounterdiff.c
 libbsp_a_SOURCES += ../../shared/gnatinstallhandler.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
@@ -379,7 +381,6 @@ libbsp_a_SOURCES += libraries/libchip/source/uart_dma.c
 libbsp_a_SOURCES += libraries/libchip/source/usart.c
 libbsp_a_SOURCES += libraries/libchip/source/usart_dma.c
 libbsp_a_SOURCES += libraries/libchip/source/wdt.c
-libbsp_a_SOURCES += libraries/libchip/source/xdmac.c
 libbsp_a_SOURCES += libraries/libchip/source/xdmad.c
 libbsp_a_SOURCES += libraries/libchip/source/xdma_hardware_interface.c
 
@@ -392,12 +393,14 @@ libbsp_a_SOURCES += libraries/libboard/source/dbg_console.c
 # Startup
 libbsp_a_SOURCES += ../shared/startup/bsp-start-memcpy.S
 libbsp_a_SOURCES += ../shared/armv7m/startup/bspreset.c
+libbsp_a_SOURCES += ../shared/armv7m/startup/armv7m-cpucounter.c
 libbsp_a_SOURCES += startup/bspstart.c
 libbsp_a_SOURCES += startup/bspstarthooks.c
 libbsp_a_SOURCES += startup/pin-config.c
 libbsp_a_SOURCES += startup/power.c
 libbsp_a_SOURCES += startup/power-rtc.c
 libbsp_a_SOURCES += startup/power-clock.c
+libbsp_a_SOURCES += startup/restart.c
 libbsp_a_SOURCES += startup/sdram-config.c
 
 # IRQ
@@ -436,6 +439,11 @@ endif
 # I2C
 libbsp_a_SOURCES += i2c/atsam_i2c_bus.c
 libbsp_a_SOURCES += i2c/atsam_i2c_init.c
+
+# SPI
+libbsp_a_SOURCES += spi/atsam_spi_bus.c
+libbsp_a_SOURCES += spi/atsam_spi_init.c
+libbsp_a_SOURCES += spi/sc16is752.c
 
 # RTC
 libbsp_a_SOURCES += ../../shared/tod.c

@@ -25,6 +25,9 @@
 
 #include "initial_filesystem_tar.h"
 #include "initial_filesystem_tar_gz.h"
+#if HAVE_XZ
+#include "initial_filesystem_tar_xz.h"
+#endif
 
 const char rtems_test_name[] = "TAR 1";
 
@@ -34,11 +37,16 @@ void test_untar_from_memory(void);
 void test_untar_from_file(void);
 void test_untar_chunks_from_memory(void);
 void test_untar_unzip_tgz(void);
+void test_untar_unzip_txz(void);
 
 #define TARFILE_START initial_filesystem_tar
 #define TARFILE_SIZE  initial_filesystem_tar_size
 #define TARFILE_GZ_START initial_filesystem_tar_gz
 #define TARFILE_GZ_SIZE  initial_filesystem_tar_gz_size
+#if HAVE_XZ
+#define TARFILE_XZ_START initial_filesystem_tar_xz
+#define TARFILE_XZ_SIZE  initial_filesystem_tar_xz_size
+#endif
 
 void test_cat(
   char *file,
@@ -59,12 +67,13 @@ static void test_untar_check_mode(const char* file, int mode)
 void test_untar_from_memory(void)
 {
   rtems_status_code sc;
-  rtems_printer     printer;
-
-  rtems_print_printer_printf(&printer);
 
   printf("Untaring from memory - ");
-  sc = Untar_FromMemory_Print((void *)TARFILE_START, TARFILE_SIZE, &printer);
+  sc = Untar_FromMemory_Print(
+    (void *)TARFILE_START,
+    TARFILE_SIZE,
+    &rtems_test_printer
+  );
   if (sc != RTEMS_SUCCESSFUL) {
     printf ("error: untar failed: %s\n", rtems_status_text (sc));
     exit(1);
@@ -91,6 +100,8 @@ void test_untar_from_file(void)
   int                fd;
   int                rv;
   ssize_t            n;
+
+  puts( "" );
 
   puts( "Copy tar image to test.tar" );
   /* Copy tar image from object to file in IMFS */
@@ -134,14 +145,13 @@ void test_untar_from_file(void)
 void test_untar_chunks_from_memory(void)
 {
   rtems_status_code sc;
-  rtems_printer     printer;
   int rv;
   Untar_ChunkContext ctx;
   unsigned long counter = 0;
   char *buffer = (char *)TARFILE_START;
   size_t buflen = TARFILE_SIZE;
 
-  rtems_print_printer_printf(&printer);
+  puts( "" );
 
   /* make a directory to untar it into */
   rv = mkdir( "/dest2", 0777 );
@@ -153,7 +163,12 @@ void test_untar_chunks_from_memory(void)
   printf( "Untaring chunks from memory - " );
   Untar_ChunkContext_Init(&ctx);
   do {
-    sc = Untar_FromChunk_Print(&ctx, &buffer[counter], (size_t)1 , &printer);
+    sc = Untar_FromChunk_Print(
+      &ctx,
+      &buffer[counter],
+      (size_t)1 ,
+      &rtems_test_printer
+    );
     rtems_test_assert(sc == RTEMS_SUCCESSFUL);
     counter ++;
   } while (counter < buflen);
@@ -177,7 +192,6 @@ void test_untar_chunks_from_memory(void)
 void test_untar_unzip_tgz(void)
 {
   int status;
-  rtems_printer     printer;
   int rv;
   Untar_GzChunkContext ctx;
   size_t i = 0;
@@ -185,7 +199,9 @@ void test_untar_unzip_tgz(void)
   size_t buflen = TARFILE_GZ_SIZE;
   char inflate_buffer;
 
-  rtems_print_printer_printf(&printer);
+  puts( "" );
+
+  rtems_test_assert( buflen != 0 );
 
   /* make a directory to untar it into */
   rv = mkdir( "/dest3", 0777 );
@@ -199,7 +215,7 @@ void test_untar_unzip_tgz(void)
   status = Untar_GzChunkContext_Init(&ctx, &inflate_buffer, 1);
   rtems_test_assert(status == UNTAR_SUCCESSFUL);
   for(i = 0; i < buflen; i++) {
-    status = Untar_FromGzChunk_Print(&ctx, &buffer[i], 1, &printer);
+    status = Untar_FromGzChunk_Print(&ctx, &buffer[i], 1, &rtems_test_printer);
     rtems_test_assert(status == UNTAR_SUCCESSFUL);
   }
   printf( "successful\n" );
@@ -218,6 +234,57 @@ void test_untar_unzip_tgz(void)
   test_cat( "/dest3/symlink", 0, 0 );
 }
 
+void test_untar_unzip_txz(void)
+{
+#if HAVE_XZ
+  int status;
+  int rv;
+  Untar_XzChunkContext ctx;
+  size_t i = 0;
+  char *buffer = (char *)TARFILE_XZ_START;
+  size_t buflen = TARFILE_XZ_SIZE;
+  char inflate_buffer;
+
+  puts( "" );
+
+  rtems_test_assert( buflen != 0 );
+
+  /* make a directory to untar it into */
+  rv = mkdir( "/dest4", 0777 );
+  rtems_test_assert( rv == 0 );
+
+  rv = chdir( "/dest4" );
+  rtems_test_assert( rv == 0 );
+
+  printf( "Untaring chunks from txz - " );
+
+  /*
+   * Use 8K dict, this is set on the command line of xz when compressing.
+   */
+  status = Untar_XzChunkContext_Init(&ctx, XZ_DYNALLOC,
+                                     8 * 1024, &inflate_buffer, 1);
+  rtems_test_assert(status == UNTAR_SUCCESSFUL);
+  for(i = 0; i < buflen; i++) {
+    status = Untar_FromXzChunk_Print(&ctx, &buffer[i], 1, &rtems_test_printer);
+    rtems_test_assert(status == UNTAR_SUCCESSFUL);
+  }
+  printf( "successful\n" );
+
+  /******************/
+  printf( "========= /dest4/home/test_file =========\n" );
+  test_cat( "/dest4/home/test_file", 0, 0 );
+
+  /******************/
+  printf( "========= /dest4/home/test_script =========\n" );
+  test_cat( "/dest4/home/test_script", 0, 0 );
+  test_untar_check_mode("/dest4/home/test_script", 0755);
+
+  /******************/
+  printf( "========= /dest4/symlink =========\n" );
+  test_cat( "/dest4/symlink", 0, 0 );
+#endif
+}
+
 rtems_task Init(
   rtems_task_argument ignored
 )
@@ -225,12 +292,10 @@ rtems_task Init(
   TEST_BEGIN();
 
   test_untar_from_memory();
-  puts( "" );
   test_untar_from_file();
-  puts( "" );
   test_untar_chunks_from_memory();
-  puts( "" );
   test_untar_unzip_tgz();
+  test_untar_unzip_txz();
 
   TEST_END();
   exit( 0 );
@@ -247,6 +312,8 @@ rtems_task Init(
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE
+
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
 
 #define CONFIGURE_INIT
 #include <rtems/confdefs.h>

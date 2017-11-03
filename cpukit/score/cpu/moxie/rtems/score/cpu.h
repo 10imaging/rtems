@@ -32,28 +32,6 @@ extern "C" {
 /* conditional compilation parameters */
 
 /*
- *  Should the calls to _Thread_Enable_dispatch be inlined?
- *
- *  If TRUE, then they are inlined.
- *  If FALSE, then a subroutine call is made.
- *
- *  Basically this is an example of the classic trade-off of size
- *  versus speed.  Inlining the call (TRUE) typically increases the
- *  size of RTEMS while speeding up the enabling of dispatching.
- *  [NOTE: In general, the _Thread_Dispatch_disable_level will
- *  only be 0 or 1 unless you are in an interrupt handler and that
- *  interrupt handler invokes the executive.]  When not inlined
- *  something calls _Thread_Enable_dispatch which in turns calls
- *  _Thread_Dispatch.  If the enable dispatch is inlined, then
- *  one subroutine call is avoided entirely.]
- *
- *  MOXIE Specific Information:
- *
- *  XXX
- */
-#define CPU_INLINE_ENABLE_DISPATCH       FALSE
-
-/*
  *  Should this target use 16 or 32 bit object Ids?
  *
  */
@@ -218,6 +196,8 @@ extern "C" {
  */
 #define CPU_USE_DEFERRED_FP_SWITCH       TRUE
 
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
 /*
  *  Does this port provide a CPU dependent IDLE task implementation?
  *
@@ -266,13 +246,6 @@ extern "C" {
 #define CPU_STRUCTURE_ALIGNMENT
 
 /*
- *  Define what is required to specify how the network to host conversion
- *  routines are handled.
- */
-#define CPU_BIG_ENDIAN                           TRUE
-#define CPU_LITTLE_ENDIAN                        FALSE
-
-/*
  *  The following defines the number of bits actually used in the
  *  interrupt field of the task mode.  How those bits map to the
  *  CPU interrupt levels is defined by the routine _CPU_ISR_Set_level().
@@ -282,8 +255,6 @@ extern "C" {
  *  XXX
  */
 #define CPU_MODES_INTERRUPT_MASK   0x00000001
-
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 #define CPU_MAXIMUM_PROCESSORS 32
 
@@ -296,10 +267,6 @@ extern "C" {
  */
 
 /* may need to put some structures here.  */
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 /*
  * Contexts
@@ -550,6 +517,11 @@ typedef struct {
     _CPU_ISR_Disable( _isr_cookie ); \
   } while (0)
 
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return true;
+}
+
 /*
  *  Map interrupt level in task mode onto the hardware that the CPU
  *  actually provides.  Currently, interrupt levels which do not
@@ -636,26 +608,6 @@ uint32_t   _CPU_ISR_Get_level( void );
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
 
-/*
- *  The purpose of this macro is to allow the initial pointer into
- *  a floating point context area (used to save the floating point
- *  context) to be at an arbitrary place in the floating point
- *  context area.
- *
- *  This is necessary because some FP units are designed to have
- *  their context saved as a stack which grows into lower addresses.
- *  Other FP units can be saved by simply moving registers into offsets
- *  from the base of the context area.  Finally some FP units provide
- *  a "dump context" instruction which could fill in from high to low
- *  or low to high based on the whim of the CPU designers.
- *
- *  MOXIE Specific Information:
- *
- *  XXX
- */
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) (_base) + (_offset) )
-
 #define _CPU_Context_Initialize_fp( _destination ) \
   memset( *( _destination ), 0, CPU_CONTEXT_FP_SIZE );
 
@@ -673,7 +625,7 @@ uint32_t   _CPU_ISR_Get_level( void );
  *  XXX
  */
 #define _CPU_Fatal_halt( _source, _error ) \
-        printk("Fatal Error %d.%d Halted\n",_source,_error); \
+        printk("Fatal Error %d.%lu Halted\n",_source,_error); \
         for(;;)
 
 /* end of Fatal Error manager macros */

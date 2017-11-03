@@ -192,7 +192,7 @@ static int mpc5200_psc_setAttributes(
     (struct mpc5200_psc *)(&mpc5200.psc[psc_minor_to_regset[minor]]);
 
   /* Baud rate */
-  baud = rtems_termios_baud_to_number(t->c_cflag & CBAUD);
+  baud = rtems_termios_baud_to_number(t->c_ospeed);
   if (baud > 0) {
    /*
     * Calculate baud rate
@@ -623,8 +623,6 @@ static void A_BSP_output_char(
   char c
 )
 {
-  char cr = '\r';
-
   /*
    *  If we are using U-Boot, then the console is already initialized
    *  and we can just poll bytes out at any time.
@@ -637,9 +635,6 @@ static void A_BSP_output_char(
 #define PRINTK_WRITE mpc5200_uart_pollWrite
 
     PRINTK_WRITE(PRINTK_MINOR, &c, 1 );
-
-    if( c == '\n' )
-      PRINTK_WRITE( PRINTK_MINOR, &cr, 1 );
 }
 
 static int A_BSP_get_char(void)

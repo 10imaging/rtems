@@ -20,7 +20,7 @@
 #define _RTEMS_SCORE_SCHEDULER_H
 
 #include <rtems/score/thread.h>
-#if defined(__RTEMS_HAVE_SYS_CPUSET_H__) && defined(RTEMS_SMP)
+#if defined(RTEMS_SMP)
   #include <sys/cpuset.h>
 #endif
 
@@ -40,17 +40,7 @@ struct Per_CPU_Control;
  */
 /**@{*/
 
-typedef struct Scheduler_Control Scheduler_Control;
-
-#if defined(RTEMS_SMP)
-  typedef Thread_Control * Scheduler_Void_or_thread;
-
-  #define SCHEDULER_RETURN_VOID_OR_NULL return NULL
-#else
-  typedef void Scheduler_Void_or_thread;
-
-  #define SCHEDULER_RETURN_VOID_OR_NULL return
-#endif
+typedef struct _Scheduler_Control Scheduler_Control;
 
 /**
  * @brief The scheduler operations.
@@ -63,27 +53,31 @@ typedef struct {
   void ( *schedule )( const Scheduler_Control *, Thread_Control *);
 
   /** @see _Scheduler_Yield() */
-  Scheduler_Void_or_thread ( *yield )(
+  void ( *yield )(
     const Scheduler_Control *,
-    Thread_Control *
+    Thread_Control *,
+    Scheduler_Node *
   );
 
   /** @see _Scheduler_Block() */
   void ( *block )(
     const Scheduler_Control *,
-    Thread_Control *
+    Thread_Control *,
+    Scheduler_Node *
   );
 
   /** @see _Scheduler_Unblock() */
-  Scheduler_Void_or_thread ( *unblock )(
+  void ( *unblock )(
     const Scheduler_Control *,
-    Thread_Control *
+    Thread_Control *,
+    Scheduler_Node *
   );
 
   /** @see _Scheduler_Update_priority() */
-  Scheduler_Void_or_thread ( *update_priority )(
+  void ( *update_priority )(
     const Scheduler_Control *,
-    Thread_Control *
+    Thread_Control *,
+    Scheduler_Node *
   );
 
   /** @see _Scheduler_Map_priority() */
@@ -100,26 +94,73 @@ typedef struct {
 
 #if defined(RTEMS_SMP)
   /**
-   * Ask for help operation.
+   * @brief Ask for help operation.
    *
-   * @param[in] scheduler The scheduler of the thread offering help.
-   * @param[in] offers_help The thread offering help.
-   * @param[in] needs_help The thread needing help.
+   * @param[in] scheduler The scheduler instance to ask for help.
+   * @param[in] the_thread The thread needing help.
+   * @param[in] node The scheduler node.
    *
-   * @retval needs_help It was not possible to schedule the thread needing
-   *   help, so it is returned to continue the search for help.
-   * @retval next_needs_help It was possible to schedule the thread needing
-   *   help, but this displaced another thread eligible to ask for help.  So
-   *   this thread is returned to start a new search for help.
-   * @retval NULL It was possible to schedule the thread needing help, and no
-   *   other thread needs help as a result.
-   *
-   * @see _Scheduler_Ask_for_help().
+   * @retval true Ask for help was successful.
+   * @retval false Otherwise.
    */
-  Thread_Control *( *ask_for_help )(
+  bool ( *ask_for_help )(
     const Scheduler_Control *scheduler,
-    Thread_Control          *offers_help,
-    Thread_Control          *needs_help
+    Thread_Control          *the_thread,
+    Scheduler_Node          *node
+  );
+
+  /**
+   * @brief Reconsider help operation.
+   *
+   * @param[in] scheduler The scheduler instance to reconsider the help
+   *   request.
+   * @param[in] the_thread The thread reconsidering a help request.
+   * @param[in] node The scheduler node.
+   */
+  void ( *reconsider_help_request )(
+    const Scheduler_Control *scheduler,
+    Thread_Control          *the_thread,
+    Scheduler_Node          *node
+  );
+
+  /**
+   * @brief Withdraw node operation.
+   *
+   * @param[in] scheduler The scheduler instance to withdraw the node.
+   * @param[in] the_thread The thread using the node.
+   * @param[in] node The scheduler node to withdraw.
+   * @param[in] next_state The next thread scheduler state in case the node is
+   *   scheduled.
+   */
+  void ( *withdraw_node )(
+    const Scheduler_Control *scheduler,
+    Thread_Control          *the_thread,
+    Scheduler_Node          *node,
+    Thread_Scheduler_state   next_state
+  );
+
+  /**
+   * @brief Add processor operation.
+   *
+   * @param[in] scheduler The scheduler instance to add the processor.
+   * @param[in] idle The idle thread of the processor to add.
+   */
+  void ( *add_processor )(
+    const Scheduler_Control *scheduler,
+    Thread_Control          *idle
+  );
+
+  /**
+   * @brief Remove processor operation.
+   *
+   * @param[in] scheduler The scheduler instance to remove the processor.
+   * @param[in] cpu The processor to remove.
+   *
+   * @return The idle thread of the removed processor.
+   */
+  Thread_Control *( *remove_processor )(
+    const Scheduler_Control *scheduler,
+    struct Per_CPU_Control  *cpu
   );
 #endif
 
@@ -135,16 +176,20 @@ typedef struct {
   void ( *node_destroy )( const Scheduler_Control *, Scheduler_Node * );
 
   /** @see _Scheduler_Release_job() */
-  Thread_Control *( *release_job ) (
+  void ( *release_job ) (
     const Scheduler_Control *,
     Thread_Control *,
-    uint64_t
+    Priority_Node *,
+    uint64_t,
+    Thread_queue_Context *
   );
 
   /** @see _Scheduler_Cancel_job() */
-  Thread_Control *( *cancel_job ) (
+  void ( *cancel_job ) (
     const Scheduler_Control *,
-    Thread_Control *
+    Thread_Control *,
+    Priority_Node *,
+    Thread_queue_Context *
   );
 
   /** @see _Scheduler_Tick() */
@@ -157,21 +202,13 @@ typedef struct {
     struct Per_CPU_Control *
   );
 
-#if defined(__RTEMS_HAVE_SYS_CPUSET_H__) && defined(RTEMS_SMP)
-  /** @see _Scheduler_Get_affinity() */
-  bool ( *get_affinity )(
-    const Scheduler_Control *,
-    Thread_Control *,
-    size_t,
-    cpu_set_t *
-  );
-  
+#if defined(RTEMS_SMP)
   /** @see _Scheduler_Set_affinity() */
   bool ( *set_affinity )(
     const Scheduler_Control *,
     Thread_Control *,
-    size_t,
-    const cpu_set_t *
+    Scheduler_Node *,
+    const Processor_mask *
   );
 #endif
 } Scheduler_Operations;
@@ -183,18 +220,23 @@ typedef struct {
  * this structure at the begin of its context structure.
  */
 typedef struct Scheduler_Context {
+  /**
+   * @brief Lock to protect this scheduler instance.
+   */
+  ISR_LOCK_MEMBER( Lock )
+
 #if defined(RTEMS_SMP)
   /**
-   * @brief Count of processors owned by this scheduler instance.
+   * @brief The set of processors owned by this scheduler instance.
    */
-  uint32_t processor_count;
+  Processor_mask Processors;
 #endif
 } Scheduler_Context;
 
 /**
  * @brief Scheduler control.
  */
-struct Scheduler_Control {
+struct _Scheduler_Control {
   /**
    * @brief Reference to a statically allocated scheduler context.
    */
@@ -291,7 +333,7 @@ extern const Scheduler_Control _Scheduler_Table[];
    *
    * @see _Scheduler_Table and rtems_configuration_get_maximum_processors().
    */
-  extern const Scheduler_Assignment _Scheduler_Assignments[];
+  extern const Scheduler_Assignment _Scheduler_Initial_assignments[];
 #endif
 
 /**
@@ -314,19 +356,51 @@ Priority_Control _Scheduler_default_Map_priority(
    * @brief Does nothing.
    *
    * @param[in] scheduler Unused.
-   * @param[in] offers_help Unused.
-   * @param[in] needs_help Unused.
+   * @param[in] the_thread Unused.
+   * @param[in] node Unused.
    *
-   * @retval NULL Always.
+   * @retval false Always.
    */
-  Thread_Control *_Scheduler_default_Ask_for_help(
+  bool _Scheduler_default_Ask_for_help(
     const Scheduler_Control *scheduler,
-    Thread_Control          *offers_help,
-    Thread_Control          *needs_help
+    Thread_Control          *the_thread,
+    Scheduler_Node          *node
+  );
+
+  /**
+   * @brief Does nothing.
+   *
+   * @param[in] scheduler Unused.
+   * @param[in] the_thread Unused.
+   * @param[in] node Unused.
+   */
+  void _Scheduler_default_Reconsider_help_request(
+    const Scheduler_Control *scheduler,
+    Thread_Control          *the_thread,
+    Scheduler_Node          *node
+  );
+
+  /**
+   * @brief Does nothing.
+   *
+   * @param[in] scheduler Unused.
+   * @param[in] the_thread Unused.
+   * @param[in] node Unused.
+   * @param[in] next_state Unused.
+   */
+  void _Scheduler_default_Withdraw_node(
+    const Scheduler_Control *scheduler,
+    Thread_Control          *the_thread,
+    Scheduler_Node          *node,
+    Thread_Scheduler_state   next_state
   );
 
   #define SCHEDULER_OPERATION_DEFAULT_ASK_FOR_HELP \
-    _Scheduler_default_Ask_for_help,
+    _Scheduler_default_Ask_for_help, \
+    _Scheduler_default_Reconsider_help_request, \
+    _Scheduler_default_Withdraw_node, \
+    NULL, \
+    NULL,
 #else
   #define SCHEDULER_OPERATION_DEFAULT_ASK_FOR_HELP
 #endif
@@ -373,14 +447,18 @@ void _Scheduler_default_Node_destroy(
  *
  * @param[in] scheduler Unused.
  * @param[in] the_thread Unused.
+ * @param[in] priority_node Unused.
  * @param[in] deadline Unused.
+ * @param[in] queue_context Unused.
  *
  * @retval NULL Always.
  */
-Thread_Control *_Scheduler_default_Release_job(
+void _Scheduler_default_Release_job(
   const Scheduler_Control *scheduler,
   Thread_Control          *the_thread,
-  uint64_t                 deadline
+  Priority_Node           *priority_node,
+  uint64_t                 deadline,
+  Thread_queue_Context    *queue_context
 );
 
 /**
@@ -388,12 +466,16 @@ Thread_Control *_Scheduler_default_Release_job(
  *
  * @param[in] scheduler Unused.
  * @param[in] the_thread Unused.
+ * @param[in] priority_node Unused.
+ * @param[in] queue_context Unused.
  *
  * @retval NULL Always.
  */
-Thread_Control *_Scheduler_default_Cancel_job(
+void _Scheduler_default_Cancel_job(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Priority_Node           *priority_node,
+  Thread_queue_Context    *queue_context
 );
 
 /**
@@ -423,47 +505,26 @@ void _Scheduler_default_Start_idle(
   struct Per_CPU_Control  *cpu
 );
 
-#if defined(__RTEMS_HAVE_SYS_CPUSET_H__) && defined(RTEMS_SMP)
-  /**
-   * @brief Get affinity for the default scheduler.
-   *
-   * @param[in] scheduler The scheduler instance.
-   * @param[in] thread The associated thread.
-   * @param[in] cpusetsize The size of the cpuset.
-   * @param[out] cpuset Affinity set containing all CPUs.
-   *
-   * @retval 0 Successfully got cpuset
-   * @retval -1 The cpusetsize is invalid for the system
-   */
-  bool _Scheduler_default_Get_affinity(
-    const Scheduler_Control *scheduler,
-    Thread_Control          *thread,
-    size_t                   cpusetsize,
-    cpu_set_t               *cpuset
-  );
-
+#if defined(RTEMS_SMP)
   /** 
-   * @brief Set affinity for the default scheduler.
+   * @brief Default implementation of the set affinity scheduler operation.
    *
    * @param[in] scheduler The scheduler instance.
    * @param[in] thread The associated thread.
-   * @param[in] cpusetsize The size of the cpuset.
-   * @param[in] cpuset Affinity new affinity set.
+   * @param[in] node The home scheduler node of the associated thread.
+   * @param[in] affinity The new processor affinity set for the thread.
    *
-   * @retval 0 Successful
-   *
-   *  This method always returns successful and does not save
-   *  the cpuset.
+   * @retval true The processor set of the scheduler is a subset of the affinity set.
+   * @retval false Otherwise.
    */
   bool _Scheduler_default_Set_affinity(
     const Scheduler_Control *scheduler,
     Thread_Control          *thread,
-    size_t                   cpusetsize,
-    const cpu_set_t         *cpuset
+    Scheduler_Node          *node,
+    const Processor_mask    *affinity
   );
 
   #define SCHEDULER_OPERATION_DEFAULT_GET_SET_AFFINITY \
-    , _Scheduler_default_Get_affinity \
     , _Scheduler_default_Set_affinity
 #else
   #define SCHEDULER_OPERATION_DEFAULT_GET_SET_AFFINITY

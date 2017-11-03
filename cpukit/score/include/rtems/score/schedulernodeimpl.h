@@ -16,21 +16,25 @@
 #define _RTEMS_SCORE_SCHEDULERNODEIMPL_H
 
 #include <rtems/score/schedulernode.h>
+#include <rtems/score/priorityimpl.h>
+
+struct _Scheduler_Control;
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#define SCHEDULER_NODE_OF_WAIT_CHAIN_NODE( node ) \
-  RTEMS_CONTAINER_OF( node, Scheduler_Node, Wait.Node.Chain )
+#define SCHEDULER_NODE_OF_WAIT_PRIORITY_NODE( node ) \
+  RTEMS_CONTAINER_OF( node, Scheduler_Node, Wait.Priority.Node.Node.Chain )
 
-#define SCHEDULER_NODE_OF_WAIT_RBTREE_NODE( node ) \
-  RTEMS_CONTAINER_OF( node, Scheduler_Node, Wait.Node.RBTree )
+#define SCHEDULER_NODE_OF_WAIT_PRIORITY( node ) \
+  RTEMS_CONTAINER_OF( node, Scheduler_Node, Wait.Priority )
 
 RTEMS_INLINE_ROUTINE void _Scheduler_Node_do_initialize(
-  Scheduler_Node   *node,
-  Thread_Control   *the_thread,
-  Priority_Control  priority
+  const struct _Scheduler_Control *scheduler,
+  Scheduler_Node                  *node,
+  Thread_Control                  *the_thread,
+  Priority_Control                 priority
 )
 {
   node->owner = the_thread;
@@ -39,14 +43,22 @@ RTEMS_INLINE_ROUTINE void _Scheduler_Node_do_initialize(
   node->Priority.prepend_it = false;
 
 #if defined(RTEMS_SMP)
+  _Chain_Initialize_node( &node->Thread.Wait_node );
+  node->Wait.Priority.scheduler = scheduler;
   node->user = the_thread;
-  node->help_state = SCHEDULER_HELP_YOURSELF;
   node->idle = NULL;
-  node->accepts_help = the_thread;
   _SMP_sequence_lock_Initialize( &node->Priority.Lock );
 #else
+  (void) scheduler;
   (void) the_thread;
 #endif
+}
+
+RTEMS_INLINE_ROUTINE const Scheduler_Control *_Scheduler_Node_get_scheduler(
+  const Scheduler_Node *node
+)
+{
+  return _Priority_Get_scheduler( &node->Wait.Priority );
 }
 
 RTEMS_INLINE_ROUTINE Thread_Control *_Scheduler_Node_get_owner(

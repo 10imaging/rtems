@@ -32,6 +32,7 @@ RTEMS_CHECK_CPUOPTS([RTEMS_POSIX_API])
 AC_PROG_LN_S
 AC_PATH_PROG([PAX],[pax],no)
 AC_PATH_PROG([GZIP],[gzip],no)
+AC_PATH_PROG([XZ],[xz],no)
 
 AS_IF([test "x$PAX" = "xno"],[
 	AC_MSG_ERROR([pax is missing.])
@@ -40,6 +41,7 @@ AS_IF([test "x$PAX" = "xno"],[
 AC_CHECK_HEADERS([complex.h])
 
 AM_CONDITIONAL(TARTESTS,test "$as_ln_s" = "ln -s" && test -n "$PAX" && test -n "$GZIP")
+AM_CONDITIONAL(TARTEST_XZ,test -n "$XZ")
 
 AM_CONDITIONAL(HAS_CXX,test "$rtems_cv_HAS_CPLUSPLUS" = "yes")
 AM_CONDITIONAL([HAS_COMPLEX],[test "$ac_cv_header_complex_h" = yes])
@@ -78,32 +80,20 @@ AS_IF([test x"$TEST_LIBDL" = x"yes"],[
 
 AM_CONDITIONAL(DLTESTS,[test x"$TEST_LIBDL" = x"yes"])
 
+# Must match the list in cpukit.
+AC_MSG_CHECKING([whether CPU supports libdebugger])
+case $RTEMS_CPU in
+  arm | i386)
+   TEST_LIBDEBUGGER=yes ;;
+  *)
+   TEST_LIBDEBUGGER=no ;;
+esac
+AC_MSG_RESULT([$TEST_LIBDEBUGGER])
+AM_CONDITIONAL(DEBUGGERTESTS,[test x"$TEST_LIBDEBUGGER" = x"yes"])
+
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile
-networking01/Makefile
-libfdt01/Makefile
-defaultconfig01/Makefile
-pwdgrp02/Makefile
-shell01/Makefile
-pwdgrp01/Makefile
-crypt01/Makefile
-sha/Makefile
-i2c01/Makefile
-newlib01/Makefile
-block17/Makefile
-exit02/Makefile
-exit01/Makefile
-utf8proc01/Makefile
-md501/Makefile
-sparsedisk01/Makefile
-block16/Makefile
-mghttpd01/Makefile
-block15/Makefile
-block14/Makefile
-block13/Makefile
-rbheap01/Makefile
-syscall01/Makefile
-flashdisk01/Makefile
+POSIX/Makefile
 block01/Makefile
 block02/Makefile
 block03/Makefile
@@ -116,8 +106,18 @@ block09/Makefile
 block10/Makefile
 block11/Makefile
 block12/Makefile
+block13/Makefile
+block14/Makefile
+block15/Makefile
+block16/Makefile
+block17/Makefile
 bspcmdline01/Makefile
+capture01/Makefile
+complex/Makefile
 cpuuse/Makefile
+crypt01/Makefile
+debugger01/Makefile
+defaultconfig01/Makefile
 devfs01/Makefile
 devfs02/Makefile
 devfs03/Makefile
@@ -130,22 +130,41 @@ dl03/Makefile
 dl04/Makefile
 dl05/Makefile
 dumpbuf01/Makefile
+exit01/Makefile
+exit02/Makefile
+flashdisk01/Makefile
 ftp01/Makefile
 gxx01/Makefile
 heapwalk/Makefile
-malloctest/Makefile
+i2c01/Makefile
+libfdt01/Makefile
 malloc02/Makefile
 malloc03/Makefile
 malloc04/Makefile
+malloctest/Makefile
+math/Makefile
+mathf/Makefile
+mathl/Makefile
+md501/Makefile
+mghttpd01/Makefile
 monitor/Makefile
 monitor02/Makefile
 mouse01/Makefile
-uid01/Makefile
+networking01/Makefile
+newlib01/Makefile
 putenvtest/Makefile
+pwdgrp01/Makefile
+pwdgrp02/Makefile
+rbheap01/Makefile
 rtmonuse/Makefile
+sha/Makefile
+shell01/Makefile
+sparsedisk01/Makefile
+spi01/Makefile
 stackchk/Makefile
 stackchk01/Makefile
 stringto01/Makefile
+syscall01/Makefile
 tar01/Makefile
 tar02/Makefile
 tar03/Makefile
@@ -158,13 +177,10 @@ termios05/Makefile
 termios06/Makefile
 termios07/Makefile
 termios08/Makefile
+termios09/Makefile
 top/Makefile
 tztest/Makefile
-capture01/Makefile
-POSIX/Makefile
-math/Makefile
-mathf/Makefile
-mathl/Makefile
-complex/Makefile
+uid01/Makefile
+utf8proc01/Makefile
 ])
 AC_OUTPUT

@@ -42,7 +42,7 @@ AC_DEFUN([RTEMS_CHECK_BSPDIR],
   case "\$1" in
 EOF
 
-for i in `LANG=C LC_COLLATE=C ls */bsp_specs | sort`; do
+for i in `ls */bsp_specs | LANG=C LC_COLLATE=C sort`; do
   d=`dirname $i`
 cat << EOF >> acinclude.m4~
   $d )
@@ -223,7 +223,6 @@ clean)
       needles="$needles install-sh"
       needles="$needles missing"
       needles="$needles mdate-sh"
-      needles="$needles texinfo.tex"
     fi
     for j in $needles; do
       files=`find . -name "$j" -print`

@@ -30,8 +30,6 @@ static void _BSP_null_char(char c)
 {
   int level;
 
-  if (c == '\n')
-    _BSP_null_char('\r');
   rtems_interrupt_disable(level);
   while ((MCF_UART_USR(CONSOLE_PORT) & MCF_UART_USR_TXRDY) == 0)
     continue;
@@ -170,7 +168,7 @@ static int IntUartSetAttributes(int minor, const struct termios *t)
   /* check to see if input is valid */
   if (t != (const struct termios *) 0) {
     /* determine baud rate index */
-    baud = rtems_termios_baud_to_number(t->c_cflag & CBAUD);
+    baud = rtems_termios_baud_to_number(t->c_ospeed);
 
     /* determine data bits */
     switch (t->c_cflag & CSIZE) {
@@ -613,8 +611,10 @@ rtems_device_driver console_open(rtems_device_major_number major,
     struct termios term;
 
     if (tcgetattr(STDIN_FILENO, &term) >= 0) {
-      term.c_cflag &= ~(CBAUD | CSIZE);
-      term.c_cflag |= CS8 | B19200;
+      term.c_cflag &= ~(CSIZE);
+      term.c_cflag |= CS8;
+      term.c_ispeed = B19200;
+      term.c_ospeed = B19200;
       tcsetattr(STDIN_FILENO, TCSANOW, &term);
     }
   }

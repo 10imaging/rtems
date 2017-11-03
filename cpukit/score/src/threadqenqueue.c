@@ -114,6 +114,9 @@ static bool _Thread_queue_Link_add(
   Thread_queue_Queue *recursive_target;
   ISR_lock_Context    lock_context;
 
+  link->source = source;
+  link->target = target;
+
   links = &_Thread_queue_Links;
   recursive_target = target;
 
@@ -136,8 +139,6 @@ static bool _Thread_queue_Link_add(
     }
   }
 
-  link->source = source;
-  link->target = target;
   _RBTree_Insert_inline(
     &links->Links,
     &link->Registry_node,
@@ -162,71 +163,101 @@ static void _Thread_queue_Link_remove( Thread_queue_Link *link )
 }
 #endif
 
-#define THREAD_QUEUE_LINK_OF_PATH_NODE( node ) \
-  RTEMS_CONTAINER_OF( node, Thread_queue_Link, Path_node );
-
-static void _Thread_queue_Path_release( Thread_queue_Path *path )
+#if !defined(RTEMS_SMP)
+static
+#endif
+void _Thread_queue_Path_release_critical(
+  Thread_queue_Context *queue_context
+)
 {
 #if defined(RTEMS_SMP)
   Chain_Node *head;
   Chain_Node *node;
 
-  head = _Chain_Head( &path->Links );
-  node = _Chain_Last( &path->Links );
+  head = _Chain_Head( &queue_context->Path.Links );
+  node = _Chain_Last( &queue_context->Path.Links );
 
-  if ( head != node ) {
+  while ( head != node ) {
     Thread_queue_Link *link;
-
-    /*
-     * The terminal link may have an owner which does not wait on a thread
-     * queue.
-     */
 
     link = THREAD_QUEUE_LINK_OF_PATH_NODE( node );
 
-    if ( link->Lock_context.Wait.queue == NULL ) {
-      _Thread_Wait_release_default_critical(
-        link->owner,
-        &link->Lock_context.Lock_context
-      );
-
-      node = _Chain_Previous( node );
-#if defined(RTEMS_DEBUG)
-      _Chain_Set_off_chain( &link->Path_node );
-#endif
-    }
-
-    while ( head != node ) {
-      /* The other links have an owner which waits on a thread queue */
-      link = THREAD_QUEUE_LINK_OF_PATH_NODE( node );
-      _Assert( link->Lock_context.Wait.queue != NULL );
-
+    if ( link->Lock_context.Wait.queue != NULL ) {
       _Thread_queue_Link_remove( link );
       _Thread_Wait_release_queue_critical(
         link->Lock_context.Wait.queue,
         &link->Lock_context
       );
       _Thread_Wait_remove_request( link->owner, &link->Lock_context );
-
-      node = _Chain_Previous( node );
-#if defined(RTEMS_DEBUG)
-      _Chain_Set_off_chain( &link->Path_node );
-#endif
+    } else {
+      _Thread_Wait_release_default_critical(
+        link->owner,
+        &link->Lock_context.Lock_context
+      );
     }
+
+    node = _Chain_Previous( node );
+#if defined(RTEMS_DEBUG)
+    _Chain_Set_off_chain( &link->Path_node );
+#endif
   }
 #else
-  (void) path;
+  (void) queue_context;
 #endif
 }
 
-static bool _Thread_queue_Path_acquire(
-  Thread_Control     *the_thread,
-  Thread_queue_Queue *queue,
-  Thread_queue_Path  *path
+#if defined(RTEMS_SMP)
+static void _Thread_queue_Path_append_deadlock_thread(
+  Thread_Control       *the_thread,
+  Thread_queue_Context *queue_context
+)
+{
+  Thread_Control *deadlock;
+
+  /*
+   * In case of a deadlock, we must obtain the thread wait default lock for the
+   * first thread on the path that tries to enqueue on a thread queue.  This
+   * thread can be identified by the thread wait operations.  This lock acquire
+   * is necessary for the timeout and explicit thread priority changes, see
+   * _Thread_Priority_perform_actions().
+   */
+
+  deadlock = NULL;
+
+  while ( the_thread->Wait.operations != &_Thread_queue_Operations_default ) {
+    the_thread = the_thread->Wait.queue->owner;
+    deadlock = the_thread;
+  }
+
+  if ( deadlock != NULL ) {
+    Thread_queue_Link *link;
+
+    link = &queue_context->Path.Deadlock;
+    _Chain_Initialize_node( &link->Path_node );
+    _Chain_Append_unprotected(
+      &queue_context->Path.Links,
+      &link->Path_node
+    );
+    link->owner = deadlock;
+    link->Lock_context.Wait.queue = NULL;
+    _Thread_Wait_acquire_default_critical(
+      deadlock,
+      &link->Lock_context.Lock_context
+    );
+  }
+}
+#endif
+
+#if !defined(RTEMS_SMP)
+static
+#endif
+bool _Thread_queue_Path_acquire_critical(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Thread_queue_Context *queue_context
 )
 {
   Thread_Control     *owner;
-
 #if defined(RTEMS_SMP)
   Thread_queue_Link  *link;
   Thread_queue_Queue *target;
@@ -239,7 +270,7 @@ static bool _Thread_queue_Path_acquire(
    * this would result in an unrecoverable deadlock of the overall system.
    */
 
-  _Chain_Initialize_empty( &path->Links );
+  _Chain_Initialize_empty( &queue_context->Path.Links );
 
   owner = queue->owner;
 
@@ -251,13 +282,15 @@ static bool _Thread_queue_Path_acquire(
     return false;
   }
 
-  _RBTree_Initialize_node( &path->Start.Registry_node );
-  _Chain_Initialize_node( &path->Start.Path_node );
-  _Chain_Initialize_node( &path->Start.Lock_context.Wait.Gate.Node );
-  link = &path->Start;
+  _Chain_Initialize_node(
+    &queue_context->Path.Start.Lock_context.Wait.Gate.Node
+  );
+  link = &queue_context->Path.Start;
+  _RBTree_Initialize_node( &link->Registry_node );
+  _Chain_Initialize_node( &link->Path_node );
 
   do {
-    _Chain_Append_unprotected( &path->Links, &link->Path_node );
+    _Chain_Append_unprotected( &queue_context->Path.Links, &link->Path_node );
     link->owner = owner;
 
     _Thread_Wait_acquire_default_critical(
@@ -293,7 +326,7 @@ static bool _Thread_queue_Path_acquire(
         }
       } else {
         link->Lock_context.Wait.queue = NULL;
-        _Thread_queue_Path_release( path );
+        _Thread_queue_Path_append_deadlock_thread( owner, queue_context );
         return false;
       }
     } else {
@@ -323,6 +356,16 @@ static bool _Thread_queue_Path_acquire(
   return true;
 }
 
+void _Thread_queue_Enqueue_do_nothing_extra(
+  Thread_queue_Queue   *queue,
+  Thread_Control       *the_thread,
+  Per_CPU_Control      *cpu_self,
+  Thread_queue_Context *queue_context
+)
+{
+  /* Do nothing */
+}
+
 void _Thread_queue_Deadlock_status( Thread_Control *the_thread )
 {
   the_thread->Wait.return_code = STATUS_DEADLOCK;
@@ -330,94 +373,61 @@ void _Thread_queue_Deadlock_status( Thread_Control *the_thread )
 
 void _Thread_queue_Deadlock_fatal( Thread_Control *the_thread )
 {
-  _Terminate(
-    INTERNAL_ERROR_CORE,
-    false,
-    INTERNAL_ERROR_THREAD_QUEUE_DEADLOCK
-  );
+  _Internal_error( INTERNAL_ERROR_THREAD_QUEUE_DEADLOCK );
 }
 
-void _Thread_queue_Enqueue_critical(
+void _Thread_queue_Enqueue(
   Thread_queue_Queue            *queue,
   const Thread_queue_Operations *operations,
   Thread_Control                *the_thread,
-  States_Control                 state,
   Thread_queue_Context          *queue_context
 )
 {
-  Thread_queue_Path  path;
-  Per_CPU_Control   *cpu_self;
-  bool               success;
+  Per_CPU_Control *cpu_self;
+  bool             success;
+
+  _Assert( queue_context->enqueue_callout != NULL );
 
 #if defined(RTEMS_MULTIPROCESSING)
   if ( _Thread_MP_Is_receive( the_thread ) && the_thread->receive_packet ) {
-    the_thread = _Thread_MP_Allocate_proxy( state );
+    the_thread = _Thread_MP_Allocate_proxy( queue_context->thread_state );
   }
 #endif
 
-  _Thread_Wait_claim( the_thread, queue, operations );
+  _Thread_Wait_claim( the_thread, queue );
 
-  if ( !_Thread_queue_Path_acquire( the_thread, queue, &path ) ) {
+  if ( !_Thread_queue_Path_acquire_critical( queue, the_thread, queue_context ) ) {
+    _Thread_queue_Path_release_critical( queue_context );
     _Thread_Wait_restore_default( the_thread );
     _Thread_queue_Queue_release( queue, &queue_context->Lock_context.Lock_context );
     _Thread_Wait_tranquilize( the_thread );
+    _Assert( queue_context->deadlock_callout != NULL );
     ( *queue_context->deadlock_callout )( the_thread );
     return;
   }
 
-  ( *operations->enqueue )( queue, the_thread, &path );
+  _Thread_queue_Context_clear_priority_updates( queue_context );
+  _Thread_Wait_claim_finalize( the_thread, operations );
+  ( *operations->enqueue )( queue, the_thread, queue_context );
 
-  _Thread_queue_Path_release( &path );
+  _Thread_queue_Path_release_critical( queue_context );
 
   the_thread->Wait.return_code = STATUS_SUCCESSFUL;
   _Thread_Wait_flags_set( the_thread, THREAD_QUEUE_INTEND_TO_BLOCK );
-  cpu_self = _Thread_Dispatch_disable_critical(
-    &queue_context->Lock_context.Lock_context
-  );
+  cpu_self = _Thread_queue_Dispatch_disable( queue_context );
   _Thread_queue_Queue_release( queue, &queue_context->Lock_context.Lock_context );
 
-  if (
-    cpu_self->thread_dispatch_disable_level
-      != queue_context->expected_thread_dispatch_disable_level
-  ) {
-    _Terminate(
-      INTERNAL_ERROR_CORE,
-      false,
-      INTERNAL_ERROR_THREAD_QUEUE_ENQUEUE_FROM_BAD_STATE
-    );
-  }
+  ( *queue_context->enqueue_callout )(
+    queue,
+    the_thread,
+    cpu_self,
+    queue_context
+  );
 
   /*
    *  Set the blocking state for this thread queue in the thread.
    */
-  _Thread_Set_state( the_thread, state );
-
-  /*
-   *  If the thread wants to timeout, then schedule its timer.
-   */
-  switch ( queue_context->timeout_discipline ) {
-    case WATCHDOG_RELATIVE:
-      /* A relative timeout of 0 is a special case indefinite (no) timeout */
-      if ( queue_context->timeout != 0 ) {
-        _Thread_Timer_insert_relative(
-          the_thread,
-          cpu_self,
-          _Thread_Timeout,
-          (Watchdog_Interval) queue_context->timeout
-        );
-      }
-      break;
-    case WATCHDOG_ABSOLUTE:
-      _Thread_Timer_insert_absolute(
-        the_thread,
-        cpu_self,
-        _Thread_Timeout,
-        queue_context->timeout
-      );
-      break;
-    default:
-      break;
-  }
+  _Thread_Set_state( the_thread, queue_context->thread_state );
 
   /*
    * At this point thread dispatching is disabled, however, we already released
@@ -437,9 +447,72 @@ void _Thread_queue_Enqueue_critical(
     _Thread_Remove_timer_and_unblock( the_thread, queue );
   }
 
-  _Thread_Update_priority( path.update_priority );
-  _Thread_Dispatch_enable( cpu_self );
+  _Thread_Priority_update( queue_context );
+  _Thread_Dispatch_direct( cpu_self );
 }
+
+#if defined(RTEMS_SMP)
+Status_Control _Thread_queue_Enqueue_sticky(
+  Thread_queue_Queue            *queue,
+  const Thread_queue_Operations *operations,
+  Thread_Control                *the_thread,
+  Thread_queue_Context          *queue_context
+)
+{
+  Per_CPU_Control *cpu_self;
+
+  _Assert( queue_context->enqueue_callout != NULL );
+
+  _Thread_Wait_claim( the_thread, queue );
+
+  if ( !_Thread_queue_Path_acquire_critical( queue, the_thread, queue_context ) ) {
+    _Thread_queue_Path_release_critical( queue_context );
+    _Thread_Wait_restore_default( the_thread );
+    _Thread_queue_Queue_release( queue, &queue_context->Lock_context.Lock_context );
+    _Thread_Wait_tranquilize( the_thread );
+    ( *queue_context->deadlock_callout )( the_thread );
+    return _Thread_Wait_get_status( the_thread );
+  }
+
+  _Thread_queue_Context_clear_priority_updates( queue_context );
+  _Thread_Wait_claim_finalize( the_thread, operations );
+  ( *operations->enqueue )( queue, the_thread, queue_context );
+
+  _Thread_queue_Path_release_critical( queue_context );
+
+  the_thread->Wait.return_code = STATUS_SUCCESSFUL;
+  _Thread_Wait_flags_set( the_thread, THREAD_QUEUE_INTEND_TO_BLOCK );
+  cpu_self = _Thread_queue_Dispatch_disable( queue_context );
+  _Thread_queue_Queue_release( queue, &queue_context->Lock_context.Lock_context );
+
+  if ( cpu_self->thread_dispatch_disable_level != 1 ) {
+    _Internal_error(
+      INTERNAL_ERROR_THREAD_QUEUE_ENQUEUE_STICKY_FROM_BAD_STATE
+    );
+  }
+
+  ( *queue_context->enqueue_callout )(
+    queue,
+    the_thread,
+    cpu_self,
+    queue_context
+  );
+
+  _Thread_Priority_update( queue_context );
+  _Thread_Priority_and_sticky_update( the_thread, 1 );
+  _Thread_Dispatch_enable( cpu_self );
+
+  while (
+    _Thread_Wait_flags_get_acquire( the_thread ) == THREAD_QUEUE_INTEND_TO_BLOCK
+  ) {
+    /* Wait */
+  }
+
+  _Thread_Wait_tranquilize( the_thread );
+  _Thread_Timer_remove( the_thread );
+  return _Thread_Wait_get_status( the_thread );
+}
+#endif
 
 #if defined(RTEMS_MULTIPROCESSING)
 static bool _Thread_queue_MP_set_callout(
@@ -488,20 +561,18 @@ static bool _Thread_queue_Make_ready_again( Thread_Control *the_thread )
   return unblock;
 }
 
-bool _Thread_queue_Do_extract_locked(
+bool _Thread_queue_Extract_locked(
   Thread_queue_Queue            *queue,
   const Thread_queue_Operations *operations,
-  Thread_Control                *the_thread
-#if defined(RTEMS_MULTIPROCESSING)
-  ,
-  const Thread_queue_Context    *queue_context
-#endif
+  Thread_Control                *the_thread,
+  Thread_queue_Context          *queue_context
 )
 {
+  _Thread_queue_Context_clear_priority_updates( queue_context );
 #if defined(RTEMS_MULTIPROCESSING)
   _Thread_queue_MP_set_callout( the_thread, queue_context );
 #endif
-  ( *operations->extract )( queue, the_thread );
+  ( *operations->extract )( queue, the_thread, queue_context );
   return _Thread_queue_Make_ready_again( the_thread );
 }
 
@@ -587,47 +658,85 @@ void _Thread_queue_Extract( Thread_Control *the_thread )
 
 void _Thread_queue_Surrender(
   Thread_queue_Queue            *queue,
-  const Thread_queue_Operations *operations,
   Thread_queue_Heads            *heads,
   Thread_Control                *previous_owner,
-  bool                           keep_priority,
-  Thread_queue_Context          *queue_context
+  Thread_queue_Context          *queue_context,
+  const Thread_queue_Operations *operations
 )
 {
-  if ( heads != NULL ) {
-    Thread_Control *new_owner;
-    bool            unblock;
+  Thread_Control  *new_owner;
+  bool             unblock;
+  Per_CPU_Control *cpu_self;
 
-    new_owner = ( *operations->surrender )( queue, heads, previous_owner );
-    queue->owner = new_owner;
+  _Assert( heads != NULL );
+
+  _Thread_queue_Context_clear_priority_updates( queue_context );
+  new_owner = ( *operations->surrender )(
+    queue,
+    heads,
+    previous_owner,
+    queue_context
+  );
+  queue->owner = new_owner;
 
 #if defined(RTEMS_MULTIPROCESSING)
-    if ( !_Thread_queue_MP_set_callout( new_owner, queue_context ) )
+  if ( !_Thread_queue_MP_set_callout( new_owner, queue_context ) )
 #endif
-    {
-      ++new_owner->resource_count;
-    }
-
-    unblock = _Thread_queue_Make_ready_again( new_owner );
-
-    _Thread_queue_Unblock_critical(
-      unblock,
-      queue,
-      new_owner,
-      &queue_context->Lock_context.Lock_context
-    );
-  } else {
-    _Thread_queue_Queue_release( queue, &queue_context->Lock_context.Lock_context );
+  {
+    _Thread_Resource_count_increment( new_owner );
   }
 
-  if ( !keep_priority ) {
-    Per_CPU_Control *cpu_self;
+  unblock = _Thread_queue_Make_ready_again( new_owner );
 
-    cpu_self = _Thread_Dispatch_disable();
-    _Thread_Restore_priority( previous_owner );
-    _Thread_Dispatch_enable( cpu_self );
+  cpu_self = _Thread_queue_Dispatch_disable( queue_context );
+  _Thread_queue_Queue_release(
+    queue,
+    &queue_context->Lock_context.Lock_context
+  );
+
+  _Thread_Priority_update( queue_context );
+
+  if ( unblock ) {
+    _Thread_Remove_timer_and_unblock( new_owner, queue );
   }
+
+  _Thread_Dispatch_enable( cpu_self );
 }
+
+#if defined(RTEMS_SMP)
+void _Thread_queue_Surrender_sticky(
+  Thread_queue_Queue            *queue,
+  Thread_queue_Heads            *heads,
+  Thread_Control                *previous_owner,
+  Thread_queue_Context          *queue_context,
+  const Thread_queue_Operations *operations
+)
+{
+  Thread_Control  *new_owner;
+  Per_CPU_Control *cpu_self;
+
+  _Assert( heads != NULL );
+
+  _Thread_queue_Context_clear_priority_updates( queue_context );
+  new_owner = ( *operations->surrender )(
+    queue,
+    heads,
+    previous_owner,
+    queue_context
+  );
+  queue->owner = new_owner;
+  _Thread_queue_Make_ready_again( new_owner );
+
+  cpu_self = _Thread_queue_Dispatch_disable( queue_context );
+  _Thread_queue_Queue_release(
+    queue,
+    &queue_context->Lock_context.Lock_context
+  );
+  _Thread_Priority_and_sticky_update( previous_owner, -1 );
+  _Thread_Priority_and_sticky_update( new_owner, 0 );
+  _Thread_Dispatch_enable( cpu_self );
+}
+#endif
 
 Thread_Control *_Thread_queue_Do_dequeue(
   Thread_queue_Control          *the_thread_queue,

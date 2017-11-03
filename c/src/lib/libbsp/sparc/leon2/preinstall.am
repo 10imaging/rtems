@@ -69,13 +69,21 @@ $(PROJECT_LIB)/start.$(OBJEXT): start.$(OBJEXT) $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/start.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/start.$(OBJEXT)
 
+$(PROJECT_LIB)/linkcmds.base: ../shared/startup/linkcmds.base $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.base
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.base
+
 $(PROJECT_LIB)/linkcmds: startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds
 PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds
 
-$(PROJECT_LIB)/linkcmds.base: ../shared/startup/linkcmds.base $(PROJECT_LIB)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.base
-PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.base
+$(PROJECT_LIB)/linkcmds.leon2: startup/linkcmds.leon2 $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.leon2
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.leon2
+
+$(PROJECT_LIB)/linkcmds.at697f: startup/linkcmds.at697f $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.at697f
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.at697f
 
 $(PROJECT_INCLUDE)/bsp/gnatcommon.h: ../shared/include/gnatcommon.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/gnatcommon.h
@@ -129,6 +137,10 @@ $(PROJECT_INCLUDE)/bsp/grpci2.h: ../../sparc/shared/include/grpci2.h $(PROJECT_I
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grpci2.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grpci2.h
 
+$(PROJECT_INCLUDE)/bsp/grpci2dma.h: ../../sparc/shared/include/grpci2dma.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grpci2dma.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grpci2dma.h
+
 $(PROJECT_INCLUDE)/bsp/pcif.h: ../../sparc/shared/include/pcif.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/pcif.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/pcif.h
@@ -160,6 +172,10 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/gr_rasta_tmtc.h
 $(PROJECT_INCLUDE)/bsp/gr_leon4_n2x.h: ../../sparc/shared/include/gr_leon4_n2x.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/gr_leon4_n2x.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/gr_leon4_n2x.h
+
+$(PROJECT_INCLUDE)/bsp/gr_cpci_gr740.h: ../../sparc/shared/include/gr_cpci_gr740.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/gr_cpci_gr740.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/gr_cpci_gr740.h
 
 $(PROJECT_INCLUDE)/bsp/b1553brm.h: ../../sparc/shared/include/b1553brm.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/b1553brm.h
@@ -197,9 +213,14 @@ $(PROJECT_INCLUDE)/bsp/grcan.h: ../../sparc/shared/include/grcan.h $(PROJECT_INC
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grcan.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grcan.h
 
+if !HAS_SMP
 $(PROJECT_INCLUDE)/bsp/grspw.h: ../../sparc/shared/include/grspw.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grspw.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grspw.h
+endif
+$(PROJECT_INCLUDE)/bsp/grspw_pkt.h: ../../sparc/shared/include/grspw_pkt.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grspw_pkt.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grspw_pkt.h
 
 $(PROJECT_INCLUDE)/bsp/grspw_router.h: ../../sparc/shared/include/grspw_router.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grspw_router.h
@@ -245,6 +266,14 @@ $(PROJECT_INCLUDE)/bsp/mctrl.h: ../../sparc/shared/include/mctrl.h $(PROJECT_INC
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/mctrl.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/mctrl.h
 
+$(PROJECT_INCLUDE)/bsp/l2c.h: ../../sparc/shared/include/l2c.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/l2c.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/l2c.h
+
+$(PROJECT_INCLUDE)/bsp/griommu.h: ../../sparc/shared/include/griommu.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/griommu.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/griommu.h
+
 $(PROJECT_INCLUDE)/bsp/grtc.h: ../../sparc/shared/include/grtc.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grtc.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grtc.h
@@ -252,6 +281,14 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grtc.h
 $(PROJECT_INCLUDE)/bsp/grtm.h: ../../sparc/shared/include/grtm.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/grtm.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/grtm.h
+
+$(PROJECT_INCLUDE)/bsp/memscrub.h: ../../sparc/shared/include/memscrub.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/memscrub.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/memscrub.h
+
+$(PROJECT_INCLUDE)/bsp/l4stat.h: ../../sparc/shared/include/l4stat.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/l4stat.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/l4stat.h
 
 $(PROJECT_INCLUDE)/drvmgr/$(dirstamp):
 	@$(MKDIR_P) $(PROJECT_INCLUDE)/drvmgr

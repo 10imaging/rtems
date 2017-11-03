@@ -11,7 +11,6 @@
 #include "config.h"
 #endif
 
-#define TESTS_USE_PRINTK
 #include "tmacros.h"
 
 #define CONFIGURE_INIT
@@ -39,19 +38,21 @@ void *POSIX_Init(
   rtems_test_exit(0);
 }
 
-void Put_Error( uint32_t source, uint32_t error )
+void Put_Error( rtems_fatal_source source, rtems_fatal_code error )
 {
   if ( source == INTERNAL_ERROR_CORE ) {
     printk( rtems_internal_error_text( error ) );
   }
   else if (source == INTERNAL_ERROR_RTEMS_API ){
-    if (error >  RTEMS_NOT_IMPLEMENTED )
-      printk("Unknown Internal Rtems Error (%d)", error);
-    else
-      printk( "%s", rtems_status_text( error ) );
+    printk( "%s", rtems_status_text( error ) );
   }
   else if (source == INTERNAL_ERROR_POSIX_API ) {
-      printk( "SOURCE=%d ERROR=%d %s", source, error, strerror( error ) );
+    printk(
+      "SOURCE=%d ERROR=%" PRIuMAX " %s",
+      source,
+      (uintmax_t) error,
+      strerror( (int) error )
+    );
   }
 }
 
@@ -62,7 +63,7 @@ void Put_Source( rtems_fatal_source source )
 
 void Fatal_extension(
   rtems_fatal_source source,
-  bool               is_internal,
+  bool               always_set_to_false,
   rtems_fatal_code   error
 )
 {
@@ -77,13 +78,8 @@ void Fatal_extension(
     printk( ")\n" );
   }
 
-  if ( is_internal !=  FATAL_ERROR_EXPECTED_IS_INTERNAL )
-  {
-    if ( is_internal == TRUE )
-      printk( "ERROR==> Fatal Extension is internal set to TRUE expected FALSE\n" );
-    else
-      printk( "ERROR==> Fatal Extension is internal set to FALSE expected TRUE\n" );
-  }
+  if ( always_set_to_false )
+    printk( "ERROR==> Fatal Extension is internal set to true expected false\n" );
 
   if ( error !=  FATAL_ERROR_EXPECTED_ERROR ) {
     printk( "ERROR==> Fatal Error Expected (");
@@ -95,7 +91,7 @@ void Fatal_extension(
 
   if (
     source == FATAL_ERROR_EXPECTED_SOURCE
-      && is_internal == FATAL_ERROR_EXPECTED_IS_INTERNAL
+      && !always_set_to_false
       && error == FATAL_ERROR_EXPECTED_ERROR
   ) {
     TEST_END();

@@ -60,7 +60,7 @@ struct winsize {
 						/* 3-7 unused */
 						/* 8-10 compat */
 						/* 11-12 unused */
-#define	TIOCEXCL	 _IO('t', 13)		/* set exclusive use of tty */
+#define TIOCEXCL   _IO('t', 13)   /* set exclusive use of tty */
 #define	TIOCNXCL	 _IO('t', 14)		/* reset exclusive use of tty */
 #define	TIOCGPTN	_IOR('t', 15, int)	/* Get pts number. */
 #define	TIOCFLUSH	_IOW('t', 16, int)	/* flush buffers */

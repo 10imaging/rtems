@@ -77,14 +77,22 @@ AC_CHECK_SIZEOF([blkcnt_t])
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile
-fsimfsconfig03/Makefile
-fsimfsconfig02/Makefile
-fsimfsconfig01/Makefile
-fsdosfsname01/Makefile
-fsdosfswrite01/Makefile
+fsbdpart01/Makefile
+fsclose01/Makefile
 fsdosfsformat01/Makefile
-fsfseeko01/Makefile
+fsdosfsname01/Makefile
+fsdosfsname02/Makefile
 fsdosfssync01/Makefile
+fsdosfswrite01/Makefile
+fsfseeko01/Makefile
+fsimfsconfig01/Makefile
+fsimfsconfig02/Makefile
+fsimfsconfig03/Makefile
+fsimfsgeneric01/Makefile
+fsjffs2gc01/Makefile
+fsnofs01/Makefile
+fsrfsbitmap01/Makefile
+fsrofs01/Makefile
 imfs_fserror/Makefile
 imfs_fslink/Makefile
 imfs_fspatheval/Makefile
@@ -112,11 +120,12 @@ mimfs_fslink/Makefile
 mimfs_fspatheval/Makefile
 mimfs_fspermission/Makefile
 mimfs_fsrdwr/Makefile
+mimfs_fsrename/Makefile
 mimfs_fsscandir01/Makefile
 mimfs_fssymlink/Makefile
 mimfs_fstime/Makefile
-mimfs_fsrename/Makefile
 mrfs_fserror/Makefile
+mrfs_fsfpathconf/Makefile
 mrfs_fslink/Makefile
 mrfs_fspatheval/Makefile
 mrfs_fspermission/Makefile
@@ -124,11 +133,5 @@ mrfs_fsrdwr/Makefile
 mrfs_fsscandir01/Makefile
 mrfs_fssymlink/Makefile
 mrfs_fstime/Makefile
-mrfs_fsfpathconf/Makefile
-fsrfsbitmap01/Makefile
-fsnofs01/Makefile
-fsimfsgeneric01/Makefile
-fsbdpart01/Makefile
-
 ])
 AC_OUTPUT

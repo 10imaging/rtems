@@ -24,7 +24,7 @@
 #include <sys/sockio.h>
 #include <sys/callout.h>
 #include <sys/proc.h>
-#include <sys/ioctl.h>
+#include <sys/sockio.h>
 #include <sys/systm.h>
 #include <net/if.h>
 #include <net/route.h>
@@ -39,7 +39,7 @@
 /*
  * Memory allocation
  */
-static uint32_t nmbuf       = (64L * 1024L) / MSIZE;
+static uint32_t nmbuf       = (64L * 1024L) / _SYS_MBUF_LEGACY_MSIZE;
        uint32_t nmbclusters = (128L * 1024L) / MCLBYTES;
 
 /*
@@ -221,8 +221,8 @@ bsd_init (void)
 	 * Set up mbuf data structures
 	 */
 
-	p = rtems_bsdnet_malloc_mbuf(nmbuf * MSIZE + MSIZE - 1,MBUF_MALLOC_MBUF);
-	p = (char *)(((uintptr_t)p + MSIZE - 1) & ~(MSIZE - 1));
+	p = rtems_bsdnet_malloc_mbuf(nmbuf * _SYS_MBUF_LEGACY_MSIZE + _SYS_MBUF_LEGACY_MSIZE - 1,MBUF_MALLOC_MBUF);
+	p = (char *)(((uintptr_t)p + _SYS_MBUF_LEGACY_MSIZE - 1) & ~(_SYS_MBUF_LEGACY_MSIZE - 1));
 	if (p == NULL) {
 		printf ("Can't get network memory.\n");
 		return -1;
@@ -230,7 +230,7 @@ bsd_init (void)
 	for (i = 0; i < nmbuf; i++) {
 		((struct mbuf *)p)->m_next = mmbfree;
 		mmbfree = (struct mbuf *)p;
-		p += MSIZE;
+		p += _SYS_MBUF_LEGACY_MSIZE;
 	}
 	mbstat.m_mbufs = nmbuf;
 	mbstat.m_mtypes[MT_FREE] = nmbuf;
@@ -296,7 +296,7 @@ rtems_bsdnet_initialize (void)
 	 * Set the memory allocation limits
 	 */
 	if (rtems_bsdnet_config.mbuf_bytecount)
-		nmbuf = rtems_bsdnet_config.mbuf_bytecount / MSIZE;
+		nmbuf = rtems_bsdnet_config.mbuf_bytecount / _SYS_MBUF_LEGACY_MSIZE;
 	if (rtems_bsdnet_config.mbuf_cluster_bytecount)
 		nmbclusters = rtems_bsdnet_config.mbuf_cluster_bytecount / MCLBYTES;
 
@@ -376,9 +376,10 @@ rtems_bsdnet_semaphore_obtain (void)
 		rtems_panic ("rtems-net: network sema obtain: network not initialised\n");
 	_Thread_queue_Context_initialize(&queue_context);
 	_ISR_lock_ISR_disable(&queue_context.Lock_context.Lock_context);
-	_Thread_queue_Context_set_no_timeout( &queue_context );
+	_Thread_queue_Context_set_enqueue_do_nothing_extra( &queue_context );
 	status = _CORE_recursive_mutex_Seize (
 		&the_networkSemaphore->Core_control.Mutex.Recursive,
+		CORE_MUTEX_TQ_PRIORITY_INHERIT_OPERATIONS,
 		_Thread_Executing,
 		true,			/* wait */
 		_CORE_recursive_mutex_Seize_nested,
@@ -412,6 +413,7 @@ rtems_bsdnet_semaphore_release (void)
 	_ISR_lock_ISR_disable(&queue_context.Lock_context.Lock_context);
 	status = _CORE_recursive_mutex_Surrender(
 		&the_networkSemaphore->Core_control.Mutex.Recursive,
+		CORE_MUTEX_TQ_PRIORITY_INHERIT_OPERATIONS,
 		_Thread_Executing,
 		&queue_context
 	);

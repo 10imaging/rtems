@@ -7,7 +7,7 @@
  *  COPYRIGHT (c) 1989-2011.
  *  On-Line Applications Research Corporation (OAR).
  *
- *  Copyright (c) 2014-2015 embedded brains GmbH
+ *  Copyright (c) 2014, 2017 embedded brains GmbH
  *
  *  The license and distribution terms for this file may be
  *  found in the file LICENSE in this distribution or at
@@ -25,8 +25,8 @@
 #include <rtems/score/percpu.h>
 #include <bspopts.h>
 
-#if SPARC_HAS_FPU == 1 && defined(SPARC_USE_SAFE_FP_SUPPORT)
-  #define FP_FRAME_OFFSET_FO_F1 (CPU_MINIMUM_STACK_FRAME_SIZE + 0)
+#if defined(SPARC_USE_SYNCHRONOUS_FP_SWITCH)
+  #define FP_FRAME_OFFSET_FO_F1 (SPARC_MINIMUM_STACK_FRAME_SIZE + 0)
   #define FP_FRAME_OFFSET_F2_F3 (FP_FRAME_OFFSET_FO_F1 + 8)
   #define FP_FRAME_OFFSET_F4_F5 (FP_FRAME_OFFSET_F2_F3 + 8)
   #define FP_FRAME_OFFSET_F6_F7 (FP_FRAME_OFFSET_F4_F5 + 8)
@@ -59,22 +59,34 @@
         PUBLIC(_CPU_Context_switch)
 SYM(_CPU_Context_switch):
         st      %g5, [%o0 + G5_OFFSET]       ! save the global registers
-        st      %g7, [%o0 + G7_OFFSET]
+
+        /*
+         * No need to save the thread pointer %g7 since it is a thread
+         * invariant.  It is initialized once in _CPU_Context_Initialize().
+         */
 
         std     %l0, [%o0 + L0_OFFSET]       ! save the local registers
+        SPARC_LEON3FT_B2BST_NOP
         std     %l2, [%o0 + L2_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l4, [%o0 + L4_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l6, [%o0 + L6_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
 
         std     %i0, [%o0 + I0_OFFSET]       ! save the input registers
+        SPARC_LEON3FT_B2BST_NOP
         std     %i2, [%o0 + I2_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i4, [%o0 + I4_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i6, [%o0 + I6_FP_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
 
         std     %o6, [%o0 + O6_SP_OFFSET]    ! save the output registers
 
         ! load the ISR stack nesting prevention flag
-        ld      [%g6 + SPARC_PER_CPU_ISR_DISPATCH_DISABLE], %o4
+        ld      [%g6 + PER_CPU_ISR_DISPATCH_DISABLE], %o4
         ! save it a bit later so we do not waste a couple of cycles
 
         rd      %psr, %o2
@@ -154,14 +166,22 @@ save_frame_loop:
          */
 
         std     %l0, [%sp + CPU_STACK_FRAME_L0_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l2, [%sp + CPU_STACK_FRAME_L2_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l4, [%sp + CPU_STACK_FRAME_L4_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l6, [%sp + CPU_STACK_FRAME_L6_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
 
         std     %i0, [%sp + CPU_STACK_FRAME_I0_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i2, [%sp + CPU_STACK_FRAME_I2_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i4, [%sp + CPU_STACK_FRAME_I4_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i6, [%sp + CPU_STACK_FRAME_I6_FP_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
 
         ba      save_frame_loop
         nop
@@ -178,22 +198,37 @@ done_flushing:
         mov     %g4, %wim
 
 #if defined(RTEMS_SMP)
-        ! The executing context no longer executes on this processor
+        /*
+         * The executing thread no longer executes on this processor.  Switch
+         * the stack to the temporary interrupt stack of this processor.  Mark
+         * the context of the executing thread as not executing.
+         */
+        add     %g6, PER_CPU_INTERRUPT_FRAME_AREA + CPU_INTERRUPT_FRAME_SIZE, %sp
         st      %g0, [%o0 + SPARC_CONTEXT_CONTROL_IS_EXECUTING_OFFSET]
 
         ! Try to update the is executing indicator of the heir context
         mov     1, %g1
 
-try_update_is_executing:
+.Ltry_update_is_executing:
 
         swap    [%o1 + SPARC_CONTEXT_CONTROL_IS_EXECUTING_OFFSET], %g1
         cmp     %g1, 0
-        bne     check_is_executing
+        bne     .Lcheck_is_executing
 
         ! The next load is in a delay slot, which is all right
 #endif
 
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
+        ld      [%g6 + SPARC_PER_CPU_FP_OWNER_OFFSET], %g2
+#endif
         ld      [%o1 + PSR_OFFSET], %g1       ! g1 = heir psr with traps enabled
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
+        sethi   %hi(SPARC_PSR_EF_MASK), %g5
+        cmp     %g2, %g0
+        bne,a   .Lclear_psr_ef_done
+         andn   %g1, %g5, %g1                 ! g1 = heir psr w/o PSR[EF]
+.Lclear_psr_ef_done:
+#endif
         andn    %g1, SPARC_PSR_CWP_MASK, %g1  ! g1 = heir psr w/o cwp
         or      %g1, %g3, %g1                 ! g1 = heir psr with cwp
         mov     %g1, %psr                     ! restore status register and
@@ -212,7 +247,7 @@ try_update_is_executing:
         ldd     [%o1 + L6_OFFSET], %l6
 
         ! Now restore thread specific ISR dispatch prevention flag
-        st      %o2, [%g6 + SPARC_PER_CPU_ISR_DISPATCH_DISABLE]
+        st      %o2, [%g6 + PER_CPU_ISR_DISPATCH_DISABLE]
 
         ldd     [%o1 + I0_OFFSET], %i0        ! restore the input registers
         ldd     [%o1 + I2_OFFSET], %i2
@@ -225,12 +260,12 @@ try_update_is_executing:
         nop                                   ! delay slot
 
 #if defined(RTEMS_SMP)
-check_is_executing:
+.Lcheck_is_executing:
 
         ! Check the is executing indicator of the heir context
         ld      [%o1 + SPARC_CONTEXT_CONTROL_IS_EXECUTING_OFFSET], %g1
         cmp     %g1, 0
-        beq     try_update_is_executing
+        beq     .Ltry_update_is_executing
          mov    1, %g1
 
         ! We may have a new heir
@@ -242,7 +277,7 @@ check_is_executing:
         ! Update the executing only if necessary to avoid cache line
         ! monopolization.
         cmp     %g2, %g4
-        beq     try_update_is_executing
+        beq     .Ltry_update_is_executing
          mov    1, %g1
 
         ! Calculate the heir context pointer
@@ -252,7 +287,7 @@ check_is_executing:
         ! Update the executing
         st      %g4, [%g6 + PER_CPU_OFFSET_EXECUTING]
 
-        ba      try_update_is_executing
+        ba      .Ltry_update_is_executing
          mov    1, %g1
 #endif
 
@@ -268,7 +303,7 @@ check_is_executing:
         .align 4
         PUBLIC(_CPU_Context_restore)
 SYM(_CPU_Context_restore):
-        save    %sp, -CPU_MINIMUM_STACK_FRAME_SIZE, %sp
+        save    %sp, -SPARC_MINIMUM_STACK_FRAME_SIZE, %sp
         rd      %psr, %o2
 #if defined(RTEMS_SMP)
         ! On SPARC the restore path needs also a valid executing context on SMP
@@ -366,13 +401,20 @@ win_ovflow:
          */
 
         std     %l0, [%sp + CPU_STACK_FRAME_L0_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l2, [%sp + CPU_STACK_FRAME_L2_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l4, [%sp + CPU_STACK_FRAME_L4_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %l6, [%sp + CPU_STACK_FRAME_L6_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
 
         std     %i0, [%sp + CPU_STACK_FRAME_I0_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i2, [%sp + CPU_STACK_FRAME_I2_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i4, [%sp + CPU_STACK_FRAME_I4_OFFSET]
+        SPARC_LEON3FT_B2BST_NOP
         std     %i6, [%sp + CPU_STACK_FRAME_I6_FP_OFFSET]
 
         restore
@@ -393,19 +435,25 @@ dont_do_the_window:
          *  REGISTERS SAME AS AT _ISR_Handler
          */
 
-        sub     %fp, CONTEXT_CONTROL_INTERRUPT_FRAME_SIZE, %sp
+        sub     %fp, CPU_INTERRUPT_FRAME_SIZE, %sp
                                                ! make space for ISF
 
         std     %l0, [%sp + ISF_PSR_OFFSET]    ! save psr, PC
+        SPARC_LEON3FT_B2BST_NOP
         st      %l2, [%sp + ISF_NPC_OFFSET]    ! save nPC
         st      %g1, [%sp + ISF_G1_OFFSET]     ! save g1
         std     %g2, [%sp + ISF_G2_OFFSET]     ! save g2, g3
+        SPARC_LEON3FT_B2BST_NOP
         std     %l4, [%sp + ISF_G4_OFFSET]     ! save g4, g5 -- see above
+        SPARC_LEON3FT_B2BST_NOP
         st      %g7, [%sp + ISF_G7_OFFSET]     ! save g7
 
         std     %i0, [%sp + ISF_I0_OFFSET]     ! save i0, i1
+        SPARC_LEON3FT_B2BST_NOP
         std     %i2, [%sp + ISF_I2_OFFSET]     ! save i2, i3
+        SPARC_LEON3FT_B2BST_NOP
         std     %i4, [%sp + ISF_I4_OFFSET]     ! save i4, i5
+        SPARC_LEON3FT_B2BST_NOP
         std     %i6, [%sp + ISF_I6_FP_OFFSET]  ! save i6/fp, i7
 
         rd      %y, %g1
@@ -431,6 +479,7 @@ dont_do_the_window:
 
         add      %l7, 1, %l7
         st       %l7, [%g6 + PER_CPU_ISR_NEST_LEVEL]
+        SPARC_LEON3FT_B2BST_NOP
 
         add      %l6, 1, %l6
         st       %l6, [%g6 + PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL]
@@ -454,7 +503,7 @@ dont_do_the_window:
 #if defined(RTEMS_PROFILING)
          sethi   %hi(_SPARC_Counter), %o5
         ld       [%o5 + %lo(_SPARC_Counter)], %l4
-        call     %l4, 0
+        call     %l4
          nop
         mov      %o0, %o5
 #else
@@ -486,7 +535,7 @@ dont_switch_stacks:
          *  enable traps again.
          */
 
-        sub      %sp, CPU_MINIMUM_STACK_FRAME_SIZE, %sp
+        sub      %sp, SPARC_MINIMUM_STACK_FRAME_SIZE, %sp
 
         /*
          *  Check if we have an external interrupt (trap 0x11 - 0x1f). If so,
@@ -537,103 +586,114 @@ pil_fixed:
                                         ! o1 = 2nd arg = address of the ISF
                                         !   WAS LOADED WHEN ISF WAS SAVED!!!
         mov      %l3, %o0               ! o0 = 1st arg = vector number
-        call     %g4, 0
+        call     %g4
 #if defined(RTEMS_PROFILING)
          mov     %o5, %l3               ! save interrupt entry instant
-        cmp      %l7, 0
-        bne      profiling_not_outer_most_exit
-         nop
-        ta       SPARC_SWTRAP_IRQDIS    ! Call interrupt disable trap handler
-        call     %l4, 0                 ! Call _SPARC_Counter.counter_read
-         nop
-        mov      %o0, %o2               ! o2 = 3rd arg = interrupt exit instant
-        mov      %l3, %o1               ! o1 = 2nd arg = interrupt entry instant
-        call     SYM(_Profiling_Outer_most_interrupt_entry_and_exit), 0
-         mov     %g6, %o0               ! o0 = 1st arg = per-CPU control
-profiling_not_outer_most_exit:
 #else
          nop                            ! delay slot
 #endif
 
-        /*
-         *  Redisable traps so we can finish up the interrupt processing.
-         *  This is a VERY conservative place to do this.
-         *
-         *  NOTE: %l0 has the PSR which was in place when we took the trap.
-         */
+#if defined(SPARC_USE_SYNCHRONOUS_FP_SWITCH)
+        mov      %l0, %g1               ! PSR[EF] value of interrupted context
+        ta       SPARC_SWTRAP_IRQDIS_FP ! **** DISABLE INTERRUPTS ****
+#else
+        ta       SPARC_SWTRAP_IRQDIS    ! **** DISABLE INTERRUPTS ****
+#endif
 
-        mov      %l0, %psr             ! **** DISABLE TRAPS ****
-        nop; nop; nop
+#if defined(RTEMS_PROFILING)
+        cmp      %l7, 0
+        bne      profiling_not_outer_most_exit
+         nop
+        call     %l4                    ! Call _SPARC_Counter.counter_read
+         mov     %g1, %l4               ! Save previous interrupt status
+        mov      %o0, %o2               ! o2 = 3rd arg = interrupt exit instant
+        mov      %l3, %o1               ! o1 = 2nd arg = interrupt entry instant
+        call     SYM(_Profiling_Outer_most_interrupt_entry_and_exit)
+         mov     %g6, %o0               ! o0 = 1st arg = per-CPU control
+profiling_not_outer_most_exit:
+#endif
 
         /*
          *  Decrement ISR nest level and Thread dispatch disable level.
          *
          *  Register usage for this section:
          *
-         *    l6 = _Thread_Dispatch_disable_level value
-         *    l7 = _ISR_Nest_level value
+         *    o2 = g6->dispatch_necessary value
+         *    o3 = g6->isr_dispatch_disable value
+         *    l6 = g6->thread_dispatch_disable_level value
+         *    l7 = g6->isr_nest_level value
          */
 
+        ldub     [%g6 + PER_CPU_DISPATCH_NEEDED], %o2
+        ld       [%g6 + PER_CPU_ISR_DISPATCH_DISABLE], %o3
         st       %l7, [%g6 + PER_CPU_ISR_NEST_LEVEL]
-
+        SPARC_LEON3FT_B2BST_NOP
         sub      %l6, 1, %l6
         st       %l6, [%g6 + PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL]
 
         /*
-         *  If dispatching is disabled (includes nested interrupt case),
-         *  then do a "simple" exit.
+         * Thread dispatching is necessary and allowed if and only if
+         *   g6->dispatch_necessary == 1 and
+         *   g6->isr_dispatch_disable == 0 and
+         *   g6->thread_dispatch_disable_level == 0.
+         *
+         * Otherwise, continue with the simple return.
          */
-
-        orcc     %l6, %g0, %g0   ! Is dispatching disabled?
-        bnz      simple_return   ! Yes, then do a "simple" exit
-        nop
-
-        ! Are we dispatching from a previous ISR in the interrupted thread?
-        ld       [%g6 + SPARC_PER_CPU_ISR_DISPATCH_DISABLE], %l7
-        orcc     %l7, %g0, %g0   ! Is this thread already doing an ISR?
-        bnz      simple_return   ! Yes, then do a "simple" exit
-        nop
-
+        xor      %o2, 1, %o2
+        or       %o2, %l6, %o2
+        orcc     %o2, %o3, %o2
+        bnz      simple_return
 
         /*
-         *  If a context switch is necessary, then do fudge stack to
-         *  return to the interrupt dispatcher.
+         * Switch back on the interrupted tasks stack and add enough room to
+         * invoke the dispatcher.  Doing this in the delay slot causes no harm,
+         * since the stack pointer (%sp) is not used in the simple return path.
          */
+         sub     %fp, SPARC_MINIMUM_STACK_FRAME_SIZE, %sp
 
-        ldub     [%g6 + PER_CPU_DISPATCH_NEEDED], %l6
-
-        orcc     %l6, %g0, %g0   ! Is thread switch necessary?
-        bz       simple_return   ! no, then do a simple return
-        nop
-
-        /*
-         *  Invoke interrupt dispatcher.
-         */
-
-        ! Set ISR dispatch nesting prevention flag
-        mov      1,%l6
-        st       %l6, [%g6 + SPARC_PER_CPU_ISR_DISPATCH_DISABLE]
-
-        /*
-         *  The following subtract should get us back on the interrupted
-         *  tasks stack and add enough room to invoke the dispatcher.
-         *  When we enable traps, we are mostly back in the context
-         *  of the task and subsequent interrupts can operate normally.
-         */
-
-        sub      %fp, CPU_MINIMUM_STACK_FRAME_SIZE, %sp
-
-        or      %l0, SPARC_PSR_ET_MASK, %l7    ! l7 = PSR with ET=1
-        mov     %l7, %psr                      !  **** ENABLE TRAPS ****
-        nop
-        nop
-        nop
 isr_dispatch:
 
-#if SPARC_HAS_FPU == 1 && defined(SPARC_USE_SAFE_FP_SUPPORT)
+        /* Set ISR dispatch disable and thread dispatch disable level to one */
+        mov      1, %l6
+        st       %l6, [%g6 + PER_CPU_THREAD_DISPATCH_DISABLE_LEVEL]
+        st       %l6, [%g6 + PER_CPU_ISR_DISPATCH_DISABLE]
+
+        /* Call _Thread_Do_dispatch(), this function will enable interrupts */
+
+        mov      0, %o1                 ! ISR level for _Thread_Do_dispatch()
+
+#if defined(SPARC_USE_LAZY_FP_SWITCH)
         /* Test if we interrupted a floating point thread (PSR[EF] == 1) */
         andcc   %l0, %l5, %g0
-        be      non_fp_thread_dispatch
+        be      .Lnon_fp_thread_dispatch
+         ld     [%g6 + PER_CPU_OFFSET_EXECUTING], %l6
+
+        /* Set new floating point unit owner to executing thread */
+        st      %l6, [%g6 + SPARC_PER_CPU_FP_OWNER_OFFSET]
+
+        call    SYM(_Thread_Do_dispatch)
+         mov    %g6, %o0
+
+        /*
+         * If we are still the floating point unit owner, then reset the
+         * floating point unit owner to NULL, otherwise clear PSR[EF] in the
+         * interrupt frame and let the FP disabled system call do the floating
+         * point context save/restore.
+         */
+        ld      [%g6 + SPARC_PER_CPU_FP_OWNER_OFFSET], %l7
+        cmp     %l6, %l7
+        bne     .Ldisable_fp
+         andn   %l0, %l5, %l0
+        ba      .Lthread_dispatch_done
+         st     %g0, [%g6 + SPARC_PER_CPU_FP_OWNER_OFFSET]
+.Ldisable_fp:
+        ba      .Lthread_dispatch_done
+         st      %l0, [%fp + ISF_PSR_OFFSET]
+.Lnon_fp_thread_dispatch:
+#elif defined(SPARC_USE_SYNCHRONOUS_FP_SWITCH)
+        /* Test if we interrupted a floating point thread (PSR[EF] == 1) */
+        andcc   %l0, %l5, %g0
+        be      .Lnon_fp_thread_dispatch
          nop
 
         /*
@@ -644,23 +704,40 @@ isr_dispatch:
          */
         sub     %sp, FP_FRAME_SIZE, %sp
         std     %f0, [%sp + FP_FRAME_OFFSET_FO_F1]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f2, [%sp + FP_FRAME_OFFSET_F2_F3]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f4, [%sp + FP_FRAME_OFFSET_F4_F5]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f6, [%sp + FP_FRAME_OFFSET_F6_F7]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f8, [%sp + FP_FRAME_OFFSET_F8_F9]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f10, [%sp + FP_FRAME_OFFSET_F1O_F11]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f12, [%sp + FP_FRAME_OFFSET_F12_F13]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f14, [%sp + FP_FRAME_OFFSET_F14_F15]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f16, [%sp + FP_FRAME_OFFSET_F16_F17]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f18, [%sp + FP_FRAME_OFFSET_F18_F19]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f20, [%sp + FP_FRAME_OFFSET_F2O_F21]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f22, [%sp + FP_FRAME_OFFSET_F22_F23]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f24, [%sp + FP_FRAME_OFFSET_F24_F25]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f26, [%sp + FP_FRAME_OFFSET_F26_F27]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f28, [%sp + FP_FRAME_OFFSET_F28_F29]
+        SPARC_LEON3FT_B2BST_NOP
         std     %f30, [%sp + FP_FRAME_OFFSET_F3O_F31]
-        call    SYM(_Thread_Dispatch), 0
-         st     %fsr, [%sp + FP_FRAME_OFFSET_FSR]
+        SPARC_LEON3FT_B2BST_NOP
+        st      %fsr, [%sp + FP_FRAME_OFFSET_FSR]
+        call    SYM(_Thread_Do_dispatch)
+         mov    %g6, %o0
 
         /*
          * Restore the floating point context from stack frame and release the
@@ -683,45 +760,37 @@ isr_dispatch:
         ldd     [%sp + FP_FRAME_OFFSET_F28_F29], %f28
         ldd     [%sp + FP_FRAME_OFFSET_F3O_F31], %f30
         ld      [%sp + FP_FRAME_OFFSET_FSR], %fsr
-        ba      thread_dispatch_done
+        ba      .Lthread_dispatch_done
          add    %sp, FP_FRAME_SIZE, %sp
 
-non_fp_thread_dispatch:
+.Lnon_fp_thread_dispatch:
 #endif
 
-        call    SYM(_Thread_Dispatch), 0
-         nop
+        call    SYM(_Thread_Do_dispatch)
+         mov    %g6, %o0
 
-#if SPARC_HAS_FPU == 1 && defined(SPARC_USE_SAFE_FP_SUPPORT)
-thread_dispatch_done:
+#if SPARC_HAS_FPU == 1
+.Lthread_dispatch_done:
 #endif
 
-        /*
-         *  We invoked _Thread_Dispatch in a state similar to the interrupted
-         *  task.  In order to safely be able to tinker with the register
-         *  windows and get the task back to its pre-interrupt state,
-         *  we need to disable interrupts disabled so we can safely tinker
-         *  with the register windowing.  In particular, the CWP in the PSR
-         *  is fragile during this period. (See PR578.)
-         */
-        ta      SPARC_SWTRAP_IRQDIS  ! syscall (disable interrupts)
+        ta       SPARC_SWTRAP_IRQDIS ! **** DISABLE INTERRUPTS ****
 
         /*
          *  While we had ISR dispatching disabled in this thread,
-         *  did we miss anything.  If so, then we need to do another
-         *  _Thread_Dispatch before leaving this ISR Dispatch context.
+         *  did we miss anything?  If so, then we need to do another
+         *  _Thread_Do_dispatch() before leaving this ISR dispatch context.
          */
         ldub    [%g6 + PER_CPU_DISPATCH_NEEDED], %l7
 
-        orcc    %l7, %g0, %g0        ! Is thread switch necesary?
-        bne,a   isr_dispatch         ! Yes, then invoke the dispatcher.
-                                     ! g1 = Old PSR PIL returned from IRQDis
-        ta      SPARC_SWTRAP_IRQEN   ! syscall (enable interrupts to same level)
+        orcc    %l7, %g0, %g0        ! Is a thread dispatch necessary?
+        bne     isr_dispatch         ! Yes, then invoke the dispatcher again.
+         mov    0, %o1               ! ISR level for _Thread_Do_dispatch()
 
-        ! No, then clear out and return
-
-        ! Zero out ISR stack nesting prevention flag
-        st       %g0, [%g6 + SPARC_PER_CPU_ISR_DISPATCH_DISABLE]
+        /*
+         * No, then set the ISR dispatch disable flag to zero and continue with
+         * the simple return.
+         */
+        st       %g0, [%g6 + PER_CPU_ISR_DISPATCH_DISABLE]
 
         /*
          *  The CWP in place at this point may be different from

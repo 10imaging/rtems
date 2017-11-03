@@ -66,6 +66,11 @@ EXTRA_DIST += monitor/README
 noinst_LIBRARIES += libmw-fb.a
 libmw_fb_a_SOURCES = fb/mw_print.c fb/mw_uid.c fb/fb.h fb/mw_uid.h
 
+## rtems-fdt
+noinst_LIBRARIES += librtemsfdt.a
+librtemsfdt_a_SOURCES = rtems-fdt/rtems-fdt-shell.c rtems-fdt/rtems-fdt-shell.h \
+    rtems-fdt/rtems-fdt.c rtems-fdt/rtems-fdt.h
+
 ## mouse
 noinst_LIBRARIES += libmouse.a
 libmouse_a_SOURCES = mouse/mouse_parser.c mouse/serial_mouse.c
@@ -155,7 +160,8 @@ EXTRA_DIST += stackchk/README
 
 ## libuntar
 noinst_LIBRARIES += libuntar.a
-libuntar_a_SOURCES = untar/untar.c untar/untar_tgz.c untar/untar.h
+libuntar_a_SOURCES = untar/untar.c untar/untar_txz.c untar/untar_tgz.c \
+	untar/untar.h
 
 EXTRA_DIST += untar/README
 
@@ -173,6 +179,7 @@ libstringto_a_SOURCES = stringto/stringtodouble.c stringto/stringtofloat.c \
 noinst_LIBRARIES += libtestsupport.a
 libtestsupport_a_SOURCES =
 libtestsupport_a_SOURCES += testsupport/testbeginend.c
+libtestsupport_a_SOURCES += testsupport/testbusy.c
 libtestsupport_a_SOURCES += testsupport/testextension.c
 libtestsupport_a_SOURCES += testsupport/testparallel.c
 
@@ -191,6 +198,13 @@ noinst_LIBRARIES += libuuid.a
 libuuid_a_SOURCES = uuid/clear.c uuid/compare.c uuid/copy.c uuid/gen_uuid.c \
 	uuid/isnull.c uuid/pack.c uuid/parse.c uuid/unpack.c uuid/unparse.c \
 	uuid/uuid_time.c uuid/uuidd.h uuid/uuidP.h
+
+## xz-embedded
+noinst_LIBRARIES += libxz.a
+libxz_a_SOURCES = xz/xz/h xz/xz_crc32.c \
+	xz/xz_dec_lzma2.c xz/xz_dec_stream.c
+
+EXTRA_DIST += xz/README xz/COPING
 
 ## ---
 include $(srcdir)/preinstall.am

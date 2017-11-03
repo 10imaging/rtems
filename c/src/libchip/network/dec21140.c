@@ -36,6 +36,7 @@
  */
 
 #include <rtems.h>
+#include <inttypes.h>
 
 /*
  *  This driver only supports architectures with the new style
@@ -67,6 +68,7 @@
 
 #if defined(__i386__)
 #include <libcpu/byteorder.h>
+#include <libcpu/page.h>
 #endif
 
 #include <stdlib.h>
@@ -289,6 +291,8 @@ static struct dec21140_softc dec21140_softc[NDECDRIVER];
 static rtems_id rxDaemonTid;
 static rtems_id txDaemonTid;
 
+void dec21140_txDaemon (void *arg);
+
 /*
  * This routine reads a word (16 bits) from the serial EEPROM.
  */
@@ -343,11 +347,6 @@ static int eeget16(volatile uint32_t *ioaddr, int location)
 static void no_op(const rtems_irq_connect_data* irq)
 {
    return;
-}
-
-static int dec21140IsOn(const rtems_irq_connect_data* irq)
-{
-  return BSP_irq_enabled_at_i8259s (irq->name);
 }
 
 /*
@@ -539,7 +538,7 @@ dec21140Enet_initialize_hardware (struct dec21140_softc *sc)
    sc->irqInfo.hdl  = (rtems_irq_hdl)dec21140Enet_interrupt_handler_entry;
    sc->irqInfo.on   = no_op;
    sc->irqInfo.off  = no_op;
-   sc->irqInfo.isOn = dec21140IsOn;
+   sc->irqInfo.isOn = NULL;
 
 #ifdef DEC_DEBUG
    printk( "dec2114x: Installing IRQ %d\n", sc->irqInfo.name );
@@ -935,7 +934,8 @@ rtems_dec21140_driver_attach (struct rtems_bsdnet_ifconfig *config, int attach)
 
    if ((unitNumber < 1) || (unitNumber > NDECDRIVER))
    {
-      printk("dec2114x : unit %i is invalid, must be (1 <= n <= %d)\n", unitNumber);
+      printk("dec2114x : unit %i is invalid, must be (1 <= n <= %d)\n",
+              unitNumber, NDECDRIVER);
       return 0;
    }
 
@@ -1025,7 +1025,7 @@ rtems_dec21140_driver_attach (struct rtems_bsdnet_ifconfig *config, int attach)
 
 
 #ifdef DEC_DEBUG
-   printk("dec2114x : unit %d base address %08x.\n", unitNumber, sc->base );
+   printk("dec2114x : unit %d base address %p.\n", unitNumber, sc->base);
 #endif
 
 

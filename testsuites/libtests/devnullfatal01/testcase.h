@@ -1,5 +1,5 @@
 /*
- *  COPYRIGHT (c) 1989-2010.
+ *  COPYRIGHT (c) 1989-2010, 2017.
  *  On-Line Applications Research Corporation (OAR).
  *
  *  The license and distribution terms for this file may be
@@ -10,10 +10,7 @@
 #define FATAL_ERROR_TEST_NAME            "/DEV/NULL 1"
 #define FATAL_ERROR_DESCRIPTION          "/dev/null already registered"
 #define FATAL_ERROR_EXPECTED_SOURCE      INTERNAL_ERROR_RTEMS_API
-#define FATAL_ERROR_EXPECTED_IS_INTERNAL FALSE
 #define FATAL_ERROR_EXPECTED_ERROR       RTEMS_TOO_MANY
-
-#define TESTS_USE_PRINTK
 
 #include <rtems/devnull.h>
 #include "tmacros.h"

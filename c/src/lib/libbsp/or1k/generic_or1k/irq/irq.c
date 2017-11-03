@@ -16,6 +16,7 @@
 
 #include <bsp/irq.h>
 #include <bsp/irq-generic.h>
+#include <rtems/inttypes.h>
 
 /* Almost all of the jobs that the following functions should
  * do are implemented in cpukit
@@ -23,7 +24,7 @@
 
 void bsp_interrupt_handler_default(rtems_vector_number vector)
 {
-    printk("spurious interrupt: %u\n", vector);
+    printk("spurious interrupt: %" PRIdrtems_vector_number "\n", vector);
 }
 
 rtems_status_code bsp_interrupt_facility_initialize()
@@ -31,12 +32,12 @@ rtems_status_code bsp_interrupt_facility_initialize()
   return 0;
 }
 
-rtems_status_code bsp_interrupt_vector_enable(rtems_vector_number vector)
+void bsp_interrupt_vector_enable(rtems_vector_number vector)
 {
-  return 0;
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
 }
 
-rtems_status_code bsp_interrupt_vector_disable(rtems_vector_number vector)
+void bsp_interrupt_vector_disable(rtems_vector_number vector)
 {
-  return 0;
+  bsp_interrupt_assert(bsp_interrupt_is_valid_vector(vector));
 }

@@ -47,6 +47,8 @@ extern void grtc_register_drv(void);
 extern void pcif_register_drv(void);
 extern void grpci_register_drv(void);
 extern void mctrl_register_drv(void);
+extern void l2cache_register_drv(void);
+extern void griommu_register_drv(void);
 extern void grpci2_register_drv(void);
 extern void spictrl_register_drv(void);
 extern void i2cmst_register_drv(void);
@@ -57,6 +59,8 @@ extern void spwcuc_register(void);
 extern void grctm_register(void);
 extern void router_register_drv(void);
 extern void ahbstat_register_drv(void);
+extern void memscrub_register_drv(void);
+extern void l4stat_register_drv(void);
 
 
 /*** LEON2 AMBA Hard coded bus Drivers ***/
@@ -72,6 +76,7 @@ extern void gr701_register_drv(void);
 extern void gr_tmtc_1553_register_drv(void);
 extern void gr_rasta_spw_router_register_drv(void);
 extern void gr_cpci_leon4_n2x_register_drv(void);
+extern void gr_cpci_gr740_register_drv(void);
 
 
 /* CONFIGURE DRIVER MANAGER */
@@ -134,6 +139,12 @@ drvmgr_drv_reg_func drvmgr_drivers[] = {
 #ifdef CONFIGURE_DRIVER_AMBAPP_MCTRL
 	mctrl_register_drv,
 #endif
+#ifdef CONFIGURE_DRIVER_AMBAPP_GAISLER_L2CACHE
+	l2cache_register_drv,
+#endif
+#ifdef CONFIGURE_DRIVER_AMBAPP_GAISLER_GRIOMMU
+	griommu_register_drv,
+#endif
 #ifdef CONFIGURE_DRIVER_AMBAPP_GAISLER_SPICTRL
 	spictrl_register_drv,
 #endif
@@ -160,6 +171,12 @@ drvmgr_drv_reg_func drvmgr_drivers[] = {
 #endif
 #ifdef CONFIGURE_DRIVER_AMBAPP_GAISLER_AHBSTAT
 	ahbstat_register_drv,
+#endif
+#ifdef CONFIGURE_DRIVER_AMBAPP_GAISLER_MEMSCRUB
+	memscrub_register_drv,
+#endif
+#ifdef CONFIGURE_DRIVER_AMBAPP_GAISLER_L4STAT
+	l4stat_register_drv,
 #endif
 
 	/*** LEON2 AMBA Drivers ***/
@@ -191,6 +208,9 @@ drvmgr_drv_reg_func drvmgr_drivers[] = {
 #endif
 #ifdef CONFIGURE_DRIVER_PCI_GR_LEON4_N2X
 	gr_cpci_leon4_n2x_register_drv,
+#endif
+#ifdef CONFIGURE_DRIVER_PCI_GR_CPCI_GR740
+	gr_cpci_gr740_register_drv,
 #endif
 
 
@@ -226,7 +246,7 @@ drvmgr_drv_reg_func drvmgr_drivers[] = {
 #endif
 
 	/* End array with NULL */
-	{NULL}
+	NULL
 };
 
 #endif /* CONFIGURE_INIT */

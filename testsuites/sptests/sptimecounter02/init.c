@@ -16,6 +16,8 @@
   #include "config.h"
 #endif
 
+#include <sys/lock.h>
+
 #define _KERNEL
 
 #include <sys/time.h>
@@ -255,9 +257,7 @@ static void Init(rtems_task_argument arg)
 #define CONFIGURE_MAXIMUM_TIMERS 2
 #define CONFIGURE_MAXIMUM_PERIODS 1
 
-#define CONFIGURE_SMP_APPLICATION
-
-#define CONFIGURE_SMP_MAXIMUM_PROCESSORS CPU_COUNT
+#define CONFIGURE_MAXIMUM_PROCESSORS CPU_COUNT
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE
 

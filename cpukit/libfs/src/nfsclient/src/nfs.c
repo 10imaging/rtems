@@ -1019,7 +1019,7 @@ rtems_status_code status;
 	initialised = 1;
 
 	fprintf(stderr,
-          "RTEMS-NFS $Release$, "                       \
+          "RTEMS-NFS, " \
           "Till Straumann, Stanford/SLAC/SSRL 2002, " \
           "See LICENSE file for licensing info.\n");
 
@@ -2566,7 +2566,7 @@ Nfs			nfs  = node->nfs;
 
 
 	SERP_ARGS(node).writearg.beginoffset = UINT32_C(0xdeadbeef);
-	if ( LIBIO_FLAGS_APPEND & iop->flags ) {
+	if (rtems_libio_iop_is_append(iop)) {
 		if ( updateAttr(node, 0) ) {
 			return -1;
 		}
@@ -2884,6 +2884,7 @@ struct _rtems_filesystem_file_handlers_r nfs_file_file_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h     = rtems_filesystem_default_fcntl,
 	.kqfilter_h  = rtems_filesystem_default_kqfilter,
+	.mmap_h      = rtems_filesystem_default_mmap,
 	.poll_h      = rtems_filesystem_default_poll,
 	.readv_h     = rtems_filesystem_default_readv,
 	.writev_h    = rtems_filesystem_default_writev
@@ -2904,6 +2905,7 @@ struct _rtems_filesystem_file_handlers_r nfs_dir_file_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h     = rtems_filesystem_default_fcntl,
 	.kqfilter_h  = rtems_filesystem_default_kqfilter,
+	.mmap_h      = rtems_filesystem_default_mmap,
 	.poll_h      = rtems_filesystem_default_poll,
 	.readv_h     = rtems_filesystem_default_readv,
 	.writev_h    = rtems_filesystem_default_writev
@@ -2924,6 +2926,7 @@ struct _rtems_filesystem_file_handlers_r nfs_link_file_handlers = {
 	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
 	.fcntl_h     = rtems_filesystem_default_fcntl,
 	.kqfilter_h  = rtems_filesystem_default_kqfilter,
+	.mmap_h      = rtems_filesystem_default_mmap,
 	.poll_h      = rtems_filesystem_default_poll,
 	.readv_h     = rtems_filesystem_default_readv,
 	.writev_h    = rtems_filesystem_default_writev

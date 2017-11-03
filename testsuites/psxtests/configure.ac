@@ -81,9 +81,6 @@ AC_CHECK_DECLS([pthread_getattr_np],[],[],[[
   #define _GNU_SOURCE
   #include <pthread.h>]])
 
-# Added to newlib pthreads for RTEMS SMP (np), may not be present
-AC_CHECK_HEADERS([cpuset.h])
-
 # Mandated by POSIX, not declared in some versions of newlib.
 AC_CHECK_DECLS([getrusage],,,[#include sys/resource.h])
 
@@ -143,10 +140,12 @@ psxcleanup01/Makefile
 psxcleanup02/Makefile
 psxclock/Makefile
 psxclock01/Makefile
+psxclockrealtime01/Makefile
 psxconcurrency01/Makefile
 psxcond01/Makefile
 psxcond02/Makefile
 psxconfig01/Makefile
+psxdevctl01/Makefile
 psxeintr_join/Makefile
 psxenosys/Makefile
 psxfatal01/Makefile
@@ -186,10 +185,13 @@ psxonce01/Makefile
 psxpasswd01/Makefile
 psxpasswd02/Makefile
 psxpipe01/Makefile
-psxreaddir/Makefile
 psxrdwrv/Makefile
+psxreaddir/Makefile
 psxrwlock01/Makefile
 psxsem01/Makefile
+psxshm01/Makefile
+psxshm02/Makefile
+psxmmap01/Makefile
 psxsignal01/Makefile
 psxsignal02/Makefile
 psxsignal03/Makefile
@@ -197,11 +199,12 @@ psxsignal04/Makefile
 psxsignal05/Makefile
 psxsignal06/Makefile
 psxspin01/Makefile
-psxspin02/Makefile
 psxstack01/Makefile
 psxstack02/Makefile
 psxstat/Makefile
+psxstrsignal01/Makefile
 psxsysconf/Makefile
+psxthreadname01/Makefile
 psxtime/Makefile
 psxtimer01/Makefile
 psxtimer02/Makefile

@@ -123,17 +123,7 @@ static void set_thread_heir( Thread_Control *thread )
 
 static void set_thread_executing( Thread_Control *thread )
 {
-#if defined( PREVENT_SMP_ASSERT_FAILURES )
-  ISR_Level level;
-
-  _ISR_Local_disable( level );
-#endif
-
-  _Thread_Executing = thread;
-
-#if defined( PREVENT_SMP_ASSERT_FAILURES )
-  _ISR_Local_enable( level );
-#endif
+  _Per_CPU_Get_snapshot()->executing = thread;
 }
 
 static void thread_resume( Thread_Control *thread )
@@ -316,7 +306,7 @@ rtems_task Middle_task(
 )
 {
   Scheduler_priority_Context *scheduler_context =
-    _Scheduler_priority_Get_context( _Scheduler_Get( _Thread_Get_executing() ) );
+    _Scheduler_priority_Get_context( _Thread_Scheduler_get_home( _Thread_Get_executing() ) );
 
   thread_dispatch_no_fp_time = benchmark_timer_read();
 
@@ -349,7 +339,7 @@ rtems_task Low_task(
 )
 {
   Scheduler_priority_Context *scheduler_context =
-    _Scheduler_priority_Get_context( _Scheduler_Get( _Thread_Get_executing() ) );
+    _Scheduler_priority_Get_context( _Thread_Scheduler_get_home( _Thread_Get_executing() ) );
   Thread_Control             *executing;
 
   context_switch_no_fp_time = benchmark_timer_read();
@@ -389,7 +379,7 @@ rtems_task Floating_point_task_1(
 )
 {
   Scheduler_priority_Context *scheduler_context =
-    _Scheduler_priority_Get_context( _Scheduler_Get( _Thread_Get_executing() ) );
+    _Scheduler_priority_Get_context( _Thread_Scheduler_get_home( _Thread_Get_executing() ) );
   Thread_Control             *executing;
   FP_DECLARE;
 
@@ -445,7 +435,7 @@ rtems_task Floating_point_task_2(
 )
 {
   Scheduler_priority_Context *scheduler_context =
-    _Scheduler_priority_Get_context( _Scheduler_Get( _Thread_Get_executing() ) );
+    _Scheduler_priority_Get_context( _Thread_Scheduler_get_home( _Thread_Get_executing() ) );
   Thread_Control             *executing;
   FP_DECLARE;
 

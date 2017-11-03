@@ -22,7 +22,7 @@
 #undef RTEMS_PRINTFLIKE
 #define RTEMS_PRINTFLIKE(_a, _b)
 
-#define TESTS_USE_PRINTK
+#include <rtems/bspIo.h>
 #include <tmacros.h>
 
 const char rtems_test_name[] = "SPPRINTK";

@@ -27,7 +27,7 @@
  * SUCH DAMAGE.
  *
  *	@(#)sockio.h	8.1 (Berkeley) 3/28/94
- * $FreeBSD r283364 2015-05-24T11:24:14Z$
+ * $FreeBSD: head/sys/sys/sockio.h 298981 2016-05-03 15:14:17Z pfg $
  */
 
 #ifndef _SYS_SOCKIO_H_
@@ -50,19 +50,14 @@
 #define	SIOCGETSGCNT	_IOWR('r', 16, struct sioc_sg_req) /* get s,g pkt cnt */
 
 #define	SIOCSIFADDR	 _IOW('i', 12, struct ifreq)	/* set ifnet address */
-#define	OSIOCGIFADDR	_IOWR('i', 13, struct ifreq)	/* get ifnet address */
 #define	SIOCGIFADDR	_IOWR('i', 33, struct ifreq)	/* get ifnet address */
 #define	SIOCSIFDSTADDR	 _IOW('i', 14, struct ifreq)	/* set p-p address */
-#define	OSIOCGIFDSTADDR	_IOWR('i', 15, struct ifreq)	/* get p-p address */
 #define	SIOCGIFDSTADDR	_IOWR('i', 34, struct ifreq)	/* get p-p address */
 #define	SIOCSIFFLAGS	 _IOW('i', 16, struct ifreq)	/* set ifnet flags */
 #define	SIOCGIFFLAGS	_IOWR('i', 17, struct ifreq)	/* get ifnet flags */
-#define	OSIOCGIFBRDADDR	_IOWR('i', 18, struct ifreq)	/* get broadcast addr */
 #define	SIOCGIFBRDADDR	_IOWR('i', 35, struct ifreq)	/* get broadcast addr */
 #define	SIOCSIFBRDADDR	 _IOW('i', 19, struct ifreq)	/* set broadcast addr */
-#define	OSIOCGIFCONF	_IOWR('i', 20, struct ifconf)	/* get ifnet list */
 #define	SIOCGIFCONF	_IOWR('i', 36, struct ifconf)	/* get ifnet list */
-#define	OSIOCGIFNETMASK	_IOWR('i', 21, struct ifreq)	/* get net addr mask */
 #define	SIOCGIFNETMASK	_IOWR('i', 37, struct ifreq)	/* get net addr mask */
 #define	SIOCSIFNETMASK	 _IOW('i', 22, struct ifreq)	/* set net addr mask */
 #define	SIOCGIFMETRIC	_IOWR('i', 23, struct ifreq)	/* get IF metric */
@@ -96,8 +91,9 @@
 
 #define	SIOCGIFSTATUS	_IOWR('i', 59, struct ifstat)	/* get IF status */
 #define	SIOCSIFLLADDR	 _IOW('i', 60, struct ifreq)	/* set linklevel addr */
+#define	SIOCGI2C	_IOWR('i', 61, struct ifreq)	/* get I2C data  */
 
-#define	SIOCSIFPHYADDR	 _IOW('i', 70, struct ifaliasreq) /* set gif addres */
+#define	SIOCSIFPHYADDR	 _IOW('i', 70, struct ifaliasreq) /* set gif address */
 #define	SIOCGIFPSRCADDR	_IOWR('i', 71, struct ifreq)	/* get gif psrc addr */
 #define	SIOCGIFPDSTADDR	_IOWR('i', 72, struct ifreq)	/* get gif pdst addr */
 #define	SIOCDIFPHYADDR	 _IOW('i', 73, struct ifreq)	/* delete gif addrs */
@@ -107,17 +103,14 @@
 #define	SIOCGPRIVATE_0	_IOWR('i', 80, struct ifreq)	/* device private 0 */
 #define	SIOCGPRIVATE_1	_IOWR('i', 81, struct ifreq)	/* device private 1 */
 
-/*
- * RTEMS additions for setting/getting `tap' function on incoming packets.
- */
-#define	SIOCSIFTAP	_IOW('i', 88, struct ifreq)	/* set tap function */
-#define	SIOCGIFTAP	_IOW('i', 89, struct ifreq)	/* get tap function */
-
 #define	SIOCSIFVNET	_IOWR('i', 90, struct ifreq)	/* move IF jail/vnet */
 #define	SIOCSIFRVNET	_IOWR('i', 91, struct ifreq)	/* reclaim vnet IF */
 
 #define	SIOCGIFFIB	_IOWR('i', 92, struct ifreq)	/* get IF fib */
 #define	SIOCSIFFIB	 _IOW('i', 93, struct ifreq)	/* set IF fib */
+
+#define	SIOCGTUNFIB	_IOWR('i', 94, struct ifreq)	/* get tunnel fib */
+#define	SIOCSTUNFIB	 _IOW('i', 95, struct ifreq)	/* set tunnel fib */
 
 #define	SIOCSDRVSPEC	_IOW('i', 123, struct ifdrv)	/* set driver-specific
 								  parameters */
@@ -133,5 +126,6 @@
 #define	SIOCGIFGROUP	_IOWR('i', 136, struct ifgroupreq) /* get ifgroups */
 #define	SIOCDIFGROUP	 _IOW('i', 137, struct ifgroupreq) /* delete ifgroup */
 #define	SIOCGIFGMEMB	_IOWR('i', 138, struct ifgroupreq) /* get members */
+#define	SIOCGIFXMEDIA	_IOWR('i', 139, struct ifmediareq) /* get net xmedia */
 
 #endif /* !_SYS_SOCKIO_H_ */

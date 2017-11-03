@@ -27,7 +27,7 @@ MEMORY {
 SECTIONS {
 	.vector0 : ALIGN_WITH_INPUT {
 		bsp_vector0_begin = .;
-		*(.vectors*)
+		KEEP (*(.vectors*))
 		bsp_vector0_end = .;
 	} > REGION_TEXT AT > REGION_TEXT
 	bsp_vector0_size = bsp_vector0_end - bsp_vector0_begin;
@@ -181,6 +181,8 @@ SECTIONS {
 		*(.rela.dtors)
 		*(.rela.got)
 		*(.rela.bss .rela.bss.* .rela.gnu.linkonce.b.*)
+		*(.rela.rtemsroset*)
+		*(.rela.rtemsrwset*)
 		PROVIDE_HIDDEN (__rel_iplt_start = .);
 		PROVIDE_HIDDEN (__rel_iplt_end = .);
 		PROVIDE_HIDDEN (__rela_iplt_start = .);

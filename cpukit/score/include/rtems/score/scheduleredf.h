@@ -89,24 +89,14 @@ typedef struct {
   Scheduler_Node Base;
 
   /**
-   * Pointer to corresponding Thread Control Block.
-   */
-  Thread_Control *thread;
-  /**
    * Rbtree node related to this thread.
    */
   RBTree_Node Node;
 
   /**
-   * @brief The thread priority used by this scheduler instance in case no job
-   * is released.
+   * @brief The thread priority currently used for this scheduler instance.
    */
-  Priority_Control background_priority;
-
-  /**
-   * @brief The thread priority currently used by this scheduler instance.
-   */
-  Priority_Control current_priority;
+  Priority_Control priority;
 } Scheduler_EDF_Node;
 
 /**
@@ -118,20 +108,10 @@ typedef struct {
  */
 void _Scheduler_EDF_Initialize( const Scheduler_Control *scheduler );
 
-/**
- *  @brief Removes thread from ready queue.
- *
- *  This routine removes @a the_thread from the scheduling decision,
- *  that is, removes it from the ready queue.  It performs
- *  any necessary scheduling operations including the selection of
- *  a new heir thread.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread is the thread to be blocked.
- */
 void _Scheduler_EDF_Block(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
 /**
@@ -164,24 +144,16 @@ void _Scheduler_EDF_Node_initialize(
   Priority_Control         priority
 );
 
-/**
- *  @brief Adds @a the_thread to the scheduling decision.
- *
- *  This routine adds @a the_thread to the scheduling decision, that is,
- *  adds it to the ready queue and updates any appropriate scheduling
- *  variables, for example the heir thread.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread will be unblocked.
- */
-Scheduler_Void_or_thread _Scheduler_EDF_Unblock(
+void _Scheduler_EDF_Unblock(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
-Scheduler_Void_or_thread _Scheduler_EDF_Update_priority(
+void _Scheduler_EDF_Update_priority(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
 );
 
 Priority_Control _Scheduler_EDF_Map_priority(
@@ -194,36 +166,25 @@ Priority_Control _Scheduler_EDF_Unmap_priority(
   Priority_Control         priority
 );
 
-/**
- *  @brief invoked when a thread wishes to voluntarily
- *  transfer control of the processor to another thread
- *  with equal deadline.
- *
- *  This routine is invoked when a thread wishes to voluntarily
- *  transfer control of the processor to another thread in the queue with
- *  equal deadline. This does not have to happen very often.
- *
- *  This routine will remove the specified THREAD from the ready queue
- *  and place it back. The rbtree ready queue is responsible for FIFO ordering
- *  in such a case.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in,out] the_thread The yielding thread.
- */
-Scheduler_Void_or_thread _Scheduler_EDF_Yield(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
-);
-
-Thread_Control *_Scheduler_EDF_Release_job(
+void _Scheduler_EDF_Yield(
   const Scheduler_Control *scheduler,
   Thread_Control          *the_thread,
-  uint64_t                 deadline
+  Scheduler_Node          *node
 );
 
-Thread_Control *_Scheduler_EDF_Cancel_job(
+void _Scheduler_EDF_Release_job(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
+  Thread_Control          *the_thread,
+  Priority_Node           *priority_node,
+  uint64_t                 deadline,
+  Thread_queue_Context    *queue_context
+);
+
+void _Scheduler_EDF_Cancel_job(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Priority_Node           *priority_node,
+  Thread_queue_Context    *queue_context
 );
 
 #ifdef __cplusplus

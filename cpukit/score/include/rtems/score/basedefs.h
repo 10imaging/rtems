@@ -10,7 +10,7 @@
  *  COPYRIGHT (c) 1989-2007.
  *  On-Line Applications Research Corporation (OAR).
  *
- *  Copyright (c) 2010-2015 embedded brains GmbH.
+ *  Copyright (c) 2010, 2017 embedded brains GmbH.
  *
  *  The license and distribution terms for this file may be
  *  found in the file LICENSE in this distribution or at
@@ -33,20 +33,6 @@
   #include <stddef.h>
   #include <stdbool.h>
   #include <stdint.h>
-
-  /*
-   * FIXME: This include should not be present.  In older RTEMS versions
-   * <rtems.h> provided <limits.h> indirectly.  This include is here to not
-   * break application source files that relied on this accidentally.
-   */
-  #include <limits.h>
-
-  /*
-   * FIXME: This include should not be present.  In older RTEMS versions
-   * <rtems.h> provided <string.h> indirectly.  This include is here to not
-   * break application source files that relied on this accidentally.
-   */
-  #include <string.h>
 #endif
 
 #ifndef TRUE
@@ -88,6 +74,16 @@
   #define RTEMS_COMPILER_MEMORY_BARRIER() __asm__ volatile("" ::: "memory")
 #else
   #define RTEMS_COMPILER_MEMORY_BARRIER()
+#endif
+
+/**
+ *  The following defines a compiler specific attribute which informs
+ *  the compiler that the method must not be inlined.
+ */
+#ifdef __GNUC__
+  #define RTEMS_NO_INLINE __attribute__((__noinline__))
+#else
+  #define RTEMS_NO_INLINE
 #endif
 
 /**
@@ -180,6 +176,26 @@
 #endif
 
 /**
+ * @brief Instructs the compiler to generate an alias to the specified target
+ * function.
+ */
+#if defined(__GNUC__)
+  #define RTEMS_ALIAS( _target ) __attribute__((__alias__(#_target)))
+#else
+  #define RTEMS_ALIAS( _target )
+#endif
+
+/**
+ * @brief Instructs the compiler to generate a weak alias to the specified
+ * target function.
+ */
+#if defined(__GNUC__)
+  #define RTEMS_WEAK_ALIAS( _target ) __attribute__((__weak__, __alias__(#_target)))
+#else
+  #define RTEMS_WEAK_ALIAS( _target )
+#endif
+
+/**
  * @brief Instructs the compiler to enforce the specified alignment.
  */
 #if defined(__GNUC__)
@@ -219,6 +235,18 @@
     __attribute__((__format__(__printf__, _format_pos, _ap_pos)))
 #else
   #define RTEMS_PRINTFLIKE( _format_pos, _ap_pos )
+#endif
+
+/**
+ * @brief Obfuscates the variable so that the compiler cannot perform
+ * optimizations based on the variable value.
+ *
+ * The variable must be simple enough to fit into a register.
+ */
+#if defined(__GNUC__)
+  #define RTEMS_OBFUSCATE_VARIABLE( _var ) __asm__("" : "+r" (_var))
+#else
+  #define RTEMS_OBFUSCATE_VARIABLE( _var ) (void) (_var)
 #endif
 
 #if __cplusplus >= 201103L
@@ -329,6 +357,25 @@ extern void RTEMS_DEQUALIFY_types_not_compatible(void);
 
 #endif /*RTEMS_DEQUALIFY_DEPTHX*/
 #endif /*RTEMS_DEQUALIFY*/
+
+/**
+ * @brief Evaluates to true if the members of two types have the same type.
+ *
+ * @param[in] _t_lhs Left hand side type.
+ * @param[in] _m_lhs Left hand side member.
+ * @param[in] _t_rhs Right hand side type.
+ * @param[in] _m_rhs Right hand side member.
+ */
+#ifdef __GNUC__
+  #define RTEMS_HAVE_MEMBER_SAME_TYPE( _t_lhs, _m_lhs, _t_rhs, _m_rhs ) \
+    __builtin_types_compatible_p( \
+      __typeof( ( (_t_lhs *) 0 )->_m_lhs ), \
+      __typeof( ( (_t_rhs *) 0 )->_m_rhs ) \
+    )
+#else
+  #define RTEMS_HAVE_MEMBER_SAME_TYPE( _t_lhs, _m_lhs, _t_rhs, _m_rhs ) \
+    true
+#endif
 
 /**
  * @brief Concatenates _x and _y without expanding.

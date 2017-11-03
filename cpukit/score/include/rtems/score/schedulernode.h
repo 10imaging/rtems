@@ -28,146 +28,135 @@ extern "C" {
 
 #if defined(RTEMS_SMP)
 /**
- * @brief State to indicate potential help for other threads.
- *
- * @dot
- * digraph state {
- *   y [label="HELP YOURSELF"];
- *   ao [label="HELP ACTIVE OWNER"];
- *   ar [label="HELP ACTIVE RIVAL"];
- *
- *   y -> ao [label="obtain"];
- *   y -> ar [label="wait for obtain"];
- *   ao -> y [label="last release"];
- *   ao -> r [label="wait for obtain"];
- *   ar -> r [label="timeout"];
- *   ar -> ao [label="timeout"];
- * }
- * @enddot
+ * @brief The scheduler node requests.
  */
 typedef enum {
   /**
-   * @brief This scheduler node is solely used by the owner thread.
-   *
-   * This thread owns no resources using a helping protocol and thus does not
-   * take part in the scheduler helping protocol.  No help will be provided for
-   * other thread.
+   * @brief The scheduler node is not on the list of pending requests.
    */
-  SCHEDULER_HELP_YOURSELF,
+  SCHEDULER_NODE_REQUEST_NOT_PENDING,
 
   /**
-   * @brief This scheduler node is owned by a thread actively owning a resource.
-   *
-   * This scheduler node can be used to help out threads.
-   *
-   * In case this scheduler node changes its state from ready to scheduled and
-   * the thread executes using another node, then an idle thread will be
-   * provided as a user of this node to temporarily execute on behalf of the
-   * owner thread.  Thus lower priority threads are denied access to the
-   * processors of this scheduler instance.
-   *
-   * In case a thread actively owning a resource performs a blocking operation,
-   * then an idle thread will be used also in case this node is in the
-   * scheduled state.
+   * @brief There is a pending scheduler node request to add this scheduler
+   * node to the Thread_Control::Scheduler::Scheduler_nodes chain.
    */
-  SCHEDULER_HELP_ACTIVE_OWNER,
+  SCHEDULER_NODE_REQUEST_ADD,
 
   /**
-   * @brief This scheduler node is owned by a thread actively obtaining a
-   * resource currently owned by another thread.
-   *
-   * This scheduler node can be used to help out threads.
-   *
-   * The thread owning this node is ready and will give away its processor in
-   * case the thread owning the resource asks for help.
+   * @brief There is a pending scheduler node request to remove this scheduler
+   * node from the Thread_Control::Scheduler::Scheduler_nodes chain.
    */
-  SCHEDULER_HELP_ACTIVE_RIVAL,
+  SCHEDULER_NODE_REQUEST_REMOVE,
 
   /**
-   * @brief This scheduler node is owned by a thread obtaining a
-   * resource currently owned by another thread.
-   *
-   * This scheduler node can be used to help out threads.
-   *
-   * The thread owning this node is blocked.
+   * @brief The scheduler node is on the list of pending requests, but nothing
+   * should change.
    */
-  SCHEDULER_HELP_PASSIVE
-} Scheduler_Help_state;
+  SCHEDULER_NODE_REQUEST_NOTHING,
+
+} Scheduler_Node_request;
 #endif
+
+typedef struct Scheduler_Node Scheduler_Node;
 
 /**
  * @brief Scheduler node for per-thread data.
  */
-typedef struct {
+struct Scheduler_Node {
 #if defined(RTEMS_SMP)
   /**
    * @brief Chain node for usage in various scheduler data structures.
    *
-   * Strictly this is the wrong place for this field since the data structures
+   * Strictly, this is the wrong place for this field since the data structures
    * to manage scheduler nodes belong to the particular scheduler
-   * implementation.  Currently all SMP scheduler implementations use chains.
-   * The node is here to simplify things, just like the object node in the
-   * thread control block.  It may be replaced with a union to add a red-black
-   * tree node in the future.
+   * implementation.  Currently, all SMP scheduler implementations use chains
+   * or red-black trees.  The node is here to simplify things, just like the
+   * object node in the thread control block.
    */
-  Chain_Node Node;
+  union {
+    Chain_Node Chain;
+    RBTree_Node RBTree;
+  } Node;
+
+  /**
+   * @brief The sticky level determines if this scheduler node should use an
+   * idle thread in case this node is scheduled and the owner thread is
+   * blocked.
+   */
+  int sticky_level;
 
   /**
    * @brief The thread using this node.
+   *
+   * This is either the owner or an idle thread.
    */
   struct _Thread_Control *user;
 
   /**
-   * @brief The help state of this node.
-   */
-  Scheduler_Help_state help_state;
-
-  /**
-   * @brief The idle thread claimed by this node in case the help state is
-   * SCHEDULER_HELP_ACTIVE_OWNER.
+   * @brief The idle thread claimed by this node in case the sticky level is
+   * greater than zero and the thread is block or is scheduled on another
+   * scheduler instance.
    *
-   * Active owners will lend their own node to an idle thread in case they
-   * execute currently using another node or in case they perform a blocking
-   * operation.  This is necessary to ensure the priority ceiling protocols
-   * work across scheduler boundaries.
+   * This is necessary to ensure the priority ceiling protocols work across
+   * scheduler boundaries.
    */
   struct _Thread_Control *idle;
+#endif
 
   /**
-   * @brief The thread accepting help by this node in case the help state is
-   * not SCHEDULER_HELP_YOURSELF.
+   * @brief The thread owning this node.
    */
-  struct _Thread_Control *accepts_help;
+  struct _Thread_Control *owner;
+
+#if defined(RTEMS_SMP)
+  /**
+   * @brief Block to register and manage this scheduler node in the thread
+   * control block of the owner of this scheduler node.
+   */
+  struct {
+    /**
+     * @brief Node to add this scheduler node to
+     * Thread_Control::Scheduler::Wait_nodes.
+     */
+    Chain_Node Wait_node;
+
+    /**
+     * @brief Node to add this scheduler node to
+     * Thread_Control::Scheduler::Scheduler_nodes or a temporary remove list.
+     */
+    union {
+      /**
+       * @brief The node for Thread_Control::Scheduler::Scheduler_nodes.
+       */
+      Chain_Node Chain;
+
+      /**
+       * @brief The next pointer for a temporary remove list.
+       *
+       * @see _Thread_Scheduler_process_requests().
+       */
+      Scheduler_Node *next;
+    } Scheduler_node;
+
+    /**
+     * @brief Link to the next scheduler node in the
+     * Thread_Control::Scheduler::requests list.
+     */
+    Scheduler_Node *next_request;
+
+    /**
+     * @brief The current scheduler node request.
+     */
+    Scheduler_Node_request request;
+  } Thread;
 #endif
 
   /**
    * @brief Thread wait support block.
    */
   struct {
-    /**
-     * @brief Node for thread queues.
-     *
-     * Each scheduler node can be enqueued on a thread queue on behalf of the
-     * thread owning the scheduler node.  The scheduler node reflects the
-     * priority of the thread within the corresponding scheduler instance.
-     */
-    union {
-      /**
-       * @brief A node for chains.
-       */
-      Chain_Node Chain;
-
-      /**
-       * @brief A node for red-black trees.
-       */
-      RBTree_Node RBTree;
-    } Node;
+    Priority_Aggregation Priority;
   } Wait;
-
-  /**
-   * @brief The thread owning this node.
-   */
-  struct _Thread_Control *owner;
 
   /**
    * @brief The thread priority information used by the scheduler.
@@ -203,7 +192,24 @@ typedef struct {
      */
     bool prepend_it;
   } Priority;
-} Scheduler_Node;
+};
+
+#if defined(RTEMS_SMP)
+/**
+ * @brief The size of a scheduler node.
+ *
+ * This value is provided via <rtems/confdefs.h>.
+ */
+extern const size_t _Scheduler_Node_size;
+#endif
+
+#if defined(RTEMS_SMP)
+#define SCHEDULER_NODE_OF_THREAD_WAIT_NODE( node ) \
+  RTEMS_CONTAINER_OF( node, Scheduler_Node, Thread.Wait_node )
+
+#define SCHEDULER_NODE_OF_THREAD_SCHEDULER_NODE( node ) \
+  RTEMS_CONTAINER_OF( node, Scheduler_Node, Thread.Scheduler_node.Chain )
+#endif
 
 #ifdef __cplusplus
 }

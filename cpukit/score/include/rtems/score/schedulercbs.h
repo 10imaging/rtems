@@ -61,7 +61,7 @@ extern "C" {
     _Scheduler_CBS_Node_initialize,  /* node initialize entry point */ \
     _Scheduler_default_Node_destroy, /* node destroy entry point */ \
     _Scheduler_CBS_Release_job,      /* new period of task */ \
-    _Scheduler_EDF_Cancel_job,       /* cancel period of task */ \
+    _Scheduler_CBS_Cancel_job,       /* cancel period of task */ \
     _Scheduler_default_Tick,         /* tick entry point */ \
     _Scheduler_default_Start_idle    /* start idle entry point */ \
     SCHEDULER_OPERATION_DEFAULT_GET_SET_AFFINITY \
@@ -135,6 +135,8 @@ typedef struct {
   Scheduler_EDF_Node            Base;
   /** CBS server specific data of a task. */
   Scheduler_CBS_Server         *cbs_server;
+
+  Priority_Node                *deadline_node;
 } Scheduler_CBS_Node;
 
 
@@ -144,29 +146,25 @@ typedef struct {
  */
 extern Scheduler_CBS_Server _Scheduler_CBS_Server_list[];
 
-/**
- *  @brief Unblocks a thread from the queue.
- *
- *  This routine adds @a the_thread to the scheduling decision, that is,
- *  adds it to the ready queue and updates any appropriate scheduling
- *  variables, for example the heir thread. It is checked whether the
- *  remaining budget is sufficient. If not, the thread continues as a
- *  new job in order to protect concurrent threads.
- *
- *  @param[in] scheduler The scheduler instance.
- *  @param[in] the_thread will be unblocked.
- *
- *  @note This has to be asessed as missed deadline of the current job.
- */
-Scheduler_Void_or_thread _Scheduler_CBS_Unblock(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread
-);
-
-Thread_Control *_Scheduler_CBS_Release_job(
+void _Scheduler_CBS_Unblock(
   const Scheduler_Control *scheduler,
   Thread_Control          *the_thread,
-  uint64_t                 length
+  Scheduler_Node          *node
+);
+
+void _Scheduler_CBS_Release_job(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Priority_Node           *priority_node,
+  uint64_t                 deadline,
+  Thread_queue_Context    *queue_context
+);
+
+void _Scheduler_CBS_Cancel_job(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Priority_Node           *priority_node,
+  Thread_queue_Context    *queue_context
 );
 
 /**

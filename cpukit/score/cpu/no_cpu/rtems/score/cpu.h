@@ -46,29 +46,6 @@ extern "C" {
 /* conditional compilation parameters */
 
 /**
- * Should the calls to @ref _Thread_Enable_dispatch be inlined?
- *
- * If TRUE, then they are inlined.
- * If FALSE, then a subroutine call is made.
- *
- * This conditional is an example of the classic trade-off of size
- * versus speed.  Inlining the call (TRUE) typically increases the
- * size of RTEMS while speeding up the enabling of dispatching.
- *
- * NOTE: In general, the @ref _Thread_Dispatch_disable_level will
- * only be 0 or 1 unless you are in an interrupt handler and that
- * interrupt handler invokes the executive.]  When not inlined
- * something calls @ref _Thread_Enable_dispatch which in turns calls
- * @ref _Thread_Dispatch.  If the enable dispatch is inlined, then
- * one subroutine call is avoided entirely.
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define CPU_INLINE_ENABLE_DISPATCH       FALSE
-
-/**
  * Does RTEMS manage a dedicated interrupt stack in software?
  *
  * If TRUE, then a stack is allocated in @ref _ISR_Handler_initialization.
@@ -153,7 +130,7 @@ extern "C" {
  *
  * XXX document implementation including references if appropriate
  */
-#define CPU_ISR_PASSES_FRAME_POINTER 0
+#define CPU_ISR_PASSES_FRAME_POINTER FALSE
 
 /**
  * @def CPU_HARDWARE_FP
@@ -272,6 +249,18 @@ extern "C" {
 #define CPU_USE_DEFERRED_FP_SWITCH       TRUE
 
 /**
+ * @brief Enables a robust thread dispatch if set to TRUE.
+ *
+ * In general, it is an application bug to call blocking operating system
+ * services with interrupts disabled.  In most situations this only increases
+ * the interrupt latency.  However, on SMP configurations or on some CPU port
+ * like ARM Cortex-M it leads to undefined system behaviour.  It order to ease
+ * the application development, this error condition is checked at run-time in
+ * case this CPU port option is defined to TRUE.
+ */
+#define CPU_ENABLE_ROBUST_THREAD_DISPATCH FALSE
+
+/**
  * Does this port provide a CPU dependent IDLE task implementation?
  *
  * If TRUE, then the routine @ref _CPU_Thread_Idle_body
@@ -331,46 +320,6 @@ extern "C" {
 #define CPU_STRUCTURE_ALIGNMENT RTEMS_ALIGNED( CPU_CACHE_LINE_BYTES )
 
 /**
- * @defgroup CPUEndian Processor Dependent Endianness Support
- *
- * This group assists in issues related to processor endianness.
- * 
- */
-/**@{**/
-
-/**
- * Define what is required to specify how the network to host conversion
- * routines are handled.
- *
- * NOTE: @a CPU_BIG_ENDIAN and @a CPU_LITTLE_ENDIAN should NOT have the
- * same values.
- *
- * @see CPU_LITTLE_ENDIAN
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define CPU_BIG_ENDIAN                           TRUE
-
-/**
- * Define what is required to specify how the network to host conversion
- * routines are handled.
- *
- * NOTE: @ref CPU_BIG_ENDIAN and @ref CPU_LITTLE_ENDIAN should NOT have the
- * same values.
- *
- * @see CPU_BIG_ENDIAN
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define CPU_LITTLE_ENDIAN                        FALSE
-
-/** @} */
-
-/**
  * @ingroup CPUInterrupt
  * 
  * The following defines the number of bits actually used in the
@@ -382,14 +331,6 @@ extern "C" {
  * XXX document implementation including references if appropriate
  */
 #define CPU_MODES_INTERRUPT_MASK   0x00000001
-
-/**
- * @brief The size of the CPU specific per-CPU control.
- *
- * This define must be visible to assember files since it is used to derive
- * structure offsets.
- */
-#define CPU_PER_CPU_CONTROL_SIZE 0
 
 /**
  * @brief Maximum number of processors of all systems supported by this CPU
@@ -406,16 +347,6 @@ extern "C" {
  */
 
 /* may need to put some structures here.  */
-
-/**
- * @brief The CPU specific per-CPU control.
- *
- * The CPU port can place here all state information that must be available and
- * maintained for each CPU in the system.
- */
-typedef struct {
-  /* CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 /**
  * @defgroup CPUContext Processor Dependent Context Management
@@ -832,6 +763,20 @@ extern Context_Control_fp _CPU_Null_fp_context;
   }
 
 /**
+ * @brief Returns true if interrupts are enabled in the specified ISR level,
+ * otherwise returns false.
+ *
+ * @param[in] level The ISR level.
+ *
+ * @retval true Interrupts are enabled in the ISR level.
+ * @retval false Otherwise.
+ */
+RTEMS_INLINE_ROUTINE bool _CPU_ISR_Is_enabled( uint32_t level )
+{
+  return false;
+}
+
+/**
  * @ingroup CPUInterrupt
  *
  * This routine and @ref _CPU_ISR_Get_level
@@ -871,6 +816,25 @@ uint32_t   _CPU_ISR_Get_level( void );
 /* Context handler macros */
 
 /**
+ * @ingroup CPUContext
+ *
+ * @brief Destroys the context of the thread.
+ *
+ * It must be implemented as a macro and an implementation is optional.  The
+ * default implementation does nothing.
+ *
+ * @param[in] _the_thread The corresponding thread.
+ * @param[in] _the_context The context to destroy.
+ *
+ * Port Specific Information:
+ *
+ * XXX document implementation including references if appropriate
+ */
+#define _CPU_Context_Destroy( _the_thread, _the_context ) \
+  { \
+  }
+
+/**
  *  @ingroup CPUContext
  * 
  * Initialize the context to a state suitable for starting a
@@ -886,6 +850,10 @@ uint32_t   _CPU_ISR_Get_level( void );
  * This routine generally does not set any unnecessary register
  * in the context.  The state of the "general data" registers is
  * undefined at task start time.
+ *
+ * The ISR dispatch disable field of the context must be cleared to zero if it
+ * is used by the CPU port.  Otherwise, a thread restart results in
+ * unpredictable behaviour.
  *
  * @param[in] _the_context is the context structure to be initialized
  * @param[in] _stack_base is the lowest physical address of this task's stack
@@ -925,32 +893,6 @@ uint32_t   _CPU_ISR_Get_level( void );
  */
 #define _CPU_Context_Restart_self( _the_context ) \
    _CPU_Context_restore( (_the_context) );
-
-/**
- * @ingroup CPUContext
- * 
- * The purpose of this macro is to allow the initial pointer into
- * a floating point context area (used to save the floating point
- * context) to be at an arbitrary place in the floating point
- *context area.
- *
- * This is necessary because some FP units are designed to have
- * their context saved as a stack which grows into lower addresses.
- * Other FP units can be saved by simply moving registers into offsets
- * from the base of the context area.  Finally some FP units provide
- * a "dump context" instruction which could fill in from high to low
- * or low to high based on the whim of the CPU designers.
- *
- * @param[in] _base is the lowest physical address of the floating point
- *        context area
- * @param[in] _offset is the offset into the floating point area
- *
- * Port Specific Information:
- *
- * XXX document implementation including references if appropriate
- */
-#define _CPU_Context_Fp_start( _base, _offset ) \
-   ( (void *) _Addresses_Add_offset( (_base), (_offset) ) )
 
 /**
  * This routine initializes the FP context area passed to it to.
@@ -1414,24 +1356,6 @@ CPU_Counter_ticks _CPU_Counter_difference(
   CPU_Counter_ticks second,
   CPU_Counter_ticks first
 );
-
-/**
- * @brief Special register pointing to the per-CPU control of the current
- * processor.
- *
- * This is optional.  Not every CPU port needs this.  It is only an optional
- * optimization variant.
- */
-register struct Per_CPU_Control *_CPU_Per_CPU_current asm( "rX" );
-
-/**
- * @brief Optional method to obtain the per-CPU control of the current processor.
- *
- * This is optional.  Not every CPU port needs this.  It is only an optional
- * optimization variant.  In case this macro is undefined, the default
- * implementation using the current processor index will be used.
- */
-#define _CPU_Get_current_per_CPU_control() ( _CPU_Per_CPU_current )
 
 #ifdef RTEMS_SMP
   /**

@@ -146,6 +146,11 @@ extern int rtems_3c509_driver_attach(struct rtems_bsdnet_ifconfig *config);
 
 #define	TIMER_TICK     1193182  /* The internal tick rate in ticks per second */
 
+#if defined( RTEMS_SMP )
+  extern ISR_lock_Control rtems_i386_i8254_access_lock;
+#endif
+
+
 /*-------------------------------------------------------------------------+
 | Console Defines
 |      WARNING: These Values MUST match the order in
@@ -184,31 +189,8 @@ void Calibrate_loop_1ms(void);           /* from 'timer.c'  */
 
 void rtems_irq_mngt_init(void);          /* from 'irq_init.c' */
 
-#if (BSP_IS_EDISON == 0)
-  void Clock_driver_install_handler(void);             /* from 'ckinit.c'  */
-  void Clock_driver_support_initialize_hardware(void); /* from 'ckinit.c'  */
-#else
-  /**
-   *  @defgroup edison_bsp Clock Tick Support
-   *
-   *  @ingroup i386_pc386
-   *
-   *  @brief Clock Tick Support Package
-   */
-   void *clock_driver_sim_idle_body(uintptr_t);
-   #define BSP_IDLE_TASK_BODY clock_driver_sim_idle_body
-  /*
-   * hack to kill some time. Hopefully hitting a hardware register is slower
-   * than an empty loop.
-   */
-  #define BSP_CLOCK_DRIVER_DELAY() \
-    do { \
-      uint64_t _i = 2500000; \
-      while (_i) { \
-        _i--; \
-      } \
-    } while ( 0 )
-#endif /* edison */
+void Clock_driver_install_handler(void);             /* from 'ckinit.c'  */
+void Clock_driver_support_initialize_hardware(void); /* from 'ckinit.c'  */
 
 void *bsp_idle_thread( uintptr_t ignored );
 #define BSP_IDLE_TASK_BODY bsp_idle_thread

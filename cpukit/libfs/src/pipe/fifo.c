@@ -19,6 +19,7 @@
 #endif
 
 #include <sys/param.h>
+#include <sys/filio.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,8 +31,8 @@
 
 #include "pipe.h"
 
-#define LIBIO_ACCMODE(_iop) ((_iop)->flags & LIBIO_FLAGS_READ_WRITE)
-#define LIBIO_NODELAY(_iop) ((_iop)->flags & LIBIO_FLAGS_NO_DELAY)
+#define LIBIO_ACCMODE(_iop) (rtems_libio_iop_flags(_iop) & LIBIO_FLAGS_READ_WRITE)
+#define LIBIO_NODELAY(_iop) rtems_libio_iop_is_no_delay(_iop)
 
 static rtems_id pipe_semaphore = RTEMS_ID_NONE;
 
@@ -264,7 +265,7 @@ void pipe_release(
     return;
 
   /* This is safe for IMFS, but how about other FSes? */
-  iop->flags &= ~LIBIO_FLAGS_OPEN;
+  rtems_libio_iop_flags_clear( iop, LIBIO_FLAGS_OPEN );
   if(iop->pathinfo.ops->unlink_h(&iop->pathinfo))
     return;
 #endif

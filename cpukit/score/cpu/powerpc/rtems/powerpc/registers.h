@@ -23,6 +23,8 @@
 #define _RTEMS_POWERPC_REGISTERS_H
 
 /* Bit encodings for Machine State Register (MSR) */
+#define MSR_CM		(1<<31)		/* Computation mode */
+#define MSR_GS		(1<<28)		/* Guest state */
 #define MSR_UCLE	(1<<26)		/* User-mode cache lock enable (e500) */
 #define MSR_VE		(1<<25)		/* Alti-Vec enable (7400+) */
 #define MSR_SPE		(1<<25)		/* SPE enable (e500) */
@@ -344,6 +346,20 @@ lidate */
 #define BOOKE_SPRG7_W  263   /* Special Purpose Register General 7 (WO)   */
 #define BOOKE_PIR      286   /* Processor ID Register                     */
 #define BOOKE_DBSR     304   /* Debug Status Register                     */
+
+#define BOOKE_EPCR     307   /* Embedded Processor Control Register       */
+#define BOOKE_EPCR_EXTGS  (1 << 31)
+#define BOOKE_EPCR_DTLBGS (1 << 30)
+#define BOOKE_EPCR_ITLBGS (1 << 29)
+#define BOOKE_EPCR_DSIGS  (1 << 28)
+#define BOOKE_EPCR_ISIGS  (1 << 27)
+#define BOOKE_EPCR_DUVD   (1 << 26)
+#define BOOKE_EPCR_ICM    (1 << 25)
+#define BOOKE_EPCR_GICM   (1 << 24)
+#define BOOKE_EPCR_DGTMI  (1 << 23)
+#define BOOKE_EPCR_DMIUH  (1 << 22)
+#define BOOKE_EPCR_PMGS   (1 << 21)
+
 #define BOOKE_DBCR0    308   /* Debug Control Register 0                  */
 #define BOOKE_DBCR1    309   /* Debug Control Register 1                  */
 #define BOOKE_DBCR2    310   /* Debug Control Register 2                  */
@@ -355,6 +371,12 @@ lidate */
 #define BOOKE_DAC2     317   /* Data Address Compare 2                    */
 #define BOOKE_DVC1     318   /* Data Value Compare 1                      */
 #define BOOKE_DVC2     319   /* Data Value Compare 2                      */
+#define BOOKE_GSRR0    378   /* Guest Save/Restore Register 0             */
+#define BOOKE_GSRR1    379   /* Guest Save/Restore Register 1             */
+#define BOOKE_GEPR     380   /* Guest External Proxy Register             */
+#define BOOKE_GDEAR    381   /* Guest Data Exception Address Register     */
+#define BOOKE_GPIR     382   /* Guest Processor ID Register               */
+#define BOOKE_GESR     383   /* Guest Exception Syndrome Register         */
 #define BOOKE_IVOR0    400   /* Interrupt Vector Offset Register 0        */
 #define BOOKE_IVOR1    401   /* Interrupt Vector Offset Register 1        */
 #define BOOKE_IVOR2    402   /* Interrupt Vector Offset Register 2        */
@@ -371,9 +393,29 @@ lidate */
 #define BOOKE_IVOR13   413   /* Interrupt Vector Offset Register 13       */
 #define BOOKE_IVOR14   414   /* Interrupt Vector Offset Register 14       */
 #define BOOKE_IVOR15   415   /* Interrupt Vector Offset Register 15       */
+#define BOOKE_IVOR42   436   /* Interrupt Vector Offset Register 42       */
+#define BOOKE_IVOR32   528   /* Interrupt Vector Offset Register 32       */
+#define BOOKE_IVOR33   529   /* Interrupt Vector Offset Register 33       */
+#define BOOKE_IVOR34   530   /* Interrupt Vector Offset Register 34       */
+#define BOOKE_IVOR35   531   /* Interrupt Vector Offset Register 35       */
+#define BOOKE_IVOR36   532   /* Interrupt Vector Offset Register 36       */
+#define BOOKE_IVOR37   533   /* Interrupt Vector Offset Register 37       */
+#define BOOKE_IVOR38   432   /* Interrupt Vector Offset Register 38       */
+#define BOOKE_IVOR39   433   /* Interrupt Vector Offset Register 39       */
+#define BOOKE_IVOR40   434   /* Interrupt Vector Offset Register 40       */
+#define BOOKE_IVOR41   435   /* Interrupt Vector Offset Register 41       */
+#define BOOKE_GIVOR2   440   /* Guest Interrupt Vector Offset Register 2  */
+#define BOOKE_GIVOR3   441   /* Guest Interrupt Vector Offset Register 3  */
+#define BOOKE_GIVOR4   442   /* Guest Interrupt Vector Offset Register 4  */
+#define BOOKE_GIVOR8   443   /* Guest Interrupt Vector Offset Register 8  */
+#define BOOKE_GIVOR13  444   /* Guest Interrupt Vector Offset Register 13 */
+#define BOOKE_GIVOR14  445   /* Guest Interrupt Vector Offset Register 14 */
+#define BOOKE_GIVPR    446   /* Guest Interrupt Vector Prefix Register    */
 #define BOOKE_MCSRR0   570   /* Machine Check Save/Restore Register 0     */
 #define BOOKE_MCSRR1   571   /* Machine Check Save/Restore Register 1     */
 #define BOOKE_MCSR     572   /* Machine Check Status Register             */
+#define BOOKE_DSRR0    574   /* Debug Save/Restore Register 0             */
+#define BOOKE_DSRR1    575   /* Debug Save/Restore Register 1             */
 
 #define PPC440_INV0    880   /* Instruction Cache Normal Victim 0         */
 #define PPC440_INV1    881   /* Instruction Cache Normal Victim 1         */
@@ -633,7 +675,7 @@ extern char _PPC_INTERRUPT_DISABLE_MASK[];
 
 static inline uint32_t ppc_interrupt_get_disable_mask( void )
 {
-  return (uint32_t) _PPC_INTERRUPT_DISABLE_MASK;
+  return (uint32_t) (uintptr_t) _PPC_INTERRUPT_DISABLE_MASK;
 }
 
 static inline uint32_t ppc_interrupt_disable( void )
