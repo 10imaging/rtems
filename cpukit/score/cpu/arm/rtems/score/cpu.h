@@ -82,6 +82,7 @@
 #define ARM_PSR_M_IRQ 0x12
 #define ARM_PSR_M_SVC 0x13
 #define ARM_PSR_M_ABT 0x17
+#define ARM_PSR_M_HYP 0x1a
 #define ARM_PSR_M_UND 0x1b
 #define ARM_PSR_M_SYS 0x1f
 
@@ -144,8 +145,11 @@
 
 #define CPU_STACK_GROWS_UP FALSE
 
-/* XXX Why 32? */
-#define CPU_STRUCTURE_ALIGNMENT __attribute__ ((aligned (32)))
+#if defined(ARM_MULTILIB_CACHE_LINE_MAX_64)
+  #define CPU_STRUCTURE_ALIGNMENT __attribute__ ((aligned ( 64 )))
+#else
+  #define CPU_STRUCTURE_ALIGNMENT __attribute__ ((aligned ( 32 )))
+#endif
 
 #define CPU_TIMESTAMP_USE_STRUCT_TIMESPEC TRUE
 
@@ -240,10 +244,6 @@ extern "C" {
  * @addtogroup ScoreCPU
  */
 /**@{**/
-
-typedef struct {
-  /* There is no CPU specific per-CPU state */
-} CPU_Per_CPU_control;
 
 typedef struct {
 #if defined(ARM_MULTILIB_ARCH_V4)

@@ -95,6 +95,40 @@ rtems_device_driver console_initialize(
     ++minor
   ) {
     tms570_sci_context *ctx = &driver_context_table[minor];
+    uint32_t rx_pin = 1 << 1;
+    uint32_t tx_pin = 1 << 2;
+
+    /* Resec SCI peripheral */
+    ctx->regs->GCR0 = TMS570_SCI_GCR0_RESET * 0;
+    ctx->regs->GCR0 = TMS570_SCI_GCR0_RESET * 1;
+
+    /* Clear all interrupt sources */
+    ctx->regs->CLEARINT = 0xffffffff;
+
+    /* Map all interrupts to SCI INT0 line */
+    ctx->regs->CLEARINTLVL = 0xffffffff;
+
+    ctx->regs->GCR1 = TMS570_SCI_GCR1_TXENA * 0 |
+                      TMS570_SCI_GCR1_RXENA * 0 |
+                      TMS570_SCI_GCR1_CONT * 0 | /* continue operation when debugged */
+                      TMS570_SCI_GCR1_LOOP_BACK * 0 |
+                      TMS570_SCI_GCR1_POWERDOWN * 0 |
+                      TMS570_SCI_GCR1_SLEEP * 0 |
+                      TMS570_SCI_GCR1_SWnRST * 0 | /* reset state */
+                      TMS570_SCI_GCR1_CLOCK * 1 | /* internal clock */
+                      TMS570_SCI_GCR1_TIMING_MODE * 1 |
+                      TMS570_SCI_GCR1_COMM_MODE * 0;
+
+    /* Setup connection of SCI peripheral Rx and Tx  pins */
+    ctx->regs->PIO0 = rx_pin * 1 | tx_pin * 1; /* Rx and Tx pins are not GPIO */
+    ctx->regs->PIO3 = rx_pin * 0 | tx_pin * 0; /* Default output low  */
+    ctx->regs->PIO1 = rx_pin * 0 | tx_pin * 0; /* Input when not used by SCI */
+    ctx->regs->PIO6 = rx_pin * 0 | tx_pin * 0; /* No open drain */
+    ctx->regs->PIO7 = rx_pin * 0 | tx_pin * 0; /* Pull-up/down enabled */
+    ctx->regs->PIO8 = rx_pin * 1 | tx_pin * 1; /* Select pull-up */
+
+    /* Bring device out of software reset */
+    ctx->regs->GCR1 |= TMS570_SCI_GCR1_SWnRST;
 
     /*
      * Install this device in the file system and Termios.  In order
@@ -107,7 +141,7 @@ rtems_device_driver console_initialize(
         major,
         minor,
         handler,
-	NULL,
+        NULL,
         &ctx->base
     );
     if ( sc != RTEMS_SUCCESSFUL ) {
@@ -213,8 +247,30 @@ static bool tms570_sci_set_attributes(
   rtems_interrupt_lock_context lock_context;
   int32_t bauddiv;
   int32_t baudrate;
+  uint32_t flr_tx_ready = TMS570_SCI_FLR_TX_EMPTY | TMS570_SCI_FLR_TX_EMPTY;
+
+  /* Baud rate */
+  baudrate = rtems_termios_baud_to_number(cfgetospeed(t));
 
   rtems_termios_device_lock_acquire(base, &lock_context);
+
+  while ( (ctx->regs->GCR1 & TMS570_SCI_GCR1_TXENA) &&
+          (ctx->regs->FLR & flr_tx_ready) != flr_tx_ready) {
+    /*
+     * There are pending characters in the hardware,
+     * change in the middle of the character Tx leads
+     * to disturb of the character and SCI engine
+     */
+    rtems_interval tw;
+
+    rtems_termios_device_lock_release(base, &lock_context);
+
+    tw = rtems_clock_get_ticks_per_second();
+    tw = tw * 5 / baudrate + 1;
+    rtems_task_wake_after( tw );
+
+    rtems_termios_device_lock_acquire(base, &lock_context);
+  }
 
   ctx->regs->GCR1 &= ~( TMS570_SCI_GCR1_SWnRST | TMS570_SCI_GCR1_TXENA |
                         TMS570_SCI_GCR1_RXENA );
@@ -242,8 +298,7 @@ static bool tms570_sci_set_attributes(
       ctx->regs->GCR1 &= ~TMS570_SCI_GCR1_PARITY_ENA;
   }
 
-  /* Baud rate */
-  baudrate = rtems_termios_baud_to_number(cfgetospeed(t));
+  /* Apply baudrate to the hardware */
   baudrate *= 2 * 16;
   bauddiv = (BSP_PLL_OUT_CLOCK + baudrate / 2) / baudrate;
   ctx->regs->BRS = bauddiv;
@@ -473,7 +528,7 @@ static bool tms570_sci_interrupt_first_open(
   if ( ret == false ) {
     return false;
   }
-  ctx->regs->SETINTLVL = 0;
+
   /* Register Interrupt handler */
   sc = rtems_interrupt_handler_install(ctx->irq,
       ctx->device_name,
