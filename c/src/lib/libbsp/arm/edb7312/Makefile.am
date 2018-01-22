@@ -1,13 +1,15 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
 dist_project_lib_DATA = bsp_specs
 
 include_HEADERS = include/bsp.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 include_bsp_HEADERS =
 
@@ -17,15 +19,15 @@ DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
 include_HEADERS += include/ep7312.h
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 include_HEADERS += ../../arm/shared/comm/uart.h
@@ -34,6 +36,7 @@ libbsp_a_SOURCES += \
     ../../shared/bspgetworkarea.c \
     ../../shared/bsppredriverhook.c startup/bspstart.c \
     ../../shared/bspclean.c ../../shared/bootcard.c ../../shared/sbrk.c \
+    ../../shared/getentropy-cpucounter.c \
     startup/bspreset.c ../../shared/gnatinstallhandler.c
 libbsp_a_SOURCES += ../../shared/cpucounterread.c
 libbsp_a_SOURCES += ../../shared/cpucounterdiff.c
@@ -64,7 +67,7 @@ libbsp_a_SOURCES += irq/bsp_irq_asm.S
 # Cache
 libbsp_a_SOURCES += ../../../libcpu/shared/src/cache_manager.c
 libbsp_a_SOURCES += ../../shared/include/cache_.h
-libbsp_a_CPPFLAGS = -I$(srcdir)/../../shared/include
+libbsp_a_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)/../../shared/include
 
 if HAS_NETWORKING
 network_CPPFLAGS = -D__INSIDE_RTEMS_BSD_TCPIP_STACK__

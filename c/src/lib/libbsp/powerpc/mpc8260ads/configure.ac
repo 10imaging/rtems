@@ -2,7 +2,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-powerpc-mpc8260ads],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/mpc8260ads.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -61,7 +61,7 @@ RTEMS_BSPOPTS_HELP([DISPATCH_HANDLER_STAT],
 RTEMS_CHECK_NETWORKING
 AM_CONDITIONAL(HAS_NETWORKING,test "$HAS_NETWORKING" = "yes")
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 # Explicitly list a Makefile here
 AC_CONFIG_FILES([Makefile])

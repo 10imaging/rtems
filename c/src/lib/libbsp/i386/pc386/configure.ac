@@ -2,7 +2,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-i386-pc386],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/pc386.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -151,7 +151,7 @@ RTEMS_CONFIG_BUILD_SUBDIRS(tools)
 
 AC_SUBST(RTEMS_BSP)
 
-RTEMS_BSP_CLEANUP_OPTIONS(1, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile])

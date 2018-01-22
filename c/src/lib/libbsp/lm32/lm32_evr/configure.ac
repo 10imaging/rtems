@@ -2,7 +2,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-lm32-lm32_evr],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/lm32_evr.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -28,7 +28,7 @@ RTEMS_BSPOPTS_HELP([LM32_ON_SIMULATOR],
  alternate printk support.])
 AM_CONDITIONAL(LM32_ON_SIMULATOR,test x"$LM32_ON_SIMULATOR" = "x1")
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile])

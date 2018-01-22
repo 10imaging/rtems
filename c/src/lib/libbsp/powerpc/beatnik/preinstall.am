@@ -49,11 +49,7 @@ $(PROJECT_INCLUDE)/bsp/bootcard.h: ../../shared/include/bootcard.h $(PROJECT_INC
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/bootcard.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/bootcard.h
 
-$(PROJECT_INCLUDE)/coverhd.h: ../../shared/include/coverhd.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/coverhd.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/coverhd.h
-
-$(PROJECT_INCLUDE)/tm27.h: ../../shared/include/tm27.h $(PROJECT_INCLUDE)/$(dirstamp)
+$(PROJECT_INCLUDE)/tm27.h: include/tm27.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/tm27.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/tm27.h
 
@@ -65,7 +61,11 @@ $(PROJECT_LIB)/motld_start.$(OBJEXT): motld_start.$(OBJEXT) $(PROJECT_LIB)/$(dir
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/motld_start.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/motld_start.$(OBJEXT)
 
-$(PROJECT_LIB)/linkcmds: ../shared/startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
+$(PROJECT_LIB)/linkcmds.share: ../shared/startup/linkcmds.share $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.share
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.share
+
+$(PROJECT_LIB)/linkcmds: startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds
 PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds
 
@@ -120,14 +120,6 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/flashPgmPvt.h
 $(PROJECT_INCLUDE)/bsp/pci.h: ../../powerpc/shared/pci/pci.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/pci.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/pci.h
-
-$(PROJECT_INCLUDE)/bsp/vectors.h: ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/vectors.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/vectors.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/vectors.h
-
-$(PROJECT_INCLUDE)/bsp/irq_supp.h: ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq_supp.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq_supp.h
 
 $(PROJECT_INCLUDE)/bsp/VMEConfig.h: vme/VMEConfig.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/VMEConfig.h

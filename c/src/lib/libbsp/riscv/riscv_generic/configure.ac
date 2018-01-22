@@ -7,7 +7,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-riscv_generic],[_RTEMS_VERSION],[http://www.rtems.org/bugzilla])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/riscv_generic.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -29,7 +29,7 @@ RTEMS_PROG_CCAS
 RTEMS_CHECK_SMP
 AM_CONDITIONAL(HAS_SMP,[test "$rtems_cv_HAS_SMP" = "yes"])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 AC_CONFIG_FILES([Makefile])

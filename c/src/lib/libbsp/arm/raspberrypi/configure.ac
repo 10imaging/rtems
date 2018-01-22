@@ -7,7 +7,7 @@
 
 AC_PREREQ([2.68])
 AC_INIT([rtems-c-src-lib-libbsp-arm-raspberrypi],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/raspberrypi.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -54,7 +54,7 @@ AC_ARG_VAR([$1],[$2; default $3])dnl
 
 RASPBERRYPI_LINKCMD([RASPBERRYPI_CPUS],[Number of active cores],[${RASPBERRYPI_CPUS}])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 AC_CONFIG_FILES([
 Makefile

@@ -2,7 +2,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-mips-hurricane],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/hurricane.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -22,7 +22,7 @@ RTEMS_BSPOPTS_SET([BSP_HAS_RM52xx],[*],[1])
 RTEMS_BSPOPTS_HELP([BSP_HAS_RM52xx],
 [This BSP has a RM52xx compatible CPU.])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile])

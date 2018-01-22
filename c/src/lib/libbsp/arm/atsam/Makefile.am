@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 ###############################################################################
 #                  Data                                                       #
@@ -8,12 +10,11 @@ include $(top_srcdir)/../../../../automake/compile.am
 
 dist_project_lib_DATA = bsp_specs
 
-noinst_LIBRARIES = libbspstart.a
+EXTRA_DIST += ../shared/start/start.S
+start.$(OBJEXT): ../shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
+project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES = ../shared/start/start.S
-
-project_lib_DATA =
-project_lib_DATA += start.$(OBJEXT)
 project_lib_DATA += startup/linkcmds
 project_lib_DATA += startup/linkcmds.memory
 project_lib_DATA += startup/linkcmds.intsram
@@ -25,7 +26,7 @@ project_lib_DATA += startup/linkcmds.qspiflash
 ###############################################################################
 
 include_HEADERS =
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 include_HEADERS += ../shared/CMSIS/Include/core_cm7.h
 include_HEADERS += ../shared/CMSIS/Include/core_cmInstr.h
 include_HEADERS += ../shared/CMSIS/Include/core_cmFunc.h
@@ -34,7 +35,6 @@ include_HEADERS += ../shared/CMSIS/Include/cmsis_gcc.h
 include_HEADERS += include/bsp.h
 
 nodist_include_HEADERS =
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 nodist_include_HEADERS += include/bspopts.h
 
 include_bspdir = $(includedir)/bsp
@@ -57,6 +57,7 @@ include_bsp_HEADERS += include/atsam-spi.h
 include_bsp_HEADERS += include/spi.h
 include_bsp_HEADERS += include/sc16is752.h
 include_bsp_HEADERS += include/power.h
+include_bsp_HEADERS += include/atsam-clock-config.h
 
 include_libchipdir = $(includedir)/libchip
 
@@ -324,7 +325,7 @@ include_libchip_include_samv71_pio_HEADERS += libraries/libchip/include/samv71/p
 #                  LibBSP                                                     #
 ###############################################################################
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 
 libbsp_a_SOURCES =
 libbsp_a_CPPFLAGS =
@@ -396,7 +397,11 @@ libbsp_a_SOURCES += ../shared/armv7m/startup/bspreset.c
 libbsp_a_SOURCES += ../shared/armv7m/startup/armv7m-cpucounter.c
 libbsp_a_SOURCES += startup/bspstart.c
 libbsp_a_SOURCES += startup/bspstarthooks.c
+libbsp_a_SOURCES += startup/getentropy-trng.c
 libbsp_a_SOURCES += startup/pin-config.c
+libbsp_a_SOURCES += startup/pmc-config.c
+libbsp_a_SOURCES += startup/power-clock.c
+libbsp_a_SOURCES += startup/power-rtc.c
 libbsp_a_SOURCES += startup/power.c
 libbsp_a_SOURCES += startup/power-rtc.c
 libbsp_a_SOURCES += startup/power-clock.c

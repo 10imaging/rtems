@@ -27,7 +27,7 @@ rtems_task Test_task(
 
 static void success(void)
 {
-  rtems_test_end();
+  TEST_END();
   rtems_test_exit( 0 );
 }
 
@@ -50,7 +50,7 @@ rtems_task Init(
   rtems_status_code  status;
 
   locked_print_initialize();
-  rtems_test_begin();
+  TEST_BEGIN();
 
   if ( rtems_get_processor_count() == 1 ) {
     success();
@@ -82,7 +82,7 @@ rtems_task Init(
 
 /* configuration information */
 
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
 
 #define CONFIGURE_MAXIMUM_PROCESSORS   2

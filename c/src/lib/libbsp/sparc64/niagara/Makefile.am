@@ -1,4 +1,5 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
 include $(top_srcdir)/../../bsp.am
@@ -28,10 +29,9 @@ nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 
 
-EXTRA_DIST = ../shared/start/start.S
+EXTRA_DIST += ../shared/start/start.S
 start.$(OBJEXT): ../shared/start/start.S
 	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
@@ -41,8 +41,10 @@ dist_project_lib_DATA += ../shared/startup/linkcmds
 startup_SOURCES = startup/bspclean.c startup/m5op_sparc.S \
     ../../shared/bsppredriverhook.c \
     ../../shared/bootcard.c ../../shared/sbrk.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../shared/bspgetworkarea.c \
     ../../shared/bspstart.c \
+    ../../shared/bspreset.c \
     ../shared/startup/setvec.c \
     ../../shared/gnatinstallhandler.c  \
     ../shared/helenos/boot/genarch/balloc.c \

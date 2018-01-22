@@ -1,13 +1,24 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
 dist_project_lib_DATA = bsp_specs
 
 include_HEADERS = include/bsp.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
+include_HEADERS += include/at91rm9200_dbgu.h
+include_HEADERS += include/at91rm9200_emac.h
+include_HEADERS += include/at91rm9200_gpio.h
+include_HEADERS += include/at91rm9200.h
+include_HEADERS += include/at91rm9200_mem.h
+include_HEADERS += include/at91rm9200_pmc.h
+include_HEADERS += include/at91rm9200_usart.h
+include_HEADERS += include/bits.h
+
 if ENABLE_LCD
 include_HEADERS += include/sed1356.h
 endif
@@ -30,25 +41,24 @@ nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 
 if ENABLE_LCD
 nodist_include_HEADERS += console/sed1356_16bit.h
 nodist_include_HEADERS += console/font8x16.h
 endif
 
-noinst_LIBRARIES = libbspstart.a
-
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 project_lib_DATA += startup/linkcmds
-EXTRA_DIST = startup/linkcmds.csb337
+EXTRA_DIST += startup/linkcmds.csb337
 EXTRA_DIST += startup/linkcmds.csb637
 EXTRA_DIST += README
 EXTRA_DIST += README.kit637_v6
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 
 # startup
 libbsp_a_SOURCES = \
@@ -56,22 +66,30 @@ libbsp_a_SOURCES = \
     startup/bspstart.c \
     ../../shared/bspclean.c startup/bspreset.c \
     startup/memmap.c ../../shared/bootcard.c ../../shared/sbrk.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../shared/gnatinstallhandler.c
 libbsp_a_SOURCES += ../../shared/cpucounterread.c
 libbsp_a_SOURCES += ../../shared/cpucounterdiff.c
+libbsp_a_SOURCES += startup/pmc.c
+libbsp_a_SOURCES += clock/clock.c
+libbsp_a_SOURCES += timer/timer.c
 # console
 libbsp_a_SOURCES += ../../shared/console.c console/uarts.c \
     ../../shared/console_select.c  ../../shared/console_control.c \
     ../../shared/console_read.c ../../shared/console_write.c 
+libbsp_a_SOURCES += console/dbgu.c
+libbsp_a_SOURCES += console/usart.c
 # IRQ
 include_bsp_HEADERS += ../../shared/include/irq-generic.h \
 	../../shared/include/irq-info.h
+include_bsp_HEADERS += include/bsp/irq.h
 libbsp_a_SOURCES += ../../shared/src/irq-default-handler.c
 libbsp_a_SOURCES += ../../shared/src/irq-generic.c
 libbsp_a_SOURCES += ../../shared/src/irq-info.c
 libbsp_a_SOURCES += ../../shared/src/irq-legacy.c
 libbsp_a_SOURCES += ../../shared/src/irq-server.c
 libbsp_a_SOURCES += ../../shared/src/irq-shell.c
+libbsp_a_SOURCES += irq/irq.c
 if ENABLE_LCD
 libbsp_a_SOURCES += console/sed1356.c console/fbcons.c
 endif
@@ -99,13 +117,7 @@ network_rel_CPPFLAGS = $(AM_CPPFLAGS) $(network_CPPFLAGS)
 network_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 endif
 
-libbsp_a_LIBADD = ../../../libcpu/@RTEMS_CPU@/shared/arm920.rel \
-    ../../../libcpu/@RTEMS_CPU@/@RTEMS_CPU_MODEL@/clock.rel \
-    ../../../libcpu/@RTEMS_CPU@/@RTEMS_CPU_MODEL@/dbgu.rel \
-    ../../../libcpu/@RTEMS_CPU@/@RTEMS_CPU_MODEL@/usart.rel \
-    ../../../libcpu/@RTEMS_CPU@/@RTEMS_CPU_MODEL@/timer.rel \
-    ../../../libcpu/@RTEMS_CPU@/@RTEMS_CPU_MODEL@/pmc.rel \
-    ../../../libcpu/@RTEMS_CPU@/@RTEMS_CPU_MODEL@/irq.rel
+libbsp_a_LIBADD = ../../../libcpu/@RTEMS_CPU@/shared/arm920.rel
 if HAS_NETWORKING
 libbsp_a_LIBADD += network.rel
 endif

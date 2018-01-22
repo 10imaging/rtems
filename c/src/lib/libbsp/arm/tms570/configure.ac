@@ -8,7 +8,7 @@
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-tms570],[_RTEMS_VERSION],
 				[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/tms570ls3137_hdk.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -54,7 +54,7 @@ RTEMS_BSPOPTS_SET([TMS570_USE_HWINIT_STARTUP],[*],[0])
 RTEMS_BSPOPTS_HELP([TMS570_USE_HWINIT_STARTUP],[Include BSP startup code for TMS570LS3137 which allows to start RTEMS application directly after reset])
 AM_CONDITIONAL(TMS570_USE_HWINIT_STARTUP,test "$TMS570_USE_HWINIT_STARTUP" = "1")
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 AC_CONFIG_FILES([Makefile])

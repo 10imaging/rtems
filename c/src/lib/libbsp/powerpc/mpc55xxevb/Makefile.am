@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -11,11 +13,14 @@ DISTCLEANFILES = include/bspopts.h
 
 noinst_PROGRAMS =
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
 # Link commands
@@ -37,17 +42,15 @@ dist_project_lib_DATA += startup/linkcmds.mpc5674f_ecu508_app
 dist_project_lib_DATA += startup/linkcmds.mpc5674f_rsm6
 dist_project_lib_DATA += startup/linkcmds.mpc5674f_rsm6_base
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # Includes
 include_HEADERS = include/bsp.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
-nodist_include_HEADERS = include/bspopts.h \
-    ../../shared/include/coverhd.h
+nodist_include_HEADERS = include/bspopts.h
 include_bsp_HEADERS =
-include_bsp_HEADERS += ../../../libcpu/powerpc/mpc83xx/i2c/mpc83xx_i2cdrv.h
 include_bsp_HEADERS += ../../shared/include/irq-generic.h
 include_bsp_HEADERS += ../../shared/include/irq-info.h
 include_bsp_HEADERS += ../../shared/include/stackalloc.h
@@ -55,6 +58,7 @@ include_bsp_HEADERS += ../../shared/include/utility.h
 include_bsp_HEADERS += ../shared/include/linker-symbols.h
 include_bsp_HEADERS += ../shared/include/start.h
 include_bsp_HEADERS += ../shared/include/tictac.h
+include_bsp_HEADERS += include/bsp/irq.h
 include_bsp_HEADERS += include/mpc55xx-config.h
 include_bsp_HEADERS += include/smsc9218i.h
 include_bsp_HEADERS += include/console-esci.h
@@ -63,6 +67,7 @@ include_bsp_HEADERS += include/console-linflex.h
 
 # startup
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c
 libbsp_a_SOURCES += ../../shared/src/stackalloc.c

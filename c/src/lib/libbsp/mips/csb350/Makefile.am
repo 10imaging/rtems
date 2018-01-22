@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -18,17 +20,17 @@ nodist_include_HEADERS = include/bspopts.h
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 nodist_include_bsp_HEADERS += ../../shared/include/console-polled.h
 DISTCLEANFILES = include/bspopts.h
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 
 noinst_PROGRAMS =
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S ../shared/liblnk/regs.h
+EXTRA_DIST += start/start.S ../shared/liblnk/regs.h
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # startup
@@ -38,6 +40,7 @@ libbsp_a_SOURCES += startup/bspreset.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += startup/bspstart.c
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 # clock
 libbsp_a_SOURCES += clock/clockdrv.c

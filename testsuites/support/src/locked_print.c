@@ -14,7 +14,9 @@
 #include "test_support.h"
 #include "tmacros.h"
 
+#include <unistd.h>
 #include <rtems/bspIo.h>
+#include <rtems/counter.h>
 
 static rtems_id locked_print_semaphore;      /* synchronisation semaphore */
 
@@ -62,11 +64,25 @@ int locked_vprintf(const char *fmt, va_list ap)
   locked_print_initialize();
 
   /* Lock semaphore without releasing the cpu */
-  do {
-    sc = rtems_semaphore_obtain( locked_print_semaphore, RTEMS_NO_WAIT, 0 );
-  } while (sc != RTEMS_SUCCESSFUL );
+  sc = rtems_semaphore_obtain( locked_print_semaphore, RTEMS_NO_WAIT, 0 );
 
-  rv = vprintf(fmt, ap);
+  if ( sc != RTEMS_SUCCESSFUL ) {
+    uint8_t e;
+    rtems_counter_ticks w;
+
+    /* Use exponential backoff to avoid a livelock */
+
+    getentropy( &e, sizeof( e ) );
+    w = e + 1;
+
+    do {
+      rtems_counter_delay_ticks( w );
+      w *= 2;
+      sc = rtems_semaphore_obtain( locked_print_semaphore, RTEMS_NO_WAIT, 0 );
+    } while (sc != RTEMS_SUCCESSFUL );
+  }
+
+  rv = vprintk(fmt, ap);
 
   /* Release the semaphore  */
   rtems_semaphore_release( locked_print_semaphore );
@@ -84,25 +100,4 @@ int locked_printf(const char *fmt, ...)
   va_end(ap);        /* clean up when done */
 
   return rv;
-}
-
-void locked_printk(const char *fmt, ...)
-{
-  va_list           ap;       /* points to each unnamed argument in turn */
-  rtems_status_code sc;
-
-
-  locked_print_initialize();
-
-  /* Lock semaphore without releasing the cpu */
-  do {
-    sc = rtems_semaphore_obtain( locked_print_semaphore, RTEMS_NO_WAIT, 0 );
-  } while (sc != RTEMS_SUCCESSFUL );
-
-  va_start(ap, fmt); /* make ap point to 1st unnamed arg */
-  vprintk(fmt, ap);
-  va_end(ap);        /* clean up when done */
-
-  /* Release the semaphore  */
-  rtems_semaphore_release( locked_print_semaphore );
 }

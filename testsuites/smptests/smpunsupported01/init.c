@@ -42,9 +42,17 @@ static void test(void)
   );
   rtems_test_assert(sc == RTEMS_UNSATISFIED);
 
-  mode = RTEMS_INTERRUPT_LEVEL(1);
+  mode = RTEMS_INTERRUPT_LEVEL(0);
+  if (mode == 0) {
+    sc = rtems_task_mode(mode, RTEMS_INTERRUPT_MASK, &mode);
+    rtems_test_assert(sc == RTEMS_NOT_IMPLEMENTED);
+  }
 
+  mode = RTEMS_INTERRUPT_LEVEL(1);
   if (mode != 0) {
+    sc = rtems_task_mode(mode, RTEMS_INTERRUPT_MASK, &mode);
+    rtems_test_assert(sc == RTEMS_NOT_IMPLEMENTED);
+
     sc = rtems_task_create(
       rtems_build_name('T', 'A', 'S', 'K'),
       RTEMS_MINIMUM_PRIORITY,
@@ -70,7 +78,7 @@ static void Init(rtems_task_argument arg)
 }
 
 #define CONFIGURE_APPLICATION_NEEDS_CLOCK_DRIVER
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
 #define CONFIGURE_MAXIMUM_PROCESSORS 2
 

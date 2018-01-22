@@ -1,9 +1,9 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 CLEANFILES      =
 DISTCLEANFILES  =
 noinst_PROGRAMS =
-EXTRA_DIST      = 
 
 include $(top_srcdir)/../../../../automake/compile.am
 include $(top_srcdir)/../../bsp.am
@@ -18,8 +18,7 @@ include_HEADERS = include/bsp.h
 
 nodist_include_HEADERS = include/bspopts.h
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
-nodist_include_HEADERS += ../../shared/include/coverhd.h
-nodist_include_HEADERS += ../../shared/include/tm27.h
+nodist_include_HEADERS += include/tm27.h
 DISTCLEANFILES += include/bspopts.h
 
 include_bsp_HEADERS =
@@ -51,14 +50,14 @@ project_lib_DATA += motld_start.$(OBJEXT)
 
 #startup
 
-dist_project_lib_DATA += ../shared/startup/linkcmds
+dist_project_lib_DATA += ../shared/startup/linkcmds.share
+dist_project_lib_DATA += startup/linkcmds
 
 noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 libbsp_a_SOURCES += startup/bspstart.c \
     ../shared/motorola/vpd.c startup/bspreset.c startup/i2c_init.c \
-    ../../powerpc/shared/startup/panic.c \
     ../../powerpc/shared/startup/bspgetworkarea.c \
     ../../powerpc/shared/startup/probeMemEnd.c \
     ../../powerpc/shared/startup/bsppredriverhook.c \
@@ -66,6 +65,7 @@ libbsp_a_SOURCES += startup/bspstart.c \
     ../../powerpc/shared/startup/pgtbl_setup.c \
     ../../powerpc/shared/startup/pgtbl_activate.c \
     ../../powerpc/shared/startup/sbrk.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     startup/bspclean.c \
     ../../shared/gnatinstallhandler.c
 
@@ -110,10 +110,6 @@ include_bsp_HEADERS += ../../powerpc/shared/pci/pci.h
 libbsp_a_SOURCES += ../../powerpc/shared/pci/pci.c \
     pci/gt_pci_init.c pci/pci_io_remap.c pci/motload_fixup.c \
     ../../powerpc/shared/pci/pcifinddevice.c
-
-#vectors
-include_bsp_HEADERS += ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/vectors.h
-include_bsp_HEADERS += ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h
 
 #vme
 include_bsp_HEADERS += vme/VMEConfig.h \

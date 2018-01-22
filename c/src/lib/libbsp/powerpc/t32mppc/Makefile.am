@@ -1,22 +1,23 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
 dist_project_lib_DATA = bsp_specs
 
 include_HEADERS = include/bsp.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 nodist_include_HEADERS = include/bspopts.h
 DISTCLEANFILES = include/bspopts.h
 
-EXTRA_DIST = README
+EXTRA_DIST += README
 
 noinst_PROGRAMS =
 
-include_HEADERS += ../../shared/include/coverhd.h
 
 include_bsp_HEADERS = include/irq.h \
 	../../shared/include/irq-generic.h \
@@ -27,35 +28,40 @@ include_bsp_HEADERS = include/irq.h \
 	../shared/include/tictac.h \
 	../shared/include/linker-symbols.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
 dist_project_lib_DATA += startup/linkcmds \
 	../shared/startup/linkcmds.base \
 	startup/linkcmds.t32mppc
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # Startup
 libbsp_a_SOURCES += \
 	../../shared/bootcard.c \
+	../../shared/getentropy-cpucounter.c \
 	../../shared/bsppredriverhook.c \
 	../../shared/sbrk.c \
 	../../shared/gnatinstallhandler.c \
 	../../shared/bspclean.c \
 	../../shared/bspgetworkarea.c \
+	../shared/src/ppc-exc-handler-table.c \
 	../shared/src/tictac.c \
 	../shared/src/bsp-start-zero.S \
 	startup/bspstart.c \
 	startup/bspreset.c
 
 # Clock
-libbsp_a_SOURCES += ../shared/clock/clock.c
+libbsp_a_SOURCES += clock/clock-config.c
 
 # Timer
 libbsp_a_SOURCES += ../../shared/timerstub.c

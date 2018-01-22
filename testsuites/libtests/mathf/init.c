@@ -22,22 +22,19 @@
 #include "config.h"
 #endif
 
-#if __rtems__
-#include <bsp.h> /* for device driver prototypes */
-#include <rtems/test.h>
-
-const char rtems_test_name[] = "MATHF";
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 
 extern void domathf(void);
 
 #if __rtems__
+#include <tmacros.h>
+
+const char rtems_test_name[] = "MATHF";
+
 /* NOTICE: the clock driver is explicitly disabled */
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
 #define CONFIGURE_MAXIMUM_TASKS           1
 #define CONFIGURE_INIT_TASK_ATTRIBUTES    RTEMS_FLOATING_POINT
@@ -60,13 +57,13 @@ int main( void )
 {
 #if __rtems__
   rtems_print_printer_fprintf_putc(&rtems_test_printer);
-  rtems_test_begin();
+  TEST_BEGIN();
 #endif
 
   domathf();
 
 #if __rtems__
-  rtems_test_end();
+  TEST_END();
 #endif
   exit( 0 );
 }

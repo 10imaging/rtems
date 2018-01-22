@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -17,10 +19,10 @@ DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
 include_HEADERS += include/leon.h
-include_HEADERS += ../../shared/include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = ../../sparc/shared/start/start.S
+EXTRA_DIST += ../../sparc/shared/start/start.S
+start.$(OBJEXT): ../../sparc/shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 dist_project_lib_DATA += ../shared/startup/linkcmds.base
@@ -31,17 +33,19 @@ dist_project_lib_DATA += startup/linkcmds.gr712rc
 dist_project_lib_DATA += startup/linkcmds.ut700
 dist_project_lib_DATA += startup/linkcmds.gr740
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # startup
 libbsp_a_SOURCES += startup/bspclean.c
 libbsp_a_SOURCES += \
     ../../shared/bootcard.c startup/bspstart.c \
+    ../../shared/getentropy-cpucounter.c \
     startup/bsppredriver.c \
     ../../sparc/shared/startup/bspgetworkarea.c ../../shared/sbrk.c \
     startup/setvec.c \
     startup/spurious.c startup/bspidle.S startup/bspdelay.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 libbsp_a_SOURCES += startup/cpucounter.c
 libbsp_a_SOURCES += ../../sparc/shared/startup/bsp_fatal_exit.c
 libbsp_a_SOURCES += startup/bsp_fatal_halt.c
@@ -225,7 +229,7 @@ include_bsp_HEADERS += include/watchdog.h
 # Cache
 libbsp_a_SOURCES += ../../../libcpu/shared/src/cache_manager.c
 libbsp_a_SOURCES += include/cache_.h
-libbsp_a_CPPFLAGS = -I$(srcdir)/include
+libbsp_a_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)/include
 
 # GR712
 include_bsp_HEADERS += ../../sparc/shared/include/grascs.h
@@ -298,7 +302,7 @@ include_bsp_HEADERS += ../../sparc/shared/include/network_interface_add.h
 libbsp_a_SOURCES += ../../sparc/shared/net/network_interface_add.c
 endif
 
-EXTRA_DIST = shmsupp/README
+EXTRA_DIST += shmsupp/README
 if HAS_MP
 # shmsupp
 libbsp_a_SOURCES += shmsupp/addrconv.c shmsupp/getcfg.c shmsupp/lock.c \

@@ -1,14 +1,15 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
 dist_project_lib_DATA = bsp_specs
 
 include_HEADERS  = include/bsp.h
-include_HEADERS += ../../shared/include/coverhd.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 include_bsp_HEADERS  = ../../lm32/shared/include/irq.h
 include_bsp_HEADERS += ../../shared/include/irq-generic.h
@@ -34,13 +35,14 @@ noinst_PROGRAMS =
 
 include_HEADERS += include/system_conf.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = ../../lm32/shared/start/start.S
+EXTRA_DIST += ../../lm32/shared/start/start.S
+start.$(OBJEXT): ../../lm32/shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 libbsp_a_LIBADD =
 
@@ -48,7 +50,9 @@ libbsp_a_LIBADD =
 libbsp_a_SOURCES += startup/bspclean.c
 libbsp_a_SOURCES += ../shared/startup/bspstart.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 libbsp_a_SOURCES += ../../shared/gnatinstallhandler.c
 
@@ -110,7 +114,7 @@ libbsp_a_SOURCES += ../../lm32/shared/milkymist_versions/versions.c
 # Cache
 libbsp_a_SOURCES += ../../../libcpu/shared/src/cache_manager.c
 libbsp_a_SOURCES += ../../shared/include/cache_.h
-libbsp_a_CPPFLAGS = -I$(srcdir)/../../shared/include
+libbsp_a_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)/../../shared/include
 
 if HAS_NETWORKING
 noinst_PROGRAMS += network.rel

@@ -3,7 +3,7 @@
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-sparc-leon3],
 [_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/leon3.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -37,7 +37,7 @@ RTEMS_BSPOPTS_HELP([BSP_POWER_DOWN_AT_FATAL_HALT],
 [If defined, CPU is powered down on fatal exit. Otherwise generate system
  error which will hand over to debugger, simulator, etc.])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 # Explicitly list all Makefiles here

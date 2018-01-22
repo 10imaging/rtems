@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -13,16 +15,15 @@ nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
-include_HEADERS += include/coverhd.h
-
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
-project_lib_DATA = start.$(OBJEXT)
-
 dist_project_lib_DATA += startup/linkcmds startup/linkcmds.prom \
     startup/linkcmds.bootp
 
-noinst_LIBRARIES += libbsp.a
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
+project_lib_DATA = start.$(OBJEXT)
+
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # startup
@@ -30,8 +31,10 @@ libbsp_a_SOURCES += startup/alloc360.c ../../shared/bspclean.c \
     ../../shared/bsppredriverhook.c \
     ../../shared/bspgetworkarea.c ../../shared/bspstart.c \
     startup/init68360.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../shared/sbrk.c ../../shared/setvec.c \
     ../../shared/gnatinstallhandler.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 # clock
 libbsp_a_SOURCES += clock/clock.c ../../../shared/clockdrv_shell.h
 # console

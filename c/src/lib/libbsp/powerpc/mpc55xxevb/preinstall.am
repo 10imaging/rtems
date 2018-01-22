@@ -121,21 +121,13 @@ $(PROJECT_INCLUDE)/bsp.h: include/bsp.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp.h
 
-$(PROJECT_INCLUDE)/tm27.h: ../../shared/include/tm27.h $(PROJECT_INCLUDE)/$(dirstamp)
+$(PROJECT_INCLUDE)/tm27.h: include/tm27.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/tm27.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/tm27.h
 
 $(PROJECT_INCLUDE)/bspopts.h: include/bspopts.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bspopts.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bspopts.h
-
-$(PROJECT_INCLUDE)/coverhd.h: ../../shared/include/coverhd.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/coverhd.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/coverhd.h
-
-$(PROJECT_INCLUDE)/bsp/mpc83xx_i2cdrv.h: ../../../libcpu/powerpc/mpc83xx/i2c/mpc83xx_i2cdrv.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/mpc83xx_i2cdrv.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/mpc83xx_i2cdrv.h
 
 $(PROJECT_INCLUDE)/bsp/irq-generic.h: ../../shared/include/irq-generic.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq-generic.h
@@ -164,6 +156,10 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/start.h
 $(PROJECT_INCLUDE)/bsp/tictac.h: ../shared/include/tictac.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/tictac.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/tictac.h
+
+$(PROJECT_INCLUDE)/bsp/irq.h: include/bsp/irq.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq.h
 
 $(PROJECT_INCLUDE)/bsp/mpc55xx-config.h: include/mpc55xx-config.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/mpc55xx-config.h

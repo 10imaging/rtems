@@ -36,7 +36,7 @@ static void test_internal_error_text(void)
   } while ( text != text_last );
 
   rtems_test_assert(
-    error - 3 == INTERNAL_ERROR_ILLEGAL_USE_OF_FLOATING_POINT_UNIT
+    error - 3 == INTERNAL_ERROR_ARC4RANDOM_GETENTROPY_FAIL
   );
 }
 
@@ -86,7 +86,7 @@ static void Init(rtems_task_argument arg)
 }
 
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
 #define CONFIGURE_MAXIMUM_TASKS 1
 

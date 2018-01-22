@@ -1,6 +1,6 @@
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-powerpc-qoriq],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/qoriq_core_0.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -166,7 +166,7 @@ AM_CONDITIONAL(HAS_NETWORKING,test "$HAS_NETWORKING" = "yes")
 RTEMS_CHECK_SMP
 AM_CONDITIONAL(HAS_SMP,[test "$rtems_cv_HAS_SMP" = "yes"])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_PPC_EXCEPTIONS
 RTEMS_BSP_LINKCMDS
 

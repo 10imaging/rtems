@@ -232,13 +232,13 @@ LAST(RTEMS_SYSINIT_INITIAL_EXTENSIONS)
 
 FIRST(RTEMS_SYSINIT_DATA_STRUCTURES)
 {
-  assert(_RTEMS_Allocator_Mutex == NULL);
+  assert(_Thread_Internal_information.Objects.maximum == 0);
   next_step(DATA_STRUCTURES_PRE);
 }
 
 LAST(RTEMS_SYSINIT_DATA_STRUCTURES)
 {
-  assert(_RTEMS_Allocator_Mutex != NULL);
+  assert(_Thread_Internal_information.Objects.maximum != 0);
   next_step(DATA_STRUCTURES_POST);
 }
 
@@ -516,13 +516,13 @@ LAST(RTEMS_SYSINIT_IDLE_THREADS)
 
 FIRST(RTEMS_SYSINIT_LIBIO)
 {
-  assert(rtems_libio_semaphore == 0);
+  assert(rtems_libio_iop_free_head == NULL);
   next_step(LIBIO_PRE);
 }
 
 LAST(RTEMS_SYSINIT_LIBIO)
 {
-  assert(rtems_libio_semaphore != 0);
+  assert(rtems_libio_iop_free_head == &rtems_libio_iops[0]);
   next_step(LIBIO_POST);
 }
 
@@ -662,7 +662,7 @@ static void *POSIX_Init(void *arg)
 #endif /* RTEMS_POSIX_API */
 
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
 #define CONFIGURE_MAXIMUM_USER_EXTENSIONS 1
 

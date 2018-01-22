@@ -34,11 +34,11 @@ int pthread_getattr_np(
   pthread_attr_t *attr
 )
 {
-  Thread_Control          *the_thread;
-  ISR_lock_Context         lock_context;
-  POSIX_API_Control       *api;
-  const Scheduler_Control *scheduler;
-  bool                     ok;
+  Thread_Control               *the_thread;
+  ISR_lock_Context              lock_context;
+  Thread_CPU_budget_algorithms  budget_algorithm;
+  const Scheduler_Control      *scheduler;
+  bool                          ok;
 
   if ( attr == NULL ) {
     return EINVAL;
@@ -54,20 +54,14 @@ int pthread_getattr_np(
 
   _Thread_State_acquire_critical( the_thread, &lock_context );
 
-  api = the_thread->API_Extensions[ THREAD_API_POSIX ];
-
-  attr->is_initialized = true;
   attr->stackaddr = the_thread->Start.Initial_stack.area;
   attr->stacksize = the_thread->Start.Initial_stack.size;
-  attr->contentionscope = PTHREAD_SCOPE_PROCESS;
 
-  if ( api->created_with_explicit_scheduler ) {
-    attr->inheritsched = PTHREAD_EXPLICIT_SCHED;
-  } else {
+  if ( the_thread->was_created_with_inherited_scheduler ) {
     attr->inheritsched = PTHREAD_INHERIT_SCHED;
+  } else {
+    attr->inheritsched = PTHREAD_EXPLICIT_SCHED;
   }
-
-  attr->schedpolicy = api->schedpolicy;
 
   scheduler = _Thread_Scheduler_get_home( the_thread );
   attr->schedparam.sched_priority = _POSIX_Priority_From_core(
@@ -76,11 +70,9 @@ int pthread_getattr_np(
   );
   _POSIX_Threads_Get_sched_param_sporadic(
     the_thread,
-    api,
     scheduler,
     &attr->schedparam
   );
-  attr->cputime_clock_allowed = 1;
 
   if ( _Thread_Is_joinable( the_thread ) ) {
     attr->detachstate = PTHREAD_CREATE_JOINABLE;
@@ -96,6 +88,15 @@ int pthread_getattr_np(
     attr->affinityset
   );
 
+  budget_algorithm = the_thread->budget_algorithm;
+
   _Thread_State_release( the_thread, &lock_context );
+
+  attr->is_initialized = true;
+  attr->contentionscope = PTHREAD_SCOPE_PROCESS;
+  attr->cputime_clock_allowed = 1;
+  attr->schedpolicy =
+    _POSIX_Thread_Translate_to_sched_policy( budget_algorithm );
+
   return ok ? 0 : EINVAL;
 }

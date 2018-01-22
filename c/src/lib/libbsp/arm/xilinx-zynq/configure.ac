@@ -7,7 +7,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-xilinx-zynq-a9],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/xilinx_zynq_a9_qemu.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -145,7 +145,7 @@ ZYNQ_LINKCMD([ZYNQ_RAM_INT_0_LENGTH],[internal 0 RAM region length],[${ZYNQ_RAM_
 ZYNQ_LINKCMD([ZYNQ_RAM_INT_1_ORIGIN],[internal 1 RAM region origin],[${ZYNQ_RAM_INT_1_ORIGIN}])
 ZYNQ_LINKCMD([ZYNQ_RAM_INT_1_LENGTH],[internal 1 RAM region length],[${ZYNQ_RAM_INT_1_LENGTH}])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 AC_CONFIG_FILES([
 Makefile

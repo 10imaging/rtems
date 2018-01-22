@@ -11,34 +11,26 @@
 #include "config.h"
 #endif
 
-#include <rtems/printer.h>
-#include <rtems/test.h>
-
-#include <bsp.h> /* for device driver prototypes */
-
-#include <stdio.h>
-#include <stdlib.h>
-
-/* forward declarations to avoid warnings */
-rtems_task Init(rtems_task_argument argument);
+#include <rtems.h>
+#include <tmacros.h>
 
 const char rtems_test_name[] = "HELLO WORLD";
 
-rtems_task Init(
+static rtems_task Init(
   rtems_task_argument ignored
 )
 {
   rtems_print_printer_fprintf_putc(&rtems_test_printer);
-  rtems_test_begin();
+  TEST_BEGIN();
   printf( "Hello World\n" );
-  rtems_test_end();
-  exit( 0 );
+  TEST_END();
+  rtems_test_exit( 0 );
 }
 
 
 /* NOTICE: the clock driver is explicitly disabled */
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
 #define CONFIGURE_MAXIMUM_TASKS            1
 

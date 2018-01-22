@@ -40,7 +40,7 @@ package body TMTEST is
    begin
 
       TEXT_IO.NEW_LINE( 2 );
-      TEXT_IO.PUT_LINE( "*** TIME TEST 20 ***" );
+      TEST_SUPPORT.ADA_TEST_BEGIN;
 
       RTEMS.TASKS.CREATE( 
          RTEMS.BUILD_NAME( 'T', 'I', 'M', '1' ),
@@ -264,7 +264,7 @@ package body TMTEST is
       TIMER_DRIVER.INITIALIZE;
          RTEMS.REGION.GET_SEGMENT(
             TMTEST.REGION_ID,
-            1998,
+            1900,
             RTEMS.NO_WAIT,
             RTEMS.NO_TIMEOUT,
             TMTEST.BUFFER_ADDRESS_4,
@@ -316,7 +316,7 @@ package body TMTEST is
       TIMER_DRIVER.INITIALIZE;
          RTEMS.REGION.GET_SEGMENT(
             TMTEST.REGION_ID,
-            1998,
+            1900,
             RTEMS.DEFAULT_OPTIONS,
             RTEMS.NO_TIMEOUT,
             TMTEST.BUFFER_ADDRESS_2,
@@ -364,7 +364,7 @@ package body TMTEST is
 
       RTEMS.REGION.GET_SEGMENT(
          TMTEST.REGION_ID,
-         1998,
+         1900,
          RTEMS.DEFAULT_OPTIONS,
          RTEMS.NO_TIMEOUT,
          TMTEST.BUFFER_ADDRESS_2,
@@ -394,7 +394,7 @@ package body TMTEST is
          RTEMS_CALLING_OVERHEAD.REGION_DELETE 
       );
 
-      TEXT_IO.PUT_LINE( "*** END OF TIME TEST 20 ***" );
+      TEST_SUPPORT.ADA_TEST_END;
       RTEMS.SHUTDOWN_EXECUTIVE( 0 );
 
    end TASK_1;

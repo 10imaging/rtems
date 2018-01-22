@@ -2,7 +2,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-powerpc-mbx5xx],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/ss555.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -42,7 +42,7 @@ RTEMS_BSPOPTS_HELP([PRINTK_MINOR],
  I/O.  Don't open the printk port from RTEMS unless also using polled I/O
  for the SCI ports.])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 # Explicitly list a Makefile here
 AC_CONFIG_FILES([Makefile])

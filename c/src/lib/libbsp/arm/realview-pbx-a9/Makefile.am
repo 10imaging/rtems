@@ -6,11 +6,12 @@
 #
 
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
-include_libcpudir = $(includedir)/libcpu
 
 dist_project_lib_DATA = bsp_specs
 
@@ -21,8 +22,7 @@ dist_project_lib_DATA = bsp_specs
 include_HEADERS = include/bsp.h
 include_HEADERS += include/tm27.h
 
-nodist_include_HEADERS = ../../shared/include/coverhd.h \
-	include/bspopts.h
+nodist_include_HEADERS = include/bspopts.h
 
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 
@@ -51,16 +51,13 @@ include_bsp_HEADERS += ../shared/include/arm-pl111-regs.h
 include_bsp_HEADERS += ../shared/include/arm-release-id.h
 include_bsp_HEADERS += include/irq.h
 
-include_libcpu_HEADERS = ../../../libcpu/arm/shared/include/arm-cp15.h
-
 ###############################################################################
 #                  Data                                                       #
 ###############################################################################
 
-noinst_LIBRARIES = libbspstart.a
-
-libbspstart_a_SOURCES = ../shared/start/start.S
-
+EXTRA_DIST += ../shared/start/start.S
+start.$(OBJEXT): ../shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 project_lib_DATA += startup/linkcmds
@@ -71,7 +68,7 @@ project_lib_DATA += startup/linkcmds.realview_pbx_a9_qemu_smp
 #                  LibBSP                                                     #
 ###############################################################################
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 
 libbsp_a_SOURCES =
 libbsp_a_CPPFLAGS =
@@ -79,6 +76,7 @@ libbsp_a_LIBADD =
 
 # Shared
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c

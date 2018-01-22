@@ -66,13 +66,15 @@ size_t _Thread_queue_Flush_critical(
   Thread_queue_Context          *queue_context
 )
 {
-  size_t         flushed;
-  Chain_Control  unblock;
-  Chain_Node    *node;
-  Chain_Node    *tail;
+  size_t          flushed;
+  Chain_Control   unblock;
+  Thread_Control *owner;
+  Chain_Node     *node;
+  Chain_Node     *tail;
 
   flushed = 0;
   _Chain_Initialize_empty( &unblock );
+  owner = queue->owner;
 
   while ( true ) {
     Thread_queue_Heads *heads;
@@ -89,6 +91,13 @@ size_t _Thread_queue_Flush_critical(
     if ( first == NULL ) {
       break;
     }
+
+    /*
+     * We do not have enough space in the queue context to collect all priority
+     * updates, so clear it each time.  We unconditionally do the priority
+     * update for the owner later if it exists.
+     */
+    _Thread_queue_Context_clear_priority_updates( queue_context );
 
     do_unblock = _Thread_queue_Extract_locked(
       queue,
@@ -130,6 +139,14 @@ size_t _Thread_queue_Flush_critical(
 
       node = next;
     } while ( node != tail );
+
+    if ( owner != NULL ) {
+      ISR_lock_Context lock_context;
+
+      _Thread_State_acquire( owner, &lock_context );
+      _Scheduler_Update_priority( owner );
+      _Thread_State_release( owner, &lock_context );
+    }
 
     _Thread_Dispatch_enable( cpu_self );
   } else {

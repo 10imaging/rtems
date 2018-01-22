@@ -6,8 +6,10 @@
 #
 
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -20,8 +22,7 @@ dist_project_lib_DATA = bsp_specs
 
 include_HEADERS = include/bsp.h
 
-nodist_include_HEADERS = ../../shared/include/coverhd.h
-nodist_include_HEADERS += include/bspopts.h
+nodist_include_HEADERS = include/bspopts.h
 
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 
@@ -58,21 +59,19 @@ include_bsp_HEADERS += include/lpc-clock-config.h
 include_bsp_HEADERS += include/system-clocks.h
 include_bsp_HEADERS += include/mbed-pinmap.h
 
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 
 # ----------------------------
 # ------  Data
 # ----------------------------
 
-noinst_LIBRARIES = libbspstart.a
-
-libbspstart_a_SOURCES = ../shared/start/start.S
-
+EXTRA_DIST += ../shared/start/start.S
+start.$(OBJEXT): ../shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 project_lib_DATA += startup/linkcmds
 
-EXTRA_DIST =
 EXTRA_DIST += startup/linkcmds.lpc1768_mbed
 EXTRA_DIST += startup/linkcmds.lpc1768_mbed_ahb_ram
 EXTRA_DIST += startup/linkcmds.lpc1768_mbed_ahb_ram_eth
@@ -82,7 +81,7 @@ EXTRA_DIST += startup/linkcmds.lpc1768_mbed_ahb_ram_eth
 # ------  LibBSP
 # ----------------------------
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 
 libbsp_a_SOURCES =
 libbsp_a_CPPFLAGS =
@@ -90,6 +89,7 @@ libbsp_a_LIBADD =
 
 # Shared
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c

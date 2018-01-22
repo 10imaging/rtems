@@ -45,7 +45,7 @@ package body SPTEST is
    begin
 
       TEXT_IO.NEW_LINE( 2 );
-      TEXT_IO.PUT_LINE( "*** TEST 9 ***" );
+      TEST_SUPPORT.ADA_TEST_BEGIN;
 
       SPTEST.TASK_NAME( 1 )   := RTEMS.BUILD_NAME(  'T', 'A', '1', ' ' );
       SPTEST.TASK_NAME( 2 )   := RTEMS.BUILD_NAME(  'T', 'A', '2', ' ' );
@@ -2475,49 +2475,50 @@ package body SPTEST is
 
       RTEMS.REGION.EXTEND(
          SPTEST.REGION_ID( 1 ),
-         SPTEST.REGION_BAD_AREA'ADDRESS,
-         128,
+         SPTEST.REGION_GOOD_AREA(
+            SPTEST.REGION_START_OFFSET - 2 * SPTEST.REGION_LENGTH )'ADDRESS,
+         SPTEST.REGION_LENGTH,
          STATUS
       );
       TEST_SUPPORT.FATAL_DIRECTIVE_STATUS(
          STATUS,
-         RTEMS.NOT_IMPLEMENTED,
-         "REGION_EXTEND WITH NOT_IMPLEMENTED"
+         RTEMS.SUCCESSFUL,
+         "REGION_EXTEND"
       );
       TEXT_IO.PUT_LINE(
-         "TA1 - region_extend - non-contiguous lower - NOT_IMPLEMENTED"
+         "TA1 - region_extend - non-contiguous lower - SUCCESSFUL"
       );
 
       RTEMS.REGION.EXTEND(
          SPTEST.REGION_ID( 1 ),
          SPTEST.REGION_GOOD_AREA( 
             SPTEST.REGION_START_OFFSET - SPTEST.REGION_LENGTH )'ADDRESS,
-         128,
+         SPTEST.REGION_LENGTH,
          STATUS
       );
       TEST_SUPPORT.FATAL_DIRECTIVE_STATUS(
          STATUS,
-         RTEMS.NOT_IMPLEMENTED,
-         "REGION_EXTEND WITH NOT_IMPLEMENTED"
+         RTEMS.SUCCESSFUL,
+         "REGION_EXTEND"
       );
       TEXT_IO.PUT_LINE(
-         "TA1 - region_extend - contiguous lower - NOT_IMPLEMENTED"
+         "TA1 - region_extend - contiguous lower - SUCCESSFUL"
       );
 
       RTEMS.REGION.EXTEND(
          SPTEST.REGION_ID( 1 ),
          SPTEST.REGION_GOOD_AREA( 
-            SPTEST.REGION_START_OFFSET + SPTEST.REGION_LENGTH + 16 )'ADDRESS,
-         128,
+            SPTEST.REGION_START_OFFSET + 2 * SPTEST.REGION_LENGTH )'ADDRESS,
+         SPTEST.REGION_LENGTH,
          STATUS
       );
       TEST_SUPPORT.FATAL_DIRECTIVE_STATUS(
          STATUS,
-         RTEMS.NOT_IMPLEMENTED,
-         "REGION_EXTEND WITH NOT_IMPLEMENTED"
+         RTEMS.SUCCESSFUL,
+         "REGION_EXTEND"
       );
       TEXT_IO.PUT_LINE(
-         "TA1 - region_extend - non-contiguous higher - NOT_IMPLEMENTED"
+         "TA1 - region_extend - non-contiguous higher - SUCCESSFUL"
       );
 
    end SCREEN_12;
@@ -2827,7 +2828,7 @@ package body SPTEST is
       );
       TEXT_IO.PUT_LINE( "TA1 - timer_server_fire_when - INCORRECT_STATE" );
 
-      RTEMS.TIMER.INITIATE_SERVER( 0, 0, 0, STATUS );
+      RTEMS.TIMER.INITIATE_SERVER( 16#80000000#, 0, 0, STATUS );
       TEST_SUPPORT.FATAL_DIRECTIVE_STATUS(
         STATUS,
         RTEMS.INVALID_PRIORITY,
@@ -2984,7 +2985,7 @@ package body SPTEST is
 
       SPTEST.SCREEN_14;
 
-      TEXT_IO.PUT_LINE( "*** END OF TEST 9 ***" );
+      TEST_SUPPORT.ADA_TEST_END;
       RTEMS.SHUTDOWN_EXECUTIVE( 0 );
 
    end TASK_1;

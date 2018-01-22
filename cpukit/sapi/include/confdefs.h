@@ -141,23 +141,9 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 /*
- * Semaphore count used by the IO library.
- */
-#define _CONFIGURE_LIBIO_SEMAPHORES 1
-
-/*
  * POSIX key count used by the IO library.
  */
 #define _CONFIGURE_LIBIO_POSIX_KEYS 1
-
-/*
- *  Driver Manager Configuration
- */
-#ifdef RTEMS_DRVMGR_STARTUP
-  #define _CONFIGURE_DRVMGR_SEMAPHORES 1
-#else
-  #define _CONFIGURE_DRVMGR_SEMAPHORES 0
-#endif
 
 #ifdef CONFIGURE_INIT
   rtems_libio_t rtems_libio_iops[CONFIGURE_LIBIO_MAXIMUM_FILE_DESCRIPTORS];
@@ -212,7 +198,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 #ifdef CONFIGURE_SMP_MAXIMUM_PROCESSORS
-  #warning "CONFIGURE_SMP_MAXIMUM_PROCESSORS has been renamed to CONFIGURE_MAXIMUM_PROCESSORS since RTEMS 4.12"
+  #warning "CONFIGURE_SMP_MAXIMUM_PROCESSORS has been renamed to CONFIGURE_MAXIMUM_PROCESSORS since RTEMS 5.1"
   #define CONFIGURE_MAXIMUM_PROCESSORS CONFIGURE_SMP_MAXIMUM_PROCESSORS
 #endif
 
@@ -233,7 +219,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 #ifdef CONFIGURE_SMP_APPLICATION
-  #warning "CONFIGURE_SMP_APPLICATION is obsolete since RTEMS 4.12"
+  #warning "CONFIGURE_SMP_APPLICATION is obsolete since RTEMS 5.1"
 #endif
 
 /*
@@ -1610,8 +1596,25 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #define NULL_DRIVER_TABLE_ENTRY \
  { NULL, NULL, NULL, NULL, NULL, NULL }
 
+#if defined(CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER) && \
+  defined(CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER)
+#error "CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER and CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER are mutually exclusive"
+#endif
+
 #ifdef CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
   #include <rtems/console.h>
+#endif
+
+#ifdef CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
+  #include <rtems/console.h>
+
+  #ifdef CONFIGURE_INIT
+    RTEMS_SYSINIT_ITEM(
+      _Console_simple_Initialize,
+      RTEMS_SYSINIT_DEVICE_DRIVERS,
+      RTEMS_SYSINIT_ORDER_SECOND
+    );
+  #endif
 #endif
 
 #ifdef CONFIGURE_APPLICATION_NEEDS_CLOCK_DRIVER
@@ -2112,10 +2115,10 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
    * capabilities.
    */
   #define _CONFIGURE_SEMAPHORES \
-    (CONFIGURE_MAXIMUM_SEMAPHORES + _CONFIGURE_LIBIO_SEMAPHORES + \
+    (CONFIGURE_MAXIMUM_SEMAPHORES + \
       _CONFIGURE_TERMIOS_SEMAPHORES + _CONFIGURE_LIBBLOCK_SEMAPHORES + \
       _CONFIGURE_SEMAPHORES_FOR_FILE_SYSTEMS + \
-      _CONFIGURE_NETWORKING_SEMAPHORES + _CONFIGURE_DRVMGR_SEMAPHORES)
+      _CONFIGURE_NETWORKING_SEMAPHORES)
 
   /*
    * This macro is calculated to specify the memory required for
@@ -2777,13 +2780,6 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 /**
- * RTEMS uses two instance of an internal mutex class.  This accounts
- * for these mutexes.
- */
-#define _CONFIGURE_API_MUTEX_MEMORY \
-  _Configure_Object_RAM(2, sizeof(API_Mutex_Control))
-
-/**
  * This calculates the amount of memory reserved for the IDLE tasks.
  * In an SMP system, each CPU core has its own idle task.
  */
@@ -2812,8 +2808,7 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
  */
 #define _CONFIGURE_MEMORY_FOR_SYSTEM_OVERHEAD \
   ( _CONFIGURE_MEMORY_FOR_INTERNAL_TASKS + \
-    _CONFIGURE_INTERRUPT_STACK_MEMORY + \
-    _CONFIGURE_API_MUTEX_MEMORY \
+    _CONFIGURE_INTERRUPT_STACK_MEMORY \
   )
 
 /**
@@ -3540,27 +3535,27 @@ extern rtems_initialization_tasks_table Initialization_tasks[];
 #endif
 
 #ifdef CONFIGURE_MAXIMUM_POSIX_BARRIERS
-  #warning "The CONFIGURE_MAXIMUM_POSIX_BARRIERS configuration option is obsolete since RTEMS 4.12"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_BARRIERS configuration option is obsolete since RTEMS 5.1"
 #endif
 
 #ifdef CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES
-  #warning "The CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES configuration option is obsolete since RTEMS 4.12"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_CONDITION_VARIABLES configuration option is obsolete since RTEMS 5.1"
 #endif
 
 #ifdef CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUE_DESCRIPTORS
-  #warning "The CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUE_DESCRIPTORS configuration option is obsolete since RTEMS 4.12"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_MESSAGE_QUEUE_DESCRIPTORS configuration option is obsolete since RTEMS 5.1"
 #endif
 
 #ifdef CONFIGURE_MAXIMUM_POSIX_MUTEXES
-  #warning "The CONFIGURE_MAXIMUM_POSIX_MUTEXES configuration option is obsolete since RTEMS 4.12"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_MUTEXES configuration option is obsolete since RTEMS 5.1"
 #endif
 
 #ifdef CONFIGURE_MAXIMUM_POSIX_RWLOCKS
-  #warning "The CONFIGURE_MAXIMUM_POSIX_RWLOCKS configuration option is obsolete since RTEMS 4.12"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_RWLOCKS configuration option is obsolete since RTEMS 5.1"
 #endif
 
 #ifdef CONFIGURE_MAXIMUM_POSIX_SPINLOCKS
-  #warning "The CONFIGURE_MAXIMUM_POSIX_SPINLOCKS configuration option is obsolete since RTEMS 4.12"
+  #warning "The CONFIGURE_MAXIMUM_POSIX_SPINLOCKS configuration option is obsolete since RTEMS 5.1"
 #endif
 
 /*

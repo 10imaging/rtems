@@ -1,4 +1,5 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
 include $(top_srcdir)/../../bsp.am
@@ -13,18 +14,17 @@ include_HEADERS += include/tm27.h
 nodist_include_HEADERS = include/bspopts.h
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 DISTCLEANFILES = include/bspopts.h
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 
 noinst_PROGRAMS =
 
-###
-dist_project_lib_DATA += ../shared/startup/linkcmds
+dist_project_lib_DATA += ../shared/startup/linkcmds.share
+dist_project_lib_DATA += startup/linkcmds
 
 noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # UNUSED
-EXTRA_DIST = startup/bootpstuff.c
+EXTRA_DIST += startup/bootpstuff.c
 
 # startup
 libbsp_a_SOURCES += startup/bspstart.c \
@@ -33,6 +33,7 @@ libbsp_a_SOURCES += startup/bspstart.c \
     ../../powerpc/shared/startup/zerobss.c \
     ../../powerpc/shared/startup/bspgetworkarea.c \
     ../../powerpc/shared/startup/sbrk.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     startup/bspclean.c \
     ../../shared/gnatinstallhandler.c startup/bspreset.c \
     ../../powerpc/shared/startup/probeMemEnd.c
@@ -62,8 +63,6 @@ libbsp_a_SOURCES += irq/irq_init.c irq/BSP_irq.c
 libbsp_a_SOURCES += ../../shared/tod.c tod/todcfg.c
 
 include_bsp_HEADERS += vectors/bspException.h
-include_bsp_HEADERS += \
-	../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h
 
 # vectors
 libbsp_a_SOURCES += vectors/exceptionhandler.c \

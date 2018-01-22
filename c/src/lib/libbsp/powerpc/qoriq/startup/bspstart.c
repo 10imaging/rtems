@@ -52,34 +52,6 @@ uint32_t bsp_time_base_frequency;
 
 uint32_t qoriq_clock_frequency;
 
-void BSP_panic(char *s)
-{
-  rtems_interrupt_level level;
-
-  rtems_interrupt_local_disable(level);
-  (void) level;
-
-  printk("%s PANIC %s\n", rtems_get_version_string(), s);
-
-  while (1) {
-    /* Do nothing */
-  }
-}
-
-void _BSP_Fatal_error(unsigned n)
-{
-  rtems_interrupt_level level;
-
-  rtems_interrupt_local_disable(level);
-  (void) level;
-
-  printk("%s PANIC ERROR %u\n", rtems_get_version_string(), n);
-
-  while (1) {
-    /* Do nothing */
-  }
-}
-
 static void initialize_frequency_parameters(void)
 {
   const void *fdt = bsp_fdt_get();
@@ -207,5 +179,9 @@ void bsp_start(void)
 
 uint32_t bsp_fdt_map_intr(const uint32_t *intr, size_t icells)
 {
+#ifndef QORIQ_IS_HYPERVISOR_GUEST
   return intr[0] - 16;
+#else
+  return intr[0];
+#endif
 }

@@ -40,12 +40,6 @@ extern "C" {
  * each thread in a system with POSIX configured.
  */
 typedef struct {
-  /** Created with explicit or inherited scheduler. */
-  bool created_with_explicit_scheduler;
-
-  /** The scheduler policy. */
-  int schedpolicy;
-
   /**
    * @brief Control block for the sporadic server scheduling policy.
    */

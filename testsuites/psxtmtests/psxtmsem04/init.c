@@ -14,7 +14,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <semaphore.h>
-#include <coverhd.h>
 #include <tmacros.h>
 #include <timesys.h>
 #include "test_support.h"
@@ -95,7 +94,7 @@ void *POSIX_Init(void *argument)
 
 /* configuration information */
 
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_TIMER_DRIVER
 
 #define CONFIGURE_MAXIMUM_POSIX_THREADS     2

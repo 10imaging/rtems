@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -17,10 +19,10 @@ DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
 include_HEADERS += include/leon.h
-include_HEADERS += ../../shared/include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = ../../sparc/shared/start/start.S
+EXTRA_DIST += ../../sparc/shared/start/start.S
+start.$(OBJEXT): ../../sparc/shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 dist_project_lib_DATA += ../shared/startup/linkcmds.base
@@ -28,15 +30,17 @@ dist_project_lib_DATA += startup/linkcmds
 dist_project_lib_DATA += startup/linkcmds.leon2
 dist_project_lib_DATA += startup/linkcmds.at697f
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # startup
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += startup/bsppredriver.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 libbsp_a_SOURCES += startup/bspstart.c
 libbsp_a_SOURCES += ../../sparc/shared/startup/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 libbsp_a_SOURCES += startup/setvec.c
 libbsp_a_SOURCES += startup/spurious.c
@@ -276,7 +280,7 @@ libbsp_a_LIBADD += leon_open_eth.rel
 libbsp_a_LIBADD += leon_smc91111.rel
 endif
 
-EXTRA_DIST = times
+EXTRA_DIST += times
 
 include $(srcdir)/preinstall.am
 include $(top_srcdir)/../../../../automake/local.am

@@ -56,7 +56,7 @@ $(PROJECT_LIB)/linkcmds.qspiflash: startup/linkcmds.qspiflash $(PROJECT_LIB)/$(d
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.qspiflash
 TMPINSTALL_FILES += $(PROJECT_LIB)/linkcmds.qspiflash
 
-$(PROJECT_INCLUDE)/tm27.h: ../../shared/include/tm27.h $(PROJECT_INCLUDE)/$(dirstamp)
+$(PROJECT_INCLUDE)/tm27.h: include/tm27.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/tm27.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/tm27.h
 
@@ -83,10 +83,6 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/cmsis_gcc.h
 $(PROJECT_INCLUDE)/bsp.h: include/bsp.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp.h
-
-$(PROJECT_INCLUDE)/coverhd.h: ../../shared/include/coverhd.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/coverhd.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/coverhd.h
 
 $(PROJECT_INCLUDE)/bspopts.h: include/bspopts.h $(PROJECT_INCLUDE)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bspopts.h
@@ -156,6 +152,10 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/sc16is752.h
 $(PROJECT_INCLUDE)/bsp/power.h: include/power.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/power.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/power.h
+
+$(PROJECT_INCLUDE)/bsp/atsam-clock-config.h: include/atsam-clock-config.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/atsam-clock-config.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/atsam-clock-config.h
 
 $(PROJECT_INCLUDE)/libchip/$(dirstamp):
 	@$(MKDIR_P) $(PROJECT_INCLUDE)/libchip

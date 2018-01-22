@@ -4,6 +4,8 @@
  * TQM8xx
  */
 
+EXTERN (__vectors)
+
 TopRamReserved = DEFINED(TopRamReserved) ? TopRamReserved : 0;	
 MEMORY {
 	RAM   : ORIGIN = 0x0, LENGTH = 128M
@@ -11,4 +13,4 @@ MEMORY {
 	ROM : ORIGIN = 0x40000000, LENGTH = 8M
 }
 
-INCLUDE linkcmds.base
+INCLUDE linkcmds.tqm8xx_base

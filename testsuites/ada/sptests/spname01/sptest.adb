@@ -19,6 +19,7 @@
 --
 
 with RTEMS;
+with RTEMS.OBJECT;
 with TEST_SUPPORT;
 with TEXT_IO;
 with System; use System;  -- for Null Pointer comparison
@@ -33,9 +34,9 @@ package body SPTEST is
    begin
 
       TEXT_IO.NEW_LINE( 2 );
-      TEXT_IO.PUT_LINE( "*** Ada Task Name TEST ***" );
+      TEST_SUPPORT.ADA_TEST_BEGIN;
 
-      RTEMS.Object_Get_Name( RTEMS.Self, StringName, Pointer );
+      RTEMS.Object.Get_Name( RTEMS.Self, StringName, Pointer );
       if Pointer = RTEMS.Null_Address then
          TEXT_IO.PUT_LINE( "Object_Get_Name_Failed" );
       else
@@ -43,17 +44,17 @@ package body SPTEST is
       end if;
 
       TEXT_IO.PUT_LINE( "Setting name to (Josiah)" );
-      RTEMS.Object_Set_Name( RTEMS.Self, NewName, Status );
+      RTEMS.Object.Set_Name( RTEMS.Self, NewName, Status );
       TEST_SUPPORT.DIRECTIVE_FAILED( STATUS, "Object_Set_Name" );
 
-      RTEMS.Object_Get_Name( RTEMS.Self, StringName, Pointer );
+      RTEMS.Object.Get_Name( RTEMS.Self, StringName, Pointer );
       if Pointer = RTEMS.Null_Address then
          TEXT_IO.PUT_LINE( "Object_Get_Name_Failed" );
       else
          TEXT_IO.PUT_LINE( "My name is (" & StringName & ")" );
       end if;
 
-      TEXT_IO.PUT_LINE( "*** END OF Ada Task Name TEST ***" );
+      TEST_SUPPORT.ADA_TEST_END;
 
       RTEMS.SHUTDOWN_EXECUTIVE( 0 );
 

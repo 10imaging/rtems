@@ -39,7 +39,7 @@ package body TMTEST is
    begin
 
       TEXT_IO.NEW_LINE( 2 );
-      TEXT_IO.PUT_LINE( "*** TIME TEST 4 ***" );
+      TEST_SUPPORT.ADA_TEST_BEGIN;
 
       TMTEST.TEST_INIT;
 
@@ -195,6 +195,15 @@ package body TMTEST is
          OVERHEAD,
          RTEMS_CALLING_OVERHEAD.SEMAPHORE_RELEASE
       );
+
+      -- All low priority (non-preemptible) tasks are ready now.  We must
+      -- prevent them from running (this would result in an invalid task exit),
+      -- since the rtems_task_delete() performs an implicit join.
+      for INDEX in 1 .. TIME_TEST_SUPPORT.OPERATION_COUNT
+      loop
+         RTEMS.TASKS.SUSPEND( TMTEST.TASK_ID( INDEX ), STATUS );
+         TEST_SUPPORT.DIRECTIVE_FAILED( STATUS, "TASK_SUSPEND" );
+      end loop;
 
       for INDEX in 1 .. TIME_TEST_SUPPORT.OPERATION_COUNT
       loop
@@ -397,7 +406,7 @@ package body TMTEST is
          RTEMS_CALLING_OVERHEAD.TASK_DELETE
       );
 
-      TEXT_IO.PUT_LINE( "*** END OF TIME TEST 4 ***" );
+      TEST_SUPPORT.ADA_TEST_END;
       RTEMS.SHUTDOWN_EXECUTIVE( 0 );
 
    end HIGH_TASK;

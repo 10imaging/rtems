@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 include_asmdir = $(includedir)/asm
@@ -14,11 +16,10 @@ include_HEADERS += include/tm27.h
 nodist_include_HEADERS = include/bspopts.h
 DISTCLEANFILES = include/bspopts.h
 
-EXTRA_DIST = README
+EXTRA_DIST += README
 
 noinst_PROGRAMS =
 
-include_HEADERS += ../../shared/include/coverhd.h
 
 include_bsp_HEADERS = include/irq.h \
 	../../shared/include/irq-generic.h \
@@ -41,14 +42,19 @@ include_asm_HEADERS += include/asm/fsl_hcalls.h
 include_uapi_asm_HEADERS =
 include_uapi_asm_HEADERS += include/uapi/asm/epapr_hcalls.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crtn.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crtn.S
+rtems_crtn.$(OBJEXT): ../../powerpc/shared/start/rtems_crtn.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crtn.$(OBJEXT)
 
 dist_project_lib_DATA += startup/linkcmds \
@@ -59,12 +65,13 @@ dist_project_lib_DATA += startup/linkcmds \
 	startup/linkcmds.qoriq_e6500_32 \
 	startup/linkcmds.qoriq_e6500_64
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # Startup
 libbsp_a_SOURCES += \
 	../../shared/bootcard.c \
+	../../shared/getentropy-cpucounter.c \
 	../../shared/sbrk.c \
 	../../shared/gnatinstallhandler.c \
 	../../shared/bspclean.c \

@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -15,18 +17,20 @@ DISTCLEANFILES = include/bspopts.h
 
 noinst_PROGRAMS =
 
-include_HEADERS += ../../shared/include/coverhd.h
 
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # clock
@@ -52,8 +56,10 @@ libbsp_a_SOURCES += irq/irq.c
 libbsp_a_SOURCES += ../../shared/bspclean.c \
     ../../shared/bsppredriverhook.c \
     ../shared/startup/bspidle.c startup/bspstart.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../shared/sbrk.c ../../shared/gnatinstallhandler.c startup/cpuinit.c \
     ../../shared/bspgetworkarea.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 
 if HAS_NETWORKING
 network_CPPFLAGS = -D__INSIDE_RTEMS_BSD_TCPIP_STACK__
@@ -76,7 +82,7 @@ if HAS_NETWORKING
 libbsp_a_LIBADD += network.rel
 endif
 
-EXTRA_DIST = times
+EXTRA_DIST += times
 
 include $(srcdir)/preinstall.am
 include $(top_srcdir)/../../../../automake/local.am

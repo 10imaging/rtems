@@ -57,10 +57,6 @@ $(PROJECT_INCLUDE)/nvram.h: ../../powerpc/shared/include/nvram.h $(PROJECT_INCLU
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/nvram.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/nvram.h
 
-$(PROJECT_INCLUDE)/coverhd.h: ../../shared/include/coverhd.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/coverhd.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/coverhd.h
-
 $(PROJECT_LIB)/start.$(OBJEXT): start.$(OBJEXT) $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/start.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/start.$(OBJEXT)
@@ -73,7 +69,11 @@ $(PROJECT_LIB)/vectors_entry.$(OBJEXT): vectors_entry.$(OBJEXT) $(PROJECT_LIB)/$
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/vectors_entry.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/vectors_entry.$(OBJEXT)
 
-$(PROJECT_LIB)/linkcmds: ../shared/startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
+$(PROJECT_LIB)/linkcmds.share: ../shared/startup/linkcmds.share $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.share
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.share
+
+$(PROJECT_LIB)/linkcmds: startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds
 PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds
 
@@ -85,13 +85,9 @@ $(PROJECT_INCLUDE)/bsp/uart.h: ../../powerpc/shared/console/uart.h $(PROJECT_INC
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/uart.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/uart.h
 
-$(PROJECT_INCLUDE)/bsp/irq.h: ../../powerpc/shared/irq/irq.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+$(PROJECT_INCLUDE)/bsp/irq.h: include/bsp/irq.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq.h
-
-$(PROJECT_INCLUDE)/bsp/irq_supp.h: ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq_supp.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq_supp.h
 
 $(PROJECT_INCLUDE)/bsp/motorola.h: ../../powerpc/shared/motorola/motorola.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/motorola.h
@@ -125,7 +121,7 @@ $(PROJECT_INCLUDE)/bsp/VME.h: ../../shared/vmeUniverse/VME.h $(PROJECT_INCLUDE)/
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/VME.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/VME.h
 
-$(PROJECT_INCLUDE)/bsp/VMEConfig.h: ../../powerpc/shared/vme/VMEConfig.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+$(PROJECT_INCLUDE)/bsp/VMEConfig.h: include/bsp/VMEConfig.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/VMEConfig.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/VMEConfig.h
 
@@ -142,11 +138,6 @@ $(PROJECT_INCLUDE)/bsp/VMEDMA.h: ../../shared/vmeUniverse/VMEDMA.h $(PROJECT_INC
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/VMEDMA.h
 
 if QEMU
-if HAS_NETWORKING
-$(PROJECT_INCLUDE)/wd80x3.h: $(srcdir)/../../i386/pc386/include/wd80x3.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/wd80x3.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/wd80x3.h
-endif
 endif
 if QEMU
 endif

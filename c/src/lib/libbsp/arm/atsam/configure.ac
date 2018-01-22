@@ -1,6 +1,6 @@
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-atsam],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/atsamv.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -14,7 +14,7 @@ RTEMS_PROG_CCAS
 RTEMS_CHECK_NETWORKING
 AM_CONDITIONAL(HAS_NETWORKING,test "$HAS_NETWORKING" = "yes")
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 AC_ARG_ENABLE(
 [chip],
 [AS_HELP_STRING([--enable-chip],[select a chip variant (default samv71q21)])],
@@ -56,6 +56,7 @@ AC_ARG_ENABLE(
 [case "${enableval}" in
   is42s16100e-7bli) AC_DEFINE([ATSAM_SDRAM_IS42S16100E_7BLI],[1],[SDRAM variant]) EXTSDRAM=0x00200000 ;;
   is42s16320f-7bl) AC_DEFINE([ATSAM_SDRAM_IS42S16320F_7BL],[1],[SDRAM variant]) EXTSDRAM=0x04000000 ;;
+  mt48lc16m16a2p-6a) AC_DEFINE([ATSAM_SDRAM_MT48LC16M16A2P_6A],[1],[SDRAM variant]) EXTSDRAM=0x02000000 ;;
   *) AC_MSG_ERROR([bad value ${enableval} for SDRAM variant]) ;;
 esac],
 [AC_DEFINE([ATSAM_SDRAM_IS42S16100E_7BLI],[1],[SDRAM variant]) EXTSDRAM=0x00200000])
@@ -63,8 +64,16 @@ esac],
 RTEMS_BSPOPTS_SET([BOARD_MAINOSC],[*],[12000000])
 RTEMS_BSPOPTS_HELP([BOARD_MAINOSC],[Main oscillator frequency in Hz (default 12MHz)])
 
-RTEMS_BSPOPTS_SET([BOARD_MCK],[*],[123000000])
-RTEMS_BSPOPTS_HELP([BOARD_MCK],[Master Clock (MCK) frequency in Hz (default 123MHz)])
+RTEMS_BSPOPTS_SET([ATSAM_MCK],[*],[123000000])
+RTEMS_BSPOPTS_HELP([ATSAM_MCK],
+[Frequency of the MCK in Hz. Set to 0 to force application defined speed.
+See startup/pmc-config.c for available clock configurations.])
+
+RTEMS_BSPOPTS_SET([ATSAM_CHANGE_CLOCK_FROM_SRAM],[*],[0])
+RTEMS_BSPOPTS_HELP([ATSAM_CHANGE_CLOCK_FROM_SRAM],
+[Move the functions that set up the clock into the SRAM.
+This allows to change the clock frequency even if the application is started from SDRAM.
+Requires a TCM_SIZE > 0.])
 
 RTEMS_BSPOPTS_SET([ATSAM_CONSOLE_BAUD],[*],[115200])
 RTEMS_BSPOPTS_HELP([ATSAM_CONSOLE_BAUD],[initial baud for console devices (default 115200)])

@@ -65,10 +65,6 @@ $(PROJECT_INCLUDE)/bsp/console-polled.h: ../../shared/include/console-polled.h $
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/console-polled.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/console-polled.h
 
-$(PROJECT_INCLUDE)/coverhd.h: include/coverhd.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/coverhd.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/coverhd.h
-
 $(PROJECT_LIB)/start.$(OBJEXT): start.$(OBJEXT) $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/start.$(OBJEXT)
 TMPINSTALL_FILES += $(PROJECT_LIB)/start.$(OBJEXT)
@@ -96,8 +92,4 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/openpic.h
 $(PROJECT_INCLUDE)/bsp/irq-generic.h: ../../shared/include/irq-generic.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq-generic.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq-generic.h
-
-$(PROJECT_INCLUDE)/bsp/irq_supp.h: ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq_supp.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq_supp.h
 

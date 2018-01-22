@@ -9,7 +9,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-powerpc-mpc55xxevb],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/gwlcfm.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -219,7 +219,7 @@ RTEMS_BSPOPTS_HELP([MPC55XX_ENABLE_START_PROLOGUE],[if defined, enable start pro
 
 AC_CONFIG_FILES([Makefile])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 RTEMS_PPC_EXCEPTIONS

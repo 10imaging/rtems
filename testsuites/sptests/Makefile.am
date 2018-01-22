@@ -33,6 +33,7 @@ _SUBDIRS = \
     spsignal_err01 spport_err01 spmsgq_err01 spmsgq_err02 spsem_err01 \
     spsem_err02 sptask_err01 spevent_err03 sptask_err03 sptask_err02 \
     sptask_err04 spclock_err01
+_SUBDIRS += spconsole01
 _SUBDIRS += spintrcritical24
 _SUBDIRS += spfatal29
 _SUBDIRS += spfatal30
@@ -63,6 +64,7 @@ _SUBDIRS += spfatal28
 _SUBDIRS += spthreadlife01
 _SUBDIRS += spcache01
 _SUBDIRS += sptls03
+_SUBDIRS += sptls04
 _SUBDIRS += spcpucounter01
 if HAS_CPLUSPLUS
 _SUBDIRS += spglobalcon01
@@ -81,6 +83,7 @@ _SUBDIRS += sptimer_err01 sptimer_err02
 _SUBDIRS += sptimerserver01
 _SUBDIRS += spclock_err02
 _SUBDIRS += spcpuset01
+_SUBDIRS += spversion01
 
 include $(top_srcdir)/../automake/subdirs.am
 include $(top_srcdir)/../automake/local.am

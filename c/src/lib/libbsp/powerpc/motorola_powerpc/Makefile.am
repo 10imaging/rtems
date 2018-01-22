@@ -1,4 +1,5 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 _SUBDIRS  = .
 _SUBDIRS += bootloader
@@ -7,6 +8,7 @@ _SUBDIRS += qemu_fakerom
 endif
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -22,21 +24,26 @@ DISTCLEANFILES = include/bspopts.h
 noinst_PROGRAMS =
 
 include_HEADERS += ../../powerpc/shared/include/nvram.h
-include_HEADERS += ../../shared/include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = ../../powerpc/shared/start/start.S
+EXTRA_DIST += ../../powerpc/shared/start/start.S
+start.$(OBJEXT): ../../powerpc/shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/vectors_entry.S
+EXTRA_DIST += ../../powerpc/shared/start/vectors_entry.S
+vectors_entry.$(OBJEXT): ../../powerpc/shared/start/vectors_entry.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += vectors_entry.$(OBJEXT)
 
-dist_project_lib_DATA += ../shared/startup/linkcmds
+dist_project_lib_DATA += ../shared/startup/linkcmds.share
+dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # startup
@@ -49,6 +56,7 @@ libbsp_a_SOURCES += ../../powerpc/shared/startup/bspstart.c \
     ../../powerpc/shared/startup/pgtbl_activate.c \
 	../../powerpc/shared/startup/ppc_idle.c \
     ../../powerpc/shared/startup/sbrk.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../shared/bspclean.c \
     ../../shared/gnatinstallhandler.c \
     startup/bspreset.c
@@ -76,13 +84,12 @@ libbsp_a_SOURCES += ../../powerpc/shared/console/consoleIo.h
 libbsp_a_SOURCES += ../../powerpc/shared/console/keyboard.h
 libbsp_a_SOURCES += ../../powerpc/shared/console/uart.h
 
-include_bsp_HEADERS += ../../powerpc/shared/irq/irq.h \
-	../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h
+include_bsp_HEADERS += include/bsp/irq.h
 
 # irq
 libbsp_a_SOURCES += ../../powerpc/shared/irq/irq_init.c
 libbsp_a_SOURCES += ../../powerpc/shared/irq/openpic_i8259_irq.c
-libbsp_a_SOURCES += ../../powerpc/shared/irq/i8259.c ../../powerpc/shared/irq/irq.h
+libbsp_a_SOURCES += ../../powerpc/shared/irq/i8259.c
 
 include_bsp_HEADERS += ../../powerpc/shared/motorola/motorola.h
 # motorola
@@ -113,7 +120,7 @@ libbsp_a_SOURCES += ../../powerpc/shared/residual/residual.c
 include_bsp_HEADERS += ../../shared/vmeUniverse/vmeUniverse.h \
     ../../shared/vmeUniverse/vme_am_defs.h \
     ../../shared/vmeUniverse/VME.h \
-    ../../powerpc/shared/vme/VMEConfig.h \
+    include/bsp/VMEConfig.h \
     ../../shared/vmeUniverse/vmeUniverseDMA.h\
     ../../shared/vmeUniverse/bspVmeDmaList.h\
     ../../shared/vmeUniverse/VMEDMA.h
@@ -125,11 +132,9 @@ libbsp_a_SOURCES += ../../shared/vmeUniverse/vme_am_defs.h
 libbsp_a_SOURCES += ../../shared/vmeUniverse/VME.h
 libbsp_a_SOURCES += ../../powerpc/shared/vme/vmeconfig.c
 libbsp_a_SOURCES += ../../powerpc/shared/vme/vme_universe.c
-libbsp_a_SOURCES += ../../powerpc/shared/vme/VMEConfig.h
 
 if QEMU
 if HAS_NETWORKING
-nodist_include_HEADERS  += $(srcdir)/../../i386/pc386/include/wd80x3.h
 ne2000_CPPFLAGS          = -D__INSIDE_RTEMS_BSD_TCPIP_STACK__
 ne2000_CPPFLAGS         += '-Dbsp_cmdline_arg=rtems_bsp_cmdline_get_param_raw'
 noinst_PROGRAMS         += ne2000.rel
@@ -158,7 +163,7 @@ libbsp_a_LIBADD+=ne2000.rel
 endif
 endif
 
-EXTRA_DIST = BOOTING README.mtx603e README.MVME2100 README.MVME2300 \
+EXTRA_DIST += BOOTING README.mtx603e README.MVME2100 README.MVME2300 \
               README.MVME2400 \
     README.OTHERBOARDS
 EXTRA_DIST += README.dec21140

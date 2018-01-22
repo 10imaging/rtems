@@ -29,6 +29,7 @@
 #include <rtems.h>
 #include <rtems/libio.h>
 #include <rtems/seterr.h>
+#include <rtems/score/assert.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,15 +51,6 @@ extern "C" {
  * RTEMS implementation to work.
  */
 #define F_DUP2FD 20
-
-/*
- *  Semaphore to protect the io table
- */
-
-#define RTEMS_LIBIO_SEM         rtems_build_name('L', 'B', 'I', 'O')
-#define RTEMS_LIBIO_IOP_SEM(n)  rtems_build_name('L', 'B', 'I', n)
-
-extern rtems_id                          rtems_libio_semaphore;
 
 /*
  *  File descriptor Table Information
@@ -181,11 +173,33 @@ static inline unsigned int rtems_libio_iop_hold( rtems_libio_t *iop )
  */
 static inline void rtems_libio_iop_drop( rtems_libio_t *iop )
 {
+#if defined(RTEMS_DEBUG)
+  unsigned int flags;
+  bool         success;
+
+  flags = _Atomic_Load_uint( &iop->flags, ATOMIC_ORDER_RELAXED );
+
+  do {
+    unsigned int desired;
+
+    _Assert( flags >= LIBIO_FLAGS_REFERENCE_INC );
+
+    desired = flags - LIBIO_FLAGS_REFERENCE_INC;
+    success = _Atomic_Compare_exchange_uint(
+      &iop->flags,
+      &flags,
+      desired,
+      ATOMIC_ORDER_RELEASE,
+      ATOMIC_ORDER_RELAXED
+    );
+  } while ( !success );
+#else
   _Atomic_Fetch_sub_uint(
     &iop->flags,
     LIBIO_FLAGS_REFERENCE_INC,
     ATOMIC_ORDER_RELEASE
   );
+#endif
 }
 
 /*
@@ -324,15 +338,9 @@ void rtems_libio_free_user_env( void *env );
 
 extern pthread_key_t rtems_current_user_env_key;
 
-static inline void rtems_libio_lock( void )
-{
-  rtems_semaphore_obtain( rtems_libio_semaphore, RTEMS_WAIT, RTEMS_NO_TIMEOUT );
-}
+void rtems_libio_lock( void );
 
-static inline void rtems_libio_unlock( void )
-{
-  rtems_semaphore_release( rtems_libio_semaphore );
-}
+void rtems_libio_unlock( void );
 
 static inline void rtems_filesystem_mt_lock( void )
 {

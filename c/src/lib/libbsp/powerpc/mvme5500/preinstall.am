@@ -53,11 +53,11 @@ $(PROJECT_INCLUDE)/bsp/bootcard.h: ../../shared/include/bootcard.h $(PROJECT_INC
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/bootcard.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/bootcard.h
 
-$(PROJECT_INCLUDE)/coverhd.h: ../../shared/include/coverhd.h $(PROJECT_INCLUDE)/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/coverhd.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/coverhd.h
+$(PROJECT_LIB)/linkcmds.share: ../shared/startup/linkcmds.share $(PROJECT_LIB)/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds.share
+PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds.share
 
-$(PROJECT_LIB)/linkcmds: ../shared/startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
+$(PROJECT_LIB)/linkcmds: startup/linkcmds $(PROJECT_LIB)/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_LIB)/linkcmds
 PREINSTALL_FILES += $(PROJECT_LIB)/linkcmds
 
@@ -84,10 +84,6 @@ PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq.h
 $(PROJECT_INCLUDE)/bsp/bspException.h: vectors/bspException.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/bspException.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/bspException.h
-
-$(PROJECT_INCLUDE)/bsp/irq_supp.h: ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
-	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq_supp.h
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq_supp.h
 
 $(PROJECT_INCLUDE)/bsp/bspMvme5500.h: GT64260/bspMvme5500.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/bspMvme5500.h

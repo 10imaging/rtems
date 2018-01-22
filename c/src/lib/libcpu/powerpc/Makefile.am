@@ -14,7 +14,13 @@ include_libcpu_HEADERS = shared/include/powerpc-utility.h
 include_bspdir = $(includedir)/bsp
 
 include_bsp_HEADERS =
+include_bsp_HEADERS += new-exceptions/bspsupport/irq_supp.h
 include_bsp_HEADERS += new-exceptions/bspsupport/vectors.h
+
+include_mpc83xxdir = $(includedir)/mpc83xx
+
+include_mpc83xx_HEADERS =
+include_mpc83xx_HEADERS += mpc83xx/i2c/mpc83xx_i2cdrv.h
 
 EXTRA_DIST =
 
@@ -55,8 +61,6 @@ new_exceptions_irq_bspsupport_rel_CPPFLAGS = $(AM_CPPFLAGS)
 new_exceptions_irq_bspsupport_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 endif
 
-EXTRA_DIST += new-exceptions/bspsupport/vectors.h
-EXTRA_DIST += new-exceptions/bspsupport/irq_supp.h
 EXTRA_DIST += new-exceptions/bspsupport/README
 EXTRA_DIST += new-exceptions/bspsupport/ppc_exc_test.c
 
@@ -80,8 +84,6 @@ shared_cache_rel_SOURCES = shared/src/cache_.h \
     ../shared/include/cache.h
 shared_cache_rel_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)/shared/src
 shared_cache_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
-
-include_libcpu_HEADERS += ../shared/include/cache.h
 
 # shared/stack
 noinst_PROGRAMS += shared/stack.rel
@@ -369,21 +371,19 @@ endif
 if mpc83xx
 
 # Includes
-include_mpc83xxdir = $(includedir)/mpc83xx
 
-include_mpc83xx_HEADERS = mpc83xx/include/mpc83xx.h
+include_mpc83xx_HEADERS += mpc83xx/include/mpc83xx.h
 
 # Network
 include_bsp_HEADERS += mpc83xx/network/tsec.h
 if HAS_NETWORKING
 noinst_PROGRAMS += mpc83xx/tsec.rel
 mpc83xx_tsec_rel_SOURCES = mpc83xx/network/tsec.c
-mpc83xx_tsec_rel_CPPFLAGS = -D__INSIDE_RTEMS_BSD_TCPIP_STACK__ -D__BSD_VISIBLE
+mpc83xx_tsec_rel_CPPFLAGS = $(AM_CPPFLAGS) -D__INSIDE_RTEMS_BSD_TCPIP_STACK__ -D__BSD_VISIBLE
 mpc83xx_tsec_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 endif
 
 # i2c
-include_mpc83xx_HEADERS += mpc83xx/i2c/mpc83xx_i2cdrv.h
 noinst_PROGRAMS += mpc83xx/i2c.rel
 mpc83xx_i2c_rel_SOURCES = mpc83xx/i2c/mpc83xx_i2cdrv.c \
 	mpc83xx/i2c/mpc83xx_i2cdrv.h
@@ -424,7 +424,6 @@ include_mpc55xx_HEADERS += mpc55xx/include/edma.h
 include_mpc55xx_HEADERS += mpc55xx/include/emios.h
 include_mpc55xx_HEADERS += mpc55xx/include/mpc55xx.h
 include_mpc55xx_HEADERS += mpc55xx/include/siu.h
-include_mpc55xx_HEADERS += mpc55xx/include/irq.h
 include_mpc55xx_HEADERS += mpc55xx/include/watchdog.h
 include_mpc55xx_HEADERS += mpc55xx/include/fsl-mpc551x.h
 include_mpc55xx_HEADERS += mpc55xx/include/fsl-mpc555x.h
@@ -434,8 +433,6 @@ include_mpc55xx_HEADERS += mpc55xx/include/fsl-mpc5668.h
 include_mpc55xx_HEADERS += mpc55xx/include/fsl-mpc567x.h
 include_mpc55xx_HEADERS += mpc55xx/include/regs-edma.h
 include_mpc55xx_HEADERS += mpc55xx/include/regs-mmu.h
-
-include_bsp_HEADERS += mpc55xx/include/irq.h
 
 # IRQ
 noinst_PROGRAMS += mpc55xx/irq.rel
@@ -494,7 +491,7 @@ include_bsp_HEADERS += mpc83xx/network/tsec.h
 if HAS_NETWORKING
 noinst_PROGRAMS += tsec.rel
 tsec_rel_SOURCES = mpc83xx/network/tsec.c
-tsec_rel_CPPFLAGS = -D__INSIDE_RTEMS_BSD_TCPIP_STACK__ -D__BSD_VISIBLE
+tsec_rel_CPPFLAGS = $(AM_CPPFLAGS) -D__INSIDE_RTEMS_BSD_TCPIP_STACK__ -D__BSD_VISIBLE
 tsec_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 endif
 

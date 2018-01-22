@@ -1,30 +1,34 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 dist_project_lib_DATA = bsp_specs
 
 include_bspdir = $(includedir)/bsp
 
 include_HEADERS = include/bsp.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 nodist_include_HEADERS = include/bspopts.h
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 nodist_include_bsp_HEADERS += ../../shared/include/console-polled.h
 DISTCLEANFILES = include/bspopts.h
 
-include_HEADERS += ../../shared/include/coverhd.h
 
-EXTRA_DIST = times
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/crtnn.S
-libbspstart_a_SOURCES += start/start.S
+EXTRA_DIST += times
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
+EXTRA_DIST += start/crtnn.S
+crtnn.$(OBJEXT): start/crtnn.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT) crtnn.$(OBJEXT)
 
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 libbsp_a_CPPFLAGS =
 
@@ -34,6 +38,7 @@ libbsp_a_SOURCES += ../../shared/bspreset_loop.c
 libbsp_a_SOURCES += startup/bspstart.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 libbsp_a_SOURCES += startup/setvec.c
 libbsp_a_SOURCES += ../../shared/gnatinstallhandler.c

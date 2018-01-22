@@ -1,4 +1,5 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
 include $(top_srcdir)/../../bsp.am
@@ -8,7 +9,7 @@ include_bspdir = $(includedir)/bsp
 dist_project_lib_DATA = bsp_specs
 
 include_HEADERS = include/bsp.h
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 nodist_include_HEADERS = include/bspopts.h
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
@@ -16,11 +17,10 @@ DISTCLEANFILES = include/bspopts.h
 
 noinst_PROGRAMS =
 
-include_HEADERS += ../../shared/include/coverhd.h
 
 project_lib_DATA =
 
-EXTRA_DIST = start/start.S
+EXTRA_DIST += start/start.S
 start.$(OBJEXT): start/start.S
 	$(CPPASCOMPILE) -o $@ -c $<
 
@@ -43,7 +43,8 @@ rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
 	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
-dist_project_lib_DATA += ../shared/startup/linkcmds
+dist_project_lib_DATA += ../shared/startup/linkcmds.share
+dist_project_lib_DATA += startup/linkcmds
 
 noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
@@ -54,8 +55,10 @@ libbsp_a_SOURCES += startup/bspstart.c \
     ../../powerpc/shared/startup/bsppredriverhook.c \
     ../../powerpc/shared/startup/zerobss.c \
     ../../powerpc/shared/startup/sbrk.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../shared/bspclean.c \
     ../../shared/gnatinstallhandler.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 # tod
 libbsp_a_SOURCES += ../../shared/tod.c tod/todcfg.c
 # pclock
@@ -71,8 +74,7 @@ libbsp_a_SOURCES += ../../powerpc/shared/console/uart.c \
 include_bsp_HEADERS += irq/irq.h
 # irq
 libbsp_a_SOURCES += irq/irq_init.c \
-    ../../powerpc/shared/irq/openpic_i8259_irq.c \
-    ../../powerpc/shared/irq/irq.h
+    ../../powerpc/shared/irq/openpic_i8259_irq.c
 
 include_bsp_HEADERS += ../../powerpc/shared/openpic/openpic.h
 # openpic
@@ -86,9 +88,6 @@ libbsp_a_SOURCES += ../../powerpc/shared/pci/pci.c \
     pci/detect_host_bridge.c \
     ../../powerpc/shared/pci/generic_clear_hberrs.c \
     ../../powerpc/shared/pci/pcifinddevice.c ../../powerpc/shared/pci/pci.h
-
-include_bsp_HEADERS += \
-  ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h
 
 include_bsp_HEADERS += vme/VMEConfig.h \
     ../../shared/vmeUniverse/vmeTsi148.h \

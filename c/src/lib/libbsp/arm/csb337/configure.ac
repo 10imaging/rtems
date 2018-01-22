@@ -2,7 +2,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-csb337],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/csb337.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -62,7 +62,7 @@ RTEMS_BSPOPTS_HELP([ENABLE_USART3],
 [If defined, enable use of the USART 3.])
 AM_CONDITIONAL(ENABLE_USART3,test "$ENABLE_USART3" = "1")
 
-RTEMS_BSP_CLEANUP_OPTIONS(1, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 # Explicitly list all Makefiles here

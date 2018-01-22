@@ -8,7 +8,7 @@
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-lpc176x],[_RTEMS_VERSION],
 				[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/lpc1768_mbed_ahb_ram.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -67,7 +67,7 @@ RTEMS_BSPOPTS_HELP([LPC176X_STOP_USB],[stop USB controller
 RTEMS_BSPOPTS_SET([LPC_DMA_CHANNEL_COUNT],[*],[2])
 RTEMS_BSPOPTS_HELP([LPC_DMA_CHANNEL_COUNT],[DMA channel count])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 AC_CONFIG_FILES([Makefile])

@@ -7,7 +7,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-lpc32xx],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/lpc32xx_mzx.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -105,7 +105,7 @@ RTEMS_BSPOPTS_HELP([BSP_USB_OTG_TRANSCEIVER_VBUS],[USB OTG transceiver VBUS poli
 RTEMS_BSPOPTS_SET([TESTS_USE_PRINTK],[*],[1])
 RTEMS_BSPOPTS_HELP([TESTS_USE_PRINTK],[tests use printk() for output])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 AC_CONFIG_FILES([Makefile])

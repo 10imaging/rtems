@@ -10,6 +10,7 @@
 #include <bsp.h>
 #include <bsp/bootcard.h>
 #include <rtems/bspIo.h>
+#include <rtems/version.h>
 
 void bsp_fatal_extension(
   rtems_fatal_source source,
@@ -17,10 +18,43 @@ void bsp_fatal_extension(
   rtems_fatal_code code
 )
 {
-  #if (BSP_PRINT_EXCEPTION_CONTEXT)
+  #if BSP_VERBOSE_FATAL_EXTENSION
+    printk(
+      "\n"
+      "*** FATAL ***\n"
+      "fatal source: %i (%s)\n",
+      source,
+      rtems_fatal_source_text( source )
+    );
+  #endif
+
+  #if (BSP_PRINT_EXCEPTION_CONTEXT) || BSP_VERBOSE_FATAL_EXTENSION
     if ( source == RTEMS_FATAL_SOURCE_EXCEPTION ) {
       rtems_exception_frame_print( (const rtems_exception_frame *) code );
     }
+  #endif
+
+  #if BSP_VERBOSE_FATAL_EXTENSION
+    else if ( source == INTERNAL_ERROR_CORE ) {
+      printk(
+        "fatal code: %ju (%s)\n",
+        (uintmax_t) code,
+        rtems_internal_error_text( code )
+      );
+    } else {
+      printk(
+        "fatal code: %ju (0x%08jx)\n",
+        (uintmax_t) code,
+        (uintmax_t) code
+      );
+    }
+
+    printk(
+      "RTEMS version: %s\n"
+      "RTEMS tools: %s\n",
+      rtems_version(),
+      __VERSION__
+    );
   #endif
 
   #if (BSP_PRESS_KEY_FOR_RESET)

@@ -29,6 +29,7 @@ include_machine_HEADERS += include/machine/_kernel_cpuset.h
 include_machine_HEADERS += include/machine/_kernel_param.h
 include_machine_HEADERS += include/machine/_kernel_time.h
 include_machine_HEADERS += include/machine/_kernel_types.h
+include_machine_HEADERS += include/machine/_timecounter.h
 
 ##  General stuff
 ERROR_C_FILES = src/error.c src/__assert.c
@@ -115,7 +116,8 @@ TERMINAL_IDENTIFICATION_C_FILES += src/ttyname.c
 LIBC_GLUE_C_FILES = src/__getpid.c src/__gettod.c src/__times.c \
     src/truncate.c src/access.c src/stat.c src/lstat.c src/pathconf.c \
     src/newlibc_reent.c src/newlibc_exit.c \
-    src/kill_noposix.c src/utsname.c src/realpath.c
+    src/kill_noposix.c src/utsname.c src/realpath.c \
+    src/arc4random_getentropy_fail.c
 
 BSD_LIBC_C_FILES = src/strlcpy.c src/strlcat.c src/issetugid.c
 
@@ -138,6 +140,7 @@ libcsupport_a_SOURCES = src/gxx_wrappers.c src/getchark.c src/printk.c \
     src/resource_snapshot.c \
     $(BSD_LIBC_C_FILES) $(BASE_FS_C_FILES) $(MALLOC_C_FILES) \
     $(ERROR_C_FILES) $(ASSOCIATION_C_FILES)
+libcsupport_a_SOURCES += src/consolesimple.c
 libcsupport_a_SOURCES += src/printertask.c
 libcsupport_a_SOURCES += src/printerfprintfputc.c
 

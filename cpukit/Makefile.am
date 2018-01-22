@@ -37,6 +37,7 @@ CLEANFILES = preinstall-stamp
 
 include_HEADERS =
 include_HEADERS += include/endian.h
+include_HEADERS += include/zconf.h
 
 include_rtemsdir = $(includedir)/rtems
 include_rtems_HEADERS =
@@ -65,19 +66,6 @@ include_sys_HEADERS += libcsupport/include/sys/utsname.h
 
 include_sys_HEADERS += include/sys/endian.h
 include_sys_HEADERS += include/sys/priority.h
-
-if !HAS_NEWLIB_20170522_HEADER
-include_sys_HEADERS += include/sys/_iovec.h
-include_sys_HEADERS += include/sys/uio.h
-include_sys_HEADERS += libcsupport/include/sys/filio.h
-include_sys_HEADERS += libcsupport/include/sys/ioccom.h
-include_sys_HEADERS += libcsupport/include/sys/ioctl.h
-include_sys_HEADERS += libcsupport/include/sys/sockio.h
-include_sys_HEADERS += libcsupport/include/sys/_termios.h
-include_sys_HEADERS += libcsupport/include/sys/termios.h
-include_sys_HEADERS += libcsupport/include/sys/ttycom.h
-include_sys_HEADERS += libcsupport/include/sys/ttydefaults.h
-endif
 
 if LIBNETWORKING
 include_rtems_bsdnetdir = $(includedir)/rtems/bsdnet
@@ -270,12 +258,58 @@ include_rtems_HEADERS += libmisc/untar/untar.h
 ## fsmount
 include_rtems_HEADERS += libmisc/fsmount/fsmount.h
 
+include_rtems_HEADERS += include/rtems/tm27-default.h
+
 ## Driver manager
 if LIBDRVMGR
 include_drvmgrdir = $(includedir)/drvmgr
 include_drvmgr_HEADERS = libdrvmgr/drvmgr.h
 include_drvmgr_HEADERS += libdrvmgr/drvmgr_confdefs.h
 include_drvmgr_HEADERS += libdrvmgr/drvmgr_list.h
+endif
+
+if LIBGNAT
+include_adaincludedir = $(includedir)/adainclude
+include_adainclude_HEADERS =
+include_adainclude_HEADERS += include/adainclude/rtems.adb
+include_adainclude_HEADERS += include/adainclude/rtems.ads
+include_adainclude_HEADERS += include/adainclude/rtems-barrier.adb
+include_adainclude_HEADERS += include/adainclude/rtems-barrier.ads
+include_adainclude_HEADERS += include/adainclude/rtems-clock.adb
+include_adainclude_HEADERS += include/adainclude/rtems-clock.ads
+include_adainclude_HEADERS += include/adainclude/rtems-cpu_usage.ads
+include_adainclude_HEADERS += include/adainclude/rtems-event.adb
+include_adainclude_HEADERS += include/adainclude/rtems-event.ads
+include_adainclude_HEADERS += include/adainclude/rtems-extension.adb
+include_adainclude_HEADERS += include/adainclude/rtems-extension.ads
+include_adainclude_HEADERS += include/adainclude/rtems-fatal.adb
+include_adainclude_HEADERS += include/adainclude/rtems-fatal.ads
+include_adainclude_HEADERS += include/adainclude/rtems-interrupt.ads
+include_adainclude_HEADERS += include/adainclude/rtems-io.adb
+include_adainclude_HEADERS += include/adainclude/rtems-io.ads
+include_adainclude_HEADERS += include/adainclude/rtems-message_queue.adb
+include_adainclude_HEADERS += include/adainclude/rtems-message_queue.ads
+include_adainclude_HEADERS += include/adainclude/rtems-multiprocessing.adb
+include_adainclude_HEADERS += include/adainclude/rtems-multiprocessing.ads
+include_adainclude_HEADERS += include/adainclude/rtems-object.adb
+include_adainclude_HEADERS += include/adainclude/rtems-object.ads
+include_adainclude_HEADERS += include/adainclude/rtems-partition.adb
+include_adainclude_HEADERS += include/adainclude/rtems-partition.ads
+include_adainclude_HEADERS += include/adainclude/rtems-port.adb
+include_adainclude_HEADERS += include/adainclude/rtems-port.ads
+include_adainclude_HEADERS += include/adainclude/rtems-rate_monotonic.adb
+include_adainclude_HEADERS += include/adainclude/rtems-rate_monotonic.ads
+include_adainclude_HEADERS += include/adainclude/rtems-region.adb
+include_adainclude_HEADERS += include/adainclude/rtems-region.ads
+include_adainclude_HEADERS += include/adainclude/rtems-semaphore.adb
+include_adainclude_HEADERS += include/adainclude/rtems-semaphore.ads
+include_adainclude_HEADERS += include/adainclude/rtems-signal.adb
+include_adainclude_HEADERS += include/adainclude/rtems-signal.ads
+include_adainclude_HEADERS += include/adainclude/rtems-stack_checker.ads
+include_adainclude_HEADERS += include/adainclude/rtems-tasks.adb
+include_adainclude_HEADERS += include/adainclude/rtems-tasks.ads
+include_adainclude_HEADERS += include/adainclude/rtems-timer.adb
+include_adainclude_HEADERS += include/adainclude/rtems-timer.ads
 endif
 
 ## HACK: doxygen filter.

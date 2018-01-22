@@ -7,7 +7,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-arm-lpc24xx],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/lpc17xx_ea_ram.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -122,7 +122,7 @@ RTEMS_BSPOPTS_HELP([BSP_START_RESET_VECTOR],[reset vector address for BSP start]
 RTEMS_BSPOPTS_SET([BSP_USB_OTG_TRANSCEIVER_I2C_ADDR],[lpc17xx_ea* | lpc40xx_ea*],[(0x2f << 1)])
 RTEMS_BSPOPTS_HELP([BSP_USB_OTG_TRANSCEIVER_I2C_ADDR],[USB OTG transceiver I2C address used by USB stack])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 RTEMS_BSP_LINKCMDS
 
 AC_CONFIG_FILES([Makefile])

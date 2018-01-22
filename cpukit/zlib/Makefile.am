@@ -18,15 +18,7 @@ libz_a_SOURCES += zconf.h
 libz_a_SOURCES += zlib.h
 libz_a_SOURCES += zutil.c zutil.h
 
-include_HEADERS = zlib.h zconf.h
-
-zconf.h: $(srcdir)/zconf.h.in
-	sed \
-	  -e 's,#ifdef Z_PREFIX.* may be ,#if 1 /* was ,' \
-	  -e 's,#ifdef HAVE_UNISTD_H.* may be ,#if 1 /* was ,' \
-	< $(srcdir)/zconf.h.in > zconf.h
-CLEANFILES = zconf.h
-EXTRA_DIST = zconf.h.in
+include_HEADERS = zlib.h
 
 include $(srcdir)/preinstall.am
 include $(top_srcdir)/automake/local.am

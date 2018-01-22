@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -17,26 +19,30 @@ nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 nodist_include_bsp_HEADERS += ../../shared/include/console-polled.h
 DISTCLEANFILES = include/bspopts.h
 
-include_HEADERS += include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
 dist_project_lib_DATA += ../shared/startup/linkcmds.base
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # startup
 libbsp_a_SOURCES += ../../shared/bspclean.c \
     ../../shared/bsppredriverhook.c startup/bspstart.c \
     ../../shared/bspgetworkarea.c ../../shared/bootcard.c \
+    ../../shared/getentropy-cpucounter.c \
     ../../powerpc/shared/startup/sbrk.c ../../shared/gnatinstallhandler.c
+libbsp_a_SOURCES += ../../shared/bspreset.c
 
 # pclock
 libbsp_a_SOURCES += ../shared/clock/p_clock.c
@@ -52,11 +58,9 @@ libbsp_a_SOURCES += irq/irq_init.c ../shared/irq/openpic_i8259_irq.c \
     ../shared/openpic/openpic.c ../../shared/src/irq-server.c  \
     ../../shared/src/irq-generic.c ../../shared/src/irq-default-handler.c
 
-EXTRA_DIST = vectors/README
+EXTRA_DIST += vectors/README
 # vectors
 libbsp_a_SOURCES += vectors/align_h.S
-
-include_bsp_HEADERS += ../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h
 
 EXTRA_DIST += shmsupp/README
 if HAS_MP

@@ -869,7 +869,7 @@ bdbuf_tests_task_0_test_4 (bdbuf_task_control* tc)
 
   for (i = 0; (i < num) && passed; i++)
   {
-    printf ("%s: rtems_bdbuf_read[%d]: ", tc->name, i);
+    printf ("%s: rtems_bdbuf_read[%zd]: ", tc->name, i);
     sc = rtems_bdbuf_read (tc->dd, i, &bd);
     if (!bdbuf_test_print_sc (sc, true))
       passed = false;
@@ -902,12 +902,11 @@ bdbuf_tests_task_0_test_4 (bdbuf_task_control* tc)
     {
       for (i = 1; (i < (num / 2)) && passed; i++)
       {
-        printf ("%s: rtems_bdbuf_release_modified[%d]: " \
+        printf ("%s: rtems_bdbuf_release_modified[%zd]: " \
                            "unblocks task 1\n", tc->name, i);
         bd = (rtems_bdbuf_buffer*) rtems_chain_get (&buffers);
         sc = rtems_bdbuf_release_modified (bd);
-        printf ("%s: rtems_bdbuf_release_modified[%d]: ",
-                           tc->name, i);
+        printf ("%s: rtems_bdbuf_release_modified[%zd]: ", tc->name, i);
         passed = bdbuf_test_print_sc (sc, true);
         if (!passed)
           break;
@@ -925,7 +924,7 @@ bdbuf_tests_task_0_test_4 (bdbuf_task_control* tc)
 
           for (i = 0; (i < (num / 2)) && passed; i++)
           {
-            printf ("%s: rtems_bdbuf_release_modified[%d]: ",
+            printf ("%s: rtems_bdbuf_release_modified[%zd]: ",
                                tc->name, i + (num / 2));
             bd = (rtems_bdbuf_buffer*) rtems_chain_get (&buffers);
             passed = bdbuf_test_print_sc (rtems_bdbuf_release_modified (bd),
@@ -1830,7 +1829,7 @@ static rtems_task Init(rtems_task_argument argument)
 #define CONFIGURE_INIT
 
 #define CONFIGURE_APPLICATION_NEEDS_CLOCK_DRIVER
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_LIBBLOCK
 
 #define CONFIGURE_BDBUF_TASK_STACK_SIZE BDBUF_TEST_STACK_SIZE
@@ -1843,6 +1842,7 @@ static rtems_task Init(rtems_task_argument argument)
   (BDBUF_TEST_TASKS * BDBUF_TEST_STACK_SIZE)
 
 #define CONFIGURE_INIT_TASK_STACK_SIZE BDBUF_TEST_STACK_SIZE
+#define CONFIGURE_INIT_TASK_ATTRIBUTES RTEMS_FLOATING_POINT
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
 
 #define CONFIGURE_RTEMS_INIT_TASKS_TABLE

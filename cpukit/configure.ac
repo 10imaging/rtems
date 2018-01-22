@@ -167,9 +167,6 @@ if test x"$RTEMS_USE_NEWLIB" = xyes ; then
   AC_CHECK_DECLS([__getreent],[],[RTEMS_TOOL_CHAIN_ERROR],[#include <sys/reent.h>])
 fi
 
-AC_CHECK_HEADER([sys/socket.h],[],[])
-AM_CONDITIONAL(HAS_NEWLIB_20170522_HEADER,[test x"${ac_cv_header_sys_socket_h}" = xyes])
-
 RTEMS_CHECK_MULTIPROCESSING
 RTEMS_CHECK_POSIX_API
 RTEMS_CHECK_NETWORKING
@@ -340,6 +337,9 @@ AC_CHECK_DECLS([utime],,,[#include <sys/types.h>
 #include <utime.h>])
 ## Check if libc provides decl of utimes
 AC_CHECK_DECLS([utimes],,,[#include <sys/time.h>])
+
+# Ensure that Newlib does not provide things now in <machine/_timecounter.h>
+AC_CHECK_DECLS([_Timecounter_Time_second],[RTEMS_TOOL_CHAIN_ERROR],,[#include <sys/time.h>])
 
 # ... far too many conditionals ...
 AM_CONDITIONAL(LIBRPC,[test x"$rtems_cv_HAS_NETWORKING" = x"yes"])

@@ -13,9 +13,7 @@
 
 /* configuration information */
 
-#define CONFIGURE_SPTEST
-
-#define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
+#define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_CLOCK_DRIVER
 
 #define CONFIGURE_MAXIMUM_USER_EXTENSIONS     1
@@ -27,6 +25,8 @@
 #define CONFIGURE_MAXIMUM_POSIX_KEYS                 10
 
 #define CONFIGURE_MAXIMUM_TASKS             5
+
+#define ADA_TEST_NAME "ADA SP 7"
 
 #include <rtems/confdefs.h>
 

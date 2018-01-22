@@ -39,22 +39,13 @@
  *  + _Scheduler_priority_SMP_Do_update
  */
 
-static bool _Scheduler_priority_affinity_SMP_Insert_priority_lifo_order(
-  const Chain_Node *to_insert,
+static bool _Scheduler_priority_affinity_SMP_Priority_less_equal(
+  const void       *to_insert,
   const Chain_Node *next
 )
 {
   return next != NULL
-    && _Scheduler_SMP_Insert_priority_lifo_order( to_insert, next );
-}
-
-static bool _Scheduler_priority_affinity_SMP_Insert_priority_fifo_order(
-  const Chain_Node *to_insert,
-  const Chain_Node *next
-)
-{
-  return next != NULL
-    && _Scheduler_SMP_Insert_priority_fifo_order( to_insert, next );
+    && _Scheduler_SMP_Priority_less_equal( to_insert, next );
 }
 
 static Scheduler_priority_affinity_SMP_Node *
@@ -84,11 +75,7 @@ void _Scheduler_priority_affinity_SMP_Node_initialize(
    *  All we add is affinity information to the basic SMP node.
    */
   the_node = _Scheduler_priority_affinity_SMP_Node_downcast( node );
-  _Processor_mask_To_cpu_set_t(
-    _SMP_Get_online_processors(),
-    sizeof( the_node->affinity ),
-    &the_node->affinity
-  );
+  _Processor_mask_Assign( &the_node->Affinity, _SMP_Get_online_processors() );
 }
 
 /*
@@ -156,7 +143,7 @@ static Scheduler_Node *_Scheduler_priority_affinity_SMP_Get_highest_ready(
       /*
        * Can this thread run on this CPU?
        */
-      if ( CPU_ISSET( (int) victim_cpu_index, &node->affinity ) ) {
+      if ( _Processor_mask_Is_set( &node->Affinity, victim_cpu_index ) ) {
         highest = &node->Base.Base.Base;
         break;
       }
@@ -233,7 +220,7 @@ static Scheduler_Node * _Scheduler_priority_affinity_SMP_Get_lowest_scheduled(
     thread = _Scheduler_Node_get_owner( &node->Base.Base.Base );
     cpu_index = _Per_CPU_Get_index( _Thread_Get_CPU( thread ) );
 
-    if ( CPU_ISSET( (int) cpu_index, &filter->affinity ) ) {
+    if ( _Processor_mask_Is_set( &filter->Affinity, cpu_index ) ) {
       lowest_scheduled = &node->Base.Base.Base;
       break;
     }
@@ -246,19 +233,21 @@ static Scheduler_Node * _Scheduler_priority_affinity_SMP_Get_lowest_scheduled(
 /*
  * This method is unique to this scheduler because it must pass
  * _Scheduler_priority_affinity_SMP_Get_lowest_scheduled into
- * _Scheduler_SMP_Enqueue_ordered.
+ * _Scheduler_SMP_Enqueue.
  */
 static bool _Scheduler_priority_affinity_SMP_Enqueue_fifo(
   Scheduler_Context *context,
-  Scheduler_Node    *node
+  Scheduler_Node    *node,
+  Priority_Control   insert_priority
 )
 {
-  return _Scheduler_SMP_Enqueue_ordered(
+  return _Scheduler_SMP_Enqueue(
     context,
     node,
-    _Scheduler_priority_affinity_SMP_Insert_priority_fifo_order,
-    _Scheduler_priority_SMP_Insert_ready_fifo,
-    _Scheduler_SMP_Insert_scheduled_fifo,
+    insert_priority,
+    _Scheduler_priority_affinity_SMP_Priority_less_equal,
+    _Scheduler_priority_SMP_Insert_ready,
+    _Scheduler_SMP_Insert_scheduled,
     _Scheduler_priority_SMP_Move_from_scheduled_to_ready,
     _Scheduler_priority_affinity_SMP_Get_lowest_scheduled,
     _Scheduler_SMP_Allocate_processor_exact
@@ -283,6 +272,9 @@ static void _Scheduler_priority_affinity_SMP_Check_for_migrations(
   self = _Scheduler_priority_SMP_Get_self( context );
 
   while (1) {
+    Priority_Control lowest_scheduled_priority;
+    Priority_Control insert_priority;
+
     if ( _Priority_bit_map_Is_empty( &self->Bit_map ) ) {
       /* Nothing to do */
       break;
@@ -310,9 +302,12 @@ static void _Scheduler_priority_affinity_SMP_Check_for_migrations(
     if ( lowest_scheduled == NULL )
       break;
 
+    lowest_scheduled_priority =
+      _Scheduler_SMP_Node_priority( lowest_scheduled );
+
     if (
-      _Scheduler_SMP_Insert_priority_lifo_order(
-        &lowest_scheduled->Node.Chain,
+      _Scheduler_SMP_Priority_less_equal(
+        &lowest_scheduled_priority,
         &highest_ready->Node.Chain
       )
     ) {
@@ -325,11 +320,14 @@ static void _Scheduler_priority_affinity_SMP_Check_for_migrations(
      */
 
     _Scheduler_priority_SMP_Extract_from_ready( context, highest_ready );
+    insert_priority = _Scheduler_SMP_Node_priority( highest_ready );
+    insert_priority = SCHEDULER_PRIORITY_APPEND( insert_priority );
     _Scheduler_SMP_Enqueue_to_scheduled(
       context,
       highest_ready,
+      insert_priority,
       lowest_scheduled,
-      _Scheduler_SMP_Insert_scheduled_fifo,
+      _Scheduler_SMP_Insert_scheduled,
       _Scheduler_priority_SMP_Move_from_scheduled_to_ready,
       _Scheduler_SMP_Allocate_processor_exact
     );
@@ -363,22 +361,21 @@ void _Scheduler_priority_affinity_SMP_Unblock(
 
 /*
  *  This is unique to this scheduler because it passes scheduler specific
- *  get_lowest_scheduled helper to _Scheduler_SMP_Enqueue_ordered.
+ *  get_lowest_scheduled helper to _Scheduler_SMP_Enqueue.
  */
-static bool _Scheduler_priority_affinity_SMP_Enqueue_ordered(
-  Scheduler_Context     *context,
-  Scheduler_Node        *node,
-  Chain_Node_order       order,
-  Scheduler_SMP_Insert   insert_ready,
-  Scheduler_SMP_Insert   insert_scheduled
+static bool _Scheduler_priority_affinity_SMP_Enqueue(
+  Scheduler_Context *context,
+  Scheduler_Node    *node,
+  Priority_Control   insert_priority
 )
 {
-  return _Scheduler_SMP_Enqueue_ordered(
+  return _Scheduler_SMP_Enqueue(
     context,
     node,
-    order,
-    insert_ready,
-    insert_scheduled,
+    insert_priority,
+    _Scheduler_priority_affinity_SMP_Priority_less_equal,
+    _Scheduler_priority_SMP_Insert_ready,
+    _Scheduler_SMP_Insert_scheduled,
     _Scheduler_priority_SMP_Move_from_scheduled_to_ready,
     _Scheduler_priority_affinity_SMP_Get_lowest_scheduled,
     _Scheduler_SMP_Allocate_processor_exact
@@ -386,85 +383,27 @@ static bool _Scheduler_priority_affinity_SMP_Enqueue_ordered(
 }
 
 /*
- *  This is unique to this scheduler because it is on the path
- *  to _Scheduler_priority_affinity_SMP_Enqueue_ordered() which
- *  invokes a scheduler unique get_lowest_scheduled helper.
- */
-static bool _Scheduler_priority_affinity_SMP_Enqueue_lifo(
-  Scheduler_Context *context,
-  Scheduler_Node    *node
-)
-{
-  return _Scheduler_priority_affinity_SMP_Enqueue_ordered(
-    context,
-    node,
-    _Scheduler_priority_affinity_SMP_Insert_priority_lifo_order,
-    _Scheduler_priority_SMP_Insert_ready_lifo,
-    _Scheduler_SMP_Insert_scheduled_lifo
-  );
-}
-
-/*
  * This method is unique to this scheduler because it must
- * invoke _Scheduler_SMP_Enqueue_scheduled_ordered() with
+ * invoke _Scheduler_SMP_Enqueue_scheduled() with
  * this scheduler's get_highest_ready() helper.
  */
-static bool _Scheduler_priority_affinity_SMP_Enqueue_scheduled_ordered(
-  Scheduler_Context    *context,
-  Scheduler_Node       *node,
-  Chain_Node_order      order,
-  Scheduler_SMP_Insert  insert_ready,
-  Scheduler_SMP_Insert  insert_scheduled
+static bool _Scheduler_priority_affinity_SMP_Enqueue_scheduled(
+  Scheduler_Context *context,
+  Scheduler_Node    *node,
+  Priority_Control   insert_priority
 )
 {
-  return _Scheduler_SMP_Enqueue_scheduled_ordered(
+  return _Scheduler_SMP_Enqueue_scheduled(
     context,
     node,
-    order,
+    insert_priority,
+    _Scheduler_SMP_Priority_less_equal,
     _Scheduler_priority_SMP_Extract_from_ready,
     _Scheduler_priority_affinity_SMP_Get_highest_ready,
-    insert_ready,
-    insert_scheduled,
+    _Scheduler_priority_SMP_Insert_ready,
+    _Scheduler_SMP_Insert_scheduled,
     _Scheduler_priority_SMP_Move_from_ready_to_scheduled,
     _Scheduler_SMP_Allocate_processor_exact
-  );
-}
-
-/*
- *  This is unique to this scheduler because it is on the path
- *  to _Scheduler_priority_affinity_SMP_Enqueue_scheduled__ordered() which
- *  invokes a scheduler unique get_lowest_scheduled helper.
- */
-static bool _Scheduler_priority_affinity_SMP_Enqueue_scheduled_lifo(
-  Scheduler_Context *context,
-  Scheduler_Node    *node
-)
-{
-  return _Scheduler_priority_affinity_SMP_Enqueue_scheduled_ordered(
-    context,
-    node,
-    _Scheduler_SMP_Insert_priority_lifo_order,
-    _Scheduler_priority_SMP_Insert_ready_lifo,
-    _Scheduler_SMP_Insert_scheduled_lifo
-  );
-}
-
-/*
- *  This is unique to this scheduler because it is on the path
- *  to _Scheduler_priority_affinity_SMP_Enqueue_scheduled__ordered() which
- *  invokes a scheduler unique get_lowest_scheduled helper.
- */
-static bool _Scheduler_priority_affinity_SMP_Enqueue_scheduled_fifo(
-  Scheduler_Context *context,
-  Scheduler_Node    *node
-)
-{
-  return _Scheduler_priority_affinity_SMP_Enqueue_scheduled_ordered(
-    context,
-    node,
-    _Scheduler_SMP_Insert_priority_fifo_order,
-    _Scheduler_priority_SMP_Insert_ready_fifo,
-    _Scheduler_SMP_Insert_scheduled_fifo
   );
 }
 
@@ -478,9 +417,9 @@ static bool _Scheduler_priority_affinity_SMP_Do_ask_for_help(
     context,
     the_thread,
     node,
-    _Scheduler_SMP_Insert_priority_lifo_order,
-    _Scheduler_priority_SMP_Insert_ready_lifo,
-    _Scheduler_SMP_Insert_scheduled_lifo,
+    _Scheduler_SMP_Priority_less_equal,
+    _Scheduler_priority_SMP_Insert_ready,
+    _Scheduler_SMP_Insert_scheduled,
     _Scheduler_priority_SMP_Move_from_scheduled_to_ready,
     _Scheduler_SMP_Get_lowest_scheduled,
     _Scheduler_SMP_Allocate_processor_lazy
@@ -501,10 +440,8 @@ void _Scheduler_priority_affinity_SMP_Update_priority(
     node,
     _Scheduler_priority_SMP_Extract_from_ready,
     _Scheduler_priority_SMP_Do_update,
-    _Scheduler_priority_affinity_SMP_Enqueue_fifo,
-    _Scheduler_priority_affinity_SMP_Enqueue_lifo,
-    _Scheduler_priority_affinity_SMP_Enqueue_scheduled_fifo,
-    _Scheduler_priority_affinity_SMP_Enqueue_scheduled_lifo,
+    _Scheduler_priority_affinity_SMP_Enqueue,
+    _Scheduler_priority_affinity_SMP_Enqueue_scheduled,
     _Scheduler_priority_affinity_SMP_Do_ask_for_help
   );
 
@@ -573,7 +510,7 @@ void _Scheduler_priority_affinity_SMP_Add_processor(
     context,
     idle,
     _Scheduler_priority_SMP_Has_ready,
-    _Scheduler_priority_affinity_SMP_Enqueue_scheduled_fifo,
+    _Scheduler_priority_affinity_SMP_Enqueue_scheduled,
     _Scheduler_SMP_Do_nothing_register_idle
   );
 }
@@ -589,7 +526,7 @@ Thread_Control *_Scheduler_priority_affinity_SMP_Remove_processor(
     context,
     cpu,
     _Scheduler_priority_SMP_Extract_from_ready,
-    _Scheduler_priority_affinity_SMP_Enqueue_fifo
+    _Scheduler_priority_affinity_SMP_Enqueue
   );
 }
 
@@ -604,7 +541,6 @@ bool _Scheduler_priority_affinity_SMP_Set_affinity(
   Scheduler_priority_affinity_SMP_Node *node;
   States_Control                        current_state;
   Processor_mask                        my_affinity;
-  cpu_set_t                             cpuset;
 
   context = _Scheduler_Get_context( scheduler );
   _Processor_mask_And( &my_affinity, &context->Processors, affinity );
@@ -613,14 +549,13 @@ bool _Scheduler_priority_affinity_SMP_Set_affinity(
     return false;
   }
 
-  _Processor_mask_To_cpu_set_t( &my_affinity, sizeof( cpuset ), &cpuset );
   node = _Scheduler_priority_affinity_SMP_Node_downcast( node_base );
 
   /*
    * The old and new set are the same, there is no point in
    * doing anything.
    */
-  if ( CPU_EQUAL( &cpuset, &node->affinity ) )
+  if ( _Processor_mask_Is_equal( &node->Affinity, affinity ) )
     return true;
 
   current_state = thread->current_state;
@@ -629,7 +564,7 @@ bool _Scheduler_priority_affinity_SMP_Set_affinity(
     _Scheduler_priority_affinity_SMP_Block( scheduler, thread, &node->Base.Base.Base );
   }
 
-  CPU_COPY( &cpuset, &node->affinity );
+  _Processor_mask_Assign( &node->Affinity, affinity );
 
   if ( _States_Is_ready( current_state ) ) {
     /*

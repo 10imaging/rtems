@@ -6,11 +6,12 @@
 #
 
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
-include_libcpudir = $(includedir)/libcpu
 
 include_bsp_ti_herculesdir = $(includedir)/bsp/ti_herc
 
@@ -22,8 +23,7 @@ dist_project_lib_DATA = bsp_specs
 
 include_HEADERS = include/bsp.h
 
-nodist_include_HEADERS = ../../shared/include/coverhd.h
-nodist_include_HEADERS += include/bspopts.h
+nodist_include_HEADERS = include/bspopts.h
 
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 
@@ -47,8 +47,6 @@ include_bsp_HEADERS += include/tms570-pinmux.h
 include_bsp_HEADERS += include/tms570-pins.h
 include_bsp_HEADERS += include/tms570ls3137zwt-pins.h
 include_bsp_HEADERS += include/tms570lc4357-pins.h
-
-include_libcpu_HEADERS = ../../../libcpu/arm/shared/include/arm-cp15.h
 
 include_bsp_ti_hercules_HEADERS = include/ti_herc/reg_adc.h
 include_bsp_ti_hercules_HEADERS += include/ti_herc/reg_ccmsr.h
@@ -87,20 +85,18 @@ include_bsp_ti_hercules_HEADERS += include/ti_herc/reg_sys.h
 include_bsp_ti_hercules_HEADERS += include/ti_herc/reg_sys2.h
 include_bsp_ti_hercules_HEADERS += include/ti_herc/reg_pcr.h
 
-include_HEADERS += ../../shared/include/tm27.h
+include_HEADERS += include/tm27.h
 
 # ----------------------------
 # ------  Data
 # ----------------------------
 
-noinst_LIBRARIES = libbspstart.a
-
-libbspstart_a_SOURCES = ../shared/start/start.S
-
+EXTRA_DIST += ../shared/start/start.S
+start.$(OBJEXT): ../shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 project_lib_DATA += startup/linkcmds
 
-EXTRA_DIST =
 EXTRA_DIST += startup/linkcmds.tms570ls3137_hdk
 EXTRA_DIST += startup/linkcmds.tms570ls3137_hdk_with_loader
 EXTRA_DIST += startup/linkcmds.tms570ls3137_hdk_sdram
@@ -110,7 +106,7 @@ EXTRA_DIST += startup/linkcmds.tms570ls3137_hdk_intram
 # ------  LibBSP
 # ----------------------------
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 
 libbsp_a_SOURCES =
 libbsp_a_CPPFLAGS =
@@ -118,6 +114,7 @@ libbsp_a_LIBADD =
 
 # Shared
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c

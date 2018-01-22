@@ -22,6 +22,19 @@ with RTEMS;
 
 package Test_Support is
 
+   procedure Ada_Test_Begin;
+   pragma Import (C, Ada_Test_Begin, "ada_test_begin");
+
+   procedure Ada_Test_End;
+   pragma Import (C, Ada_Test_End, "ada_test_end");
+
+   procedure Check_Type(
+      t : in Long_Integer;
+      s : in Long_Integer;
+      a : in Long_Integer
+   );
+   pragma Import (C, Check_Type, "check_type");
+
 --
 --  Fatal_Directive_Status
 --

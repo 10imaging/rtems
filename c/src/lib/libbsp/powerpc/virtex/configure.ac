@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
 AC_INIT([rtems-c-src-lib-libbsp-powerpc-virtex],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/virtex.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -40,7 +40,7 @@ VIRTEX_REGION([VIRTEX_FAST_RAM_LENGTH],[fast RAM region length],[0x0])
 VIRTEX_REGION([VIRTEX_RESET_ORIGIN],[reset region origin],[0x7ffffec])
 VIRTEX_REGION([VIRTEX_RESET_LENGTH],[reset region length],[0x14])
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 1)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([

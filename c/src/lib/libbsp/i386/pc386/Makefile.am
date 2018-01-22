@@ -2,6 +2,7 @@
 ##
 
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 # FIXME: We must not include *.cfg
 include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
@@ -9,6 +10,7 @@ include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 CLEANFILES =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 
@@ -42,18 +44,18 @@ include_bsp_HEADERS += ../../i386/shared/smp/smp-imps.h
 endif
 
 include_HEADERS += include/crt.h
-nodist_include_HEADERS += ../../shared/include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-EXTRA_DIST = start/start16.S
+EXTRA_DIST += start/start16.S
 start16.$(OBJEXT): start/start16.S
 	$(CPPASCOMPILE) $(AM_CPPFLAGS) -DHEADERADDR=$(HEADERADDR) -o $@ -c $<
 
 start16-elf32.$(OBJEXT): start16.$(OBJEXT)
-	$(LD) -N -T $(top_srcdir)/startup/linkcmds -Ttext $(START16ADDR) -e start16 -nostdlib \
+	$(LD) -N -Ttext $(START16ADDR) -e start16 -nostdlib \
 	  --oformat=elf32-i386 \
 	-o $@ $<
 
@@ -65,7 +67,7 @@ project_lib_DATA += start16.bin
 
 dist_project_lib_DATA += startup/linkcmds
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # clock
@@ -110,7 +112,6 @@ endif
 
 # console (non-graphics support)
 include_HEADERS += ../../i386/shared/comm/i386_io.h
-include_rtems_HEADERS += ../../shared/console_private.h
 libbsp_a_SOURCES += console/serial_mouse_config.c
 libbsp_a_SOURCES += ../../i386/shared/comm/uart.c
 libbsp_a_SOURCES += ../../i386/shared/comm/tty_drv.c
@@ -156,6 +157,7 @@ libbsp_a_SOURCES += ../../i386/shared/irq/irq.c
 libbsp_a_SOURCES += ../../i386/shared/irq/irq_init.c
 libbsp_a_SOURCES += ../../i386/shared/irq/elcr.c
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 libbsp_a_SOURCES += startup/ldsegs.S
 libbsp_a_SOURCES += ../../i386/shared/irq/irq_asm.S
@@ -201,14 +203,9 @@ ne2000_rel_LDFLAGS += -Wl,--undefined=rtems_ne_driver_attach
 endif
 
 if HAS_NETWORKING
-# This driver needs to be reworked for the BSD stack.
-# We only install wd80x3.h if HAS_NETWORKING was defined
-include_HEADERS += include/wd80x3.h
-
 wd8003_CPPFLAGS = -D__INSIDE_RTEMS_BSD_TCPIP_STACK__
 noinst_PROGRAMS += wd8003.rel
 wd8003_rel_SOURCES = wd8003/wd8003.c
-wd8003_rel_SOURCES += include/wd80x3.h
 wd8003_rel_CPPFLAGS = $(AM_CPPFLAGS) $(wd8003_CPPFLAGS)
 wd8003_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 wd8003_rel_LDFLAGS += -Wl,--undefined=rtems_wd_driver_attach

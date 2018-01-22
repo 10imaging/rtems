@@ -46,6 +46,7 @@ include_rtems_score_HEADERS += include/rtems/score/heap.h
 include_rtems_score_HEADERS += include/rtems/score/heapimpl.h
 include_rtems_score_HEADERS += include/rtems/score/protectedheap.h
 include_rtems_score_HEADERS += include/rtems/score/interr.h
+include_rtems_score_HEADERS += include/rtems/score/io.h
 include_rtems_score_HEADERS += include/rtems/score/isr.h
 include_rtems_score_HEADERS += include/rtems/score/isrlevel.h
 include_rtems_score_HEADERS += include/rtems/score/isrlock.h
@@ -161,8 +162,10 @@ libscore_a_SOURCES += src/schedulersmpstartidle.c
 endif
 
 ## CORE_APIMUTEX_C_FILES
-libscore_a_SOURCES += src/apimutex.c \
-    src/apimutexlock.c src/apimutexisowner.c src/apimutexunlock.c
+libscore_a_SOURCES += src/allocatormutex.c
+libscore_a_SOURCES += src/apimutexisowner.c
+libscore_a_SOURCES += src/apimutexlock.c
+libscore_a_SOURCES += src/apimutexunlock.c
 
 ## CORE_BARRIER_C_FILES
 libscore_a_SOURCES += src/corebarrier.c src/corebarrierrelease.c \
@@ -291,7 +294,6 @@ libscore_a_SOURCES += src/threadentryadaptoridle.c
 libscore_a_SOURCES += src/threadentryadaptornumeric.c
 libscore_a_SOURCES += src/threadentryadaptorpointer.c
 libscore_a_SOURCES += src/threadgetcputimeused.c
-libscore_a_SOURCES += src/threadglobalconstruction.c
 libscore_a_SOURCES += src/threaditerate.c
 libscore_a_SOURCES += src/threadname.c
 libscore_a_SOURCES += src/threadscheduler.c
@@ -333,9 +335,10 @@ libscore_a_SOURCES += src/chain.c \
     src/chainnodecount.c \
     src/debugisthreaddispatchingallowed.c \
     src/interr.c src/isr.c src/wkspace.c src/wkstringduplicate.c
+libscore_a_SOURCES += src/ioprintf.c
+libscore_a_SOURCES += src/iovprintf.c
 libscore_a_SOURCES += src/isrisinprogress.c
 libscore_a_SOURCES += src/condition.c
-libscore_a_SOURCES += src/debugisownerofallocator.c
 libscore_a_SOURCES += src/futex.c
 libscore_a_SOURCES += src/profilingisrentryexit.c
 libscore_a_SOURCES += src/mutex.c

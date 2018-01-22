@@ -1,6 +1,8 @@
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 include_bestcommdir = $(include_bspdir)/bestcomm
@@ -10,8 +12,7 @@ include_bestcomm_task_apidir = $(include_bestcommdir)/task_api
 
 dist_project_lib_DATA = bsp_specs
 
-include_HEADERS = include/bsp.h include/i2cdrv.h \
-    include/i2c.h
+include_HEADERS = include/bsp.h
 include_HEADERS += include/tm27.h
 
 nodist_include_HEADERS = include/bspopts.h
@@ -19,25 +20,27 @@ DISTCLEANFILES = include/bspopts.h
 
 noinst_PROGRAMS =
 
-include_HEADERS += ../../shared/include/coverhd.h
 
-noinst_LIBRARIES = libbspstart.a
-libbspstart_a_SOURCES = start/start.S
+EXTRA_DIST += start/start.S
+start.$(OBJEXT): start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
-libbspstart_a_SOURCES += ../../powerpc/shared/start/rtems_crti.S
+EXTRA_DIST += ../../powerpc/shared/start/rtems_crti.S
+rtems_crti.$(OBJEXT): ../../powerpc/shared/start/rtems_crti.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA += rtems_crti.$(OBJEXT)
 
-dist_project_lib_DATA += startup/linkcmds.base
+dist_project_lib_DATA += startup/linkcmds.gen5200_base
 project_lib_DATA += startup/linkcmds
-EXTRA_DIST = startup/linkcmds.brs5l
+EXTRA_DIST += startup/linkcmds.brs5l
 EXTRA_DIST += startup/linkcmds.brs6l
 EXTRA_DIST += startup/linkcmds.icecube
 EXTRA_DIST += startup/linkcmds.pm520_cr825
 EXTRA_DIST += startup/linkcmds.pm520_ze30
 EXTRA_DIST += startup/linkcmds.dp2
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 libbsp_a_SOURCES =
 
 # bestcomm
@@ -63,9 +66,7 @@ include_bestcomm_HEADERS = bestcomm/bestcomm_priv.h \
 	bestcomm/dma_image.capi.h \
 	bestcomm/bestcomm_api.h \
 	bestcomm/bestcomm_glue.h
-include_bestcomm_include_HEADERS = bestcomm/include/ppctypes.h \
-	bestcomm/include/mgt5200/sdma.h \
-	bestcomm/include/mgt5200/mgt5200.h
+include_bestcomm_include_HEADERS = bestcomm/include/ppctypes.h
 include_bestcomm_include_mgt5200_HEADERS = bestcomm/include/mgt5200/mgt5200.h \
 	bestcomm/include/mgt5200/sdma.h
 include_bestcomm_task_api_HEADERS = bestcomm/task_api/tasksetup_general.h \
@@ -130,6 +131,7 @@ libbsp_a_SOURCES += tod/todcfg.c tod/pcf8563.c tod/pcf8563.h \
 
 # startup
 libbsp_a_SOURCES += ../../shared/bootcard.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/bspclean.c
 libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c

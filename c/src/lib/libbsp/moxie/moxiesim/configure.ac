@@ -4,7 +4,7 @@
 
 AC_PREREQ(2.60)
 AC_INIT([rtems-c-src-lib-libbsp-moxie-moxiesim],[_RTEMS_VERSION],[https://devel.rtems.org/newticket])
-AC_CONFIG_SRCDIR([bsp_specs])
+AC_CONFIG_SRCDIR([make/custom/moxiesim.cfg])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
@@ -15,7 +15,7 @@ RTEMS_PROG_CC_FOR_TARGET
 RTEMS_CANONICALIZE_TOOLS
 RTEMS_PROG_CCAS
 
-RTEMS_BSP_CLEANUP_OPTIONS(0, 0)
+RTEMS_BSP_CLEANUP_OPTIONS
 
 AC_MSG_CHECKING([for old moxie assembly syntax])
 AC_COMPILE_IFELSE(

@@ -6,12 +6,13 @@
 #
 
 ACLOCAL_AMFLAGS = -I ../../../../aclocal
+EXTRA_DIST =
 
 include $(top_srcdir)/../../../../automake/compile.am
+include $(top_srcdir)/../../bsp.am
 
 include_bspdir = $(includedir)/bsp
 include_bsp_socaldir = $(includedir)/bsp/socal
-include_libcpudir = $(includedir)/libcpu
 
 dist_project_lib_DATA = bsp_specs
 
@@ -22,8 +23,7 @@ dist_project_lib_DATA = bsp_specs
 include_HEADERS = include/bsp.h
 include_HEADERS += include/tm27.h
 
-nodist_include_HEADERS = ../../shared/include/coverhd.h \
-	include/bspopts.h
+nodist_include_HEADERS = include/bspopts.h
 
 nodist_include_bsp_HEADERS = ../../shared/include/bootcard.h
 
@@ -93,18 +93,13 @@ include_bsp_socal_HEADERS += hwlib/include/socal/alt_uart.h
 include_bsp_socal_HEADERS += hwlib/include/socal/hps.h
 include_bsp_socal_HEADERS += hwlib/include/socal/socal.h
 
-include_libcpu_HEADERS = ../../../libcpu/arm/shared/include/arm-cp15.h
-
-
-
 ###############################################################################
 #                  Data                                                       #
 ###############################################################################
 
-noinst_LIBRARIES = libbspstart.a
-
-libbspstart_a_SOURCES = ../shared/start/start.S
-
+EXTRA_DIST += ../shared/start/start.S
+start.$(OBJEXT): ../shared/start/start.S
+	$(CPPASCOMPILE) -o $@ -c $<
 project_lib_DATA = start.$(OBJEXT)
 
 project_lib_DATA += startup/linkcmds
@@ -116,7 +111,7 @@ project_lib_DATA += startup/linkcmds.altcycv_devkit_smp
 #                  LibBSP                                                     #
 ###############################################################################
 
-noinst_LIBRARIES += libbsp.a
+noinst_LIBRARIES = libbsp.a
 
 libbsp_a_SOURCES =
 libbsp_a_CPPFLAGS =
@@ -151,12 +146,13 @@ libbsp_a_SOURCES += hwlib/src/hwmgr/alt_reset_manager.c
 
 # Shared
 libbsp_a_SOURCES += ../../shared/bootcard.c
-libbsp_a_SOURCES += ../../shared/bspgetworkarea.c
+libbsp_a_SOURCES += ../../shared/getentropy-cpucounter.c
 libbsp_a_SOURCES += ../../shared/bsppredriverhook.c
 libbsp_a_SOURCES += ../../shared/cpucounterdiff.c
 libbsp_a_SOURCES += ../../shared/gnatinstallhandler.c
 libbsp_a_SOURCES += ../../shared/sbrk.c
 libbsp_a_SOURCES += ../../shared/timerstub.c
+libbsp_a_SOURCES += ../../shared/src/bsp-fdt.c
 libbsp_a_SOURCES += ../../shared/src/stackalloc.c
 libbsp_a_SOURCES += ../shared/startup/bsp-start-memcpy.S
 libbsp_a_SOURCES += ../shared/arm-cp15-set-exception-handler.c
@@ -164,6 +160,7 @@ libbsp_a_SOURCES += ../shared/arm-cp15-set-ttb-entries.c
 
 # Startup
 libbsp_a_SOURCES += startup/bspclean.c
+libbsp_a_SOURCES += startup/bspgetworkarea.c
 libbsp_a_SOURCES += startup/bspreset.c
 libbsp_a_SOURCES += startup/bspstart.c
 libbsp_a_SOURCES += startup/bspstarthooks.c
